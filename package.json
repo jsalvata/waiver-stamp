@@ -42,7 +42,8 @@
     "test:watch": "vitest",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "bench": "tsx scripts/bench.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

@@ -6,5 +6,8 @@
     "name": "Jordi Salvat"
   },
   "homepage": "https://github.com/jsalvata/waiver-stamp",
-  "keywords": ["waiver-stamp", "refactor", "code-review", "pull-request"]
+  "keywords": ["waiver-stamp", "refactor", "code-review", "pull-request"],
+  "mcpServers": {
+    "waiver-stamp": { "command": "npx", "args": ["-y", "waiver-stamp", "mcp"] }
+  }
 }
