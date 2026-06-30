@@ -1,0 +1,18 @@
+{
+  "schema": "waiver-stamp/v0",
+  "tool": "waiver-stamp@0.0.0",
+  "ops": [
+    { "op": "rename", "target": { "file": "src/foo.ts", "symbol": "oldName" }, "to": "newName" },
+    {
+      "op": "extract-function",
+      "target": {
+        "file": "src/foo.ts",
+        "within": "handleRequest",
+        "from": { "text": "const total = items.reduce" }
+      },
+      "name": "computeTotal"
+    },
+    { "op": "change-test", "files": ["test/foo.test.ts"] },
+    { "op": "change-docs", "files": ["README.md"] }
+  ]
+}
