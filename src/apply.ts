@@ -2,6 +2,7 @@ import { relative } from 'node:path';
 import { foldOps } from './engine/fold.js';
 import { loadProject } from './engine/project.js';
 import { loadWaiver } from './load.js';
+import type { Waiver } from './types.js';
 
 export interface ApplyOptions {
   /** Working tree to apply the waiver's transform ops to. */
@@ -20,7 +21,11 @@ export interface ApplyResult {
  * the transform ops in order (§2), and saves the result.
  */
 export async function apply(path: string, options: ApplyOptions): Promise<ApplyResult> {
-  const waiver = await loadWaiver(path);
+  return applyWaiver(await loadWaiver(path), options);
+}
+
+/** Apply an already-loaded waiver (the seam the MCP `waiver_apply` tool reuses, §18.1). */
+export async function applyWaiver(waiver: Waiver, options: ApplyOptions): Promise<ApplyResult> {
   const project = loadProject(options.cwd);
 
   foldOps(project, options.cwd, waiver.ops);
