@@ -8,3 +8,6 @@ export { loadWaiver, loadWaiverFromObject } from './load.js';
 export { check, type CheckResult } from './check.js';
 export { apply, type ApplyOptions, type ApplyResult } from './apply.js';
 export { stamp, stampWaiver, type StampOptions } from './stamp.js';
+export { verify, aggregate, type VerifyOptions } from './verify.js';
+export { commitWaiver, type CommitOptions } from './commit.js';
+export { extractWaiverBlock, embedWaiver, type WaiverBlock } from './commit-waiver.js';

@@ -49,6 +49,14 @@ export class OpApplicationError extends Error {
   }
 }
 
+/** `waiver commit` refuses to run against a working tree with tracked changes (§17.4). */
+export class DirtyTreeError extends Error {
+  override readonly name = 'DirtyTreeError';
+  constructor(readonly cwd: string) {
+    super('Working tree has tracked changes; commit or stash them first');
+  }
+}
+
 /** The waiver's pinned `tool@version` does not match the running tool (spec §5, §9). */
 export class ToolMismatchError extends Error {
   override readonly name = 'ToolMismatchError';
