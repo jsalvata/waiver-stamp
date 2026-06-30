@@ -9,19 +9,22 @@ import { OpApplicationError } from '../errors.js';
 import type { Op } from '../types.js';
 import { applyRename } from './ops/rename.js';
 
-export function foldOps(project: Project, cwd: string, ops: readonly Op[]): void {
-  for (const op of ops) {
-    switch (op.op) {
-      case 'rename':
-        applyRename(project, cwd, op);
-        break;
-      case 'change-test':
-      case 'change-docs':
-        break; // exclusion ops are comparison directives, not tree mutations (§2)
-      case 'extract-function':
-      case 'move-to-new-file':
-      case 'bump':
-        throw new OpApplicationError(op.op, 'not yet implemented in v0');
-    }
+/** Apply one transform op to the project. Exclusion ops are a no-op here (§2). */
+export function applyTransformOp(project: Project, cwd: string, op: Op): void {
+  switch (op.op) {
+    case 'rename':
+      applyRename(project, cwd, op);
+      return;
+    case 'change-test':
+    case 'change-docs':
+      return; // exclusion ops are comparison directives, not tree mutations (§2)
+    case 'extract-function':
+    case 'move-to-new-file':
+    case 'bump':
+      throw new OpApplicationError(op.op, 'not yet implemented in v0');
   }
+}
+
+export function foldOps(project: Project, cwd: string, ops: readonly Op[]): void {
+  for (const op of ops) applyTransformOp(project, cwd, op);
 }

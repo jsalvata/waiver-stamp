@@ -7,6 +7,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { runGit } from './git.js';
 
 export interface Fixture {
   /** Absolute path to the temp project root (holds tsconfig.json). */
@@ -28,6 +29,9 @@ const DEFAULT_TSCONFIG = {
   include: ['**/*.ts'],
 };
 
+/** The fixture tsconfig as a committable JSON string (for git-repo fixtures). */
+export const FIXTURE_TSCONFIG_JSON = `${JSON.stringify(DEFAULT_TSCONFIG, null, 2)}\n`;
+
 /** Write `files` (path → content) plus a tsconfig into a fresh temp dir. */
 export async function scaffoldProject(
   files: Record<string, string>,
@@ -41,4 +45,34 @@ export async function scaffoldProject(
     await writeFile(abs, content, 'utf8');
   }
   return { cwd, cleanup: () => rm(cwd, { recursive: true, force: true }) };
+}
+
+export interface GitRepoFixture {
+  /** Absolute path to the git repo. */
+  repo: string;
+  /** Write `files` (path → content), stage, commit; returns the new commit SHA. */
+  commit: (files: Record<string, string>, message: string) => Promise<string>;
+  cleanup: () => Promise<void>;
+}
+
+/** A throwaway git repo with a `commit(files, message)` helper for stamp/verify tests. */
+export async function makeGitRepo(): Promise<GitRepoFixture> {
+  const repo = await mkdtemp(join(tmpdir(), 'ws-repo-'));
+  await runGit(repo, ['init', '-b', 'main']);
+  await runGit(repo, ['config', 'user.email', 'test@example.com']);
+  await runGit(repo, ['config', 'user.name', 'Test']);
+  await runGit(repo, ['config', 'commit.gpgsign', 'false']);
+
+  const commit = async (files: Record<string, string>, message: string): Promise<string> => {
+    for (const [rel, content] of Object.entries(files)) {
+      const abs = join(repo, rel);
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, content, 'utf8');
+    }
+    await runGit(repo, ['add', '-A']);
+    await runGit(repo, ['commit', '-m', message]);
+    return runGit(repo, ['rev-parse', 'HEAD']);
+  };
+
+  return { repo, commit, cleanup: () => rm(repo, { recursive: true, force: true }) };
 }

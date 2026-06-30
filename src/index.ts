@@ -7,4 +7,4 @@ export { WaiverSchema, OpSchema, jsonSchema, SCHEMA_VERSION, SCHEMA_ID } from '.
 export { loadWaiver, loadWaiverFromObject } from './load.js';
 export { check, type CheckResult } from './check.js';
 export { apply, type ApplyOptions, type ApplyResult } from './apply.js';
-export { stamp, type StampOptions } from './stamp.js';
+export { stamp, stampWaiver, type StampOptions } from './stamp.js';

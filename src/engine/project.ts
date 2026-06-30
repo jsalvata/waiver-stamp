@@ -9,9 +9,25 @@ import { type Node, Project, type SourceFile } from 'ts-morph';
 import { SelectorResolutionError } from '../errors.js';
 import type { Selector } from '../types.js';
 
-/** Load the project at `cwd` from its `tsconfig.json` (the repo's own config). */
+/**
+ * Load the project at `cwd` from its `tsconfig.json` (the repo's own config).
+ *
+ * `noEmit` is forced off so the stamper can emit through this program (spec §7);
+ * the repo's own tsconfig often sets `noEmit: true` for type-checking. The
+ * runtime-affecting options (target, module, decorator/enum/class-field settings)
+ * are left untouched so emit matches the repo's build semantics.
+ */
 export function loadProject(cwd: string): Project {
-  return new Project({ tsConfigFilePath: join(cwd, 'tsconfig.json') });
+  return new Project({
+    tsConfigFilePath: join(cwd, 'tsconfig.json'),
+    compilerOptions: {
+      noEmit: false,
+      declaration: false,
+      declarationMap: false,
+      sourceMap: false,
+      inlineSourceMap: false,
+    },
+  });
 }
 
 /** The source file named by a selector, resolved against the loaded program. */

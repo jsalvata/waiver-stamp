@@ -48,3 +48,14 @@ export class OpApplicationError extends Error {
     super('Operation could not be applied');
   }
 }
+
+/** The waiver's pinned `tool@version` does not match the running tool (spec §5, §9). */
+export class ToolMismatchError extends Error {
+  override readonly name = 'ToolMismatchError';
+  constructor(
+    readonly waiverTool: string,
+    readonly runningTool: string,
+  ) {
+    super('Waiver tool version does not match the running tool');
+  }
+}
