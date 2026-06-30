@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 import { emitForFile } from './engine/emit-compare.js';
 import { predicateOk } from './engine/exclude.js';
 import { applyTransformOp } from './engine/fold.js';
+import { emitDivergenceGuard, runReproductiveGuards } from './engine/guards.js';
 import { loadProject } from './engine/project.js';
 import { ToolMismatchError } from './errors.js';
 import { changedFiles, worktreeAt } from './git.js';
@@ -56,6 +57,11 @@ export async function stampWaiver(waiver: Waiver, options: StampOptions): Promis
 
     const oProject = loadProject(oWt.dir);
 
+    // Reproductive guards over the base program (public-API, dynamic-reference, §8).
+    for (const finding of runReproductiveGuards(oProject, waiver.ops)) {
+      failures.push(`guard ${finding.guard}: ${finding.detail}`);
+    }
+
     for (const op of waiver.ops) {
       if (op.op === 'change-test' || op.op === 'change-docs') {
         applyExclusionOp(op, excluded, fileFindings, failures, opFindings);
@@ -66,6 +72,14 @@ export async function stampWaiver(waiver: Waiver, options: StampOptions): Promis
 
     const headProject = loadProject(headWt.dir);
     const compareSet = await buildCompareSet(cwd, options, oProject, oWt.dir, excluded);
+
+    // Emit-divergence guard over the changed files on head (the tsc-vs-deploy gap, §8).
+    for (const finding of emitDivergenceGuard(
+      headProject,
+      compareSet.map((f) => join(headWt.dir, f)),
+    )) {
+      failures.push(`guard ${finding.guard}: ${finding.detail}`);
+    }
 
     for (const file of compareSet) {
       const equal = await filesEquivalent(file, oProject, oWt.dir, headProject, headWt.dir);

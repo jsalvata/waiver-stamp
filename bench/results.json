@@ -1,0 +1,19 @@
+{
+  "model": "claude-opus-4-8",
+  "tool": "waiver-stamp@0.0.0",
+  "date": "2026-06-30",
+  "runsPerCell": 1,
+  "metric": "median output tokens",
+  "cells": [
+    {
+      "fanOut": 3,
+      "withoutOutputTokens": 707,
+      "withOutputTokens": 198,
+      "ratio": 3.6,
+      "withoutCorrect": true,
+      "withCorrect": true,
+      "withoutCostUsd": 0.428941,
+      "withCostUsd": 0.18389499999999998
+    }
+  ]
+}
