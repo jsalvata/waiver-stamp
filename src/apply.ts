@@ -1,4 +1,6 @@
-import { NotImplementedError } from './errors.js';
+import { relative } from 'node:path';
+import { foldOps } from './engine/fold.js';
+import { loadProject } from './engine/project.js';
 import { loadWaiver } from './load.js';
 
 export interface ApplyOptions {
@@ -6,14 +8,28 @@ export interface ApplyOptions {
   cwd: string;
 }
 
+export interface ApplyResult {
+  /** Paths (relative to `cwd`) the fold created or modified. */
+  files: string[];
+}
+
 /**
- * Runner (§4): apply a waiver's transform ops to the working tree, deterministically.
- *
- * Scaffold status: the waiver is loaded and schema-validated (real), but the
- * ts-morph fold (rename / extract-function / move-to-new-file / bump) is not yet
- * implemented — this throws {@link NotImplementedError}.
+ * Runner (§4): apply a waiver's transform ops to the working tree at `cwd`,
+ * deterministically. Exclusion ops describe hand-edits the author already made;
+ * `apply` does not generate those. Loads the repo's own tsconfig program, folds
+ * the transform ops in order (§2), and saves the result.
  */
-export async function apply(path: string, _options: ApplyOptions): Promise<never> {
-  await loadWaiver(path);
-  throw new NotImplementedError('apply');
+export async function apply(path: string, options: ApplyOptions): Promise<ApplyResult> {
+  const waiver = await loadWaiver(path);
+  const project = loadProject(options.cwd);
+
+  foldOps(project, options.cwd, waiver.ops);
+
+  const changed = project
+    .getSourceFiles()
+    .filter((sf) => !sf.isSaved())
+    .map((sf) => relative(options.cwd, sf.getFilePath()));
+
+  await project.save();
+  return { files: changed };
 }

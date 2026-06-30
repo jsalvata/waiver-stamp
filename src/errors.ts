@@ -26,3 +26,25 @@ export class NotImplementedError extends Error {
     super('Not implemented in the v0 scaffold');
   }
 }
+
+/** A selector did not resolve to exactly one declaration in the loaded program (§5.2). */
+export class SelectorResolutionError extends Error {
+  override readonly name = 'SelectorResolutionError';
+  constructor(
+    readonly selector: string,
+    readonly detail: string,
+  ) {
+    super('Selector did not resolve to exactly one declaration');
+  }
+}
+
+/** An engine operation could not be applied (collision, ambiguity, unsupported shape). */
+export class OpApplicationError extends Error {
+  override readonly name = 'OpApplicationError';
+  constructor(
+    readonly opKind: string,
+    readonly detail: string,
+  ) {
+    super('Operation could not be applied');
+  }
+}

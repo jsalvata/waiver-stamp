@@ -30,6 +30,32 @@ export interface FileFinding {
   reason?: string;
 }
 
+// ── Per-commit verification (§17.2) ──────────────────────────────────────────
+
+/** How a single commit in a verified range was classified (§17.2). */
+export type CommitClass = 'stamped' | 'invalid' | 'unwaivered' | 'skipped';
+
+/** The aggregate verdict over a commit range (§17.2). */
+export type Verdict = 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES' | 'ABSTAIN';
+
+export interface PerCommitResult {
+  sha: string;
+  subject: string;
+  class: CommitClass;
+  /** Why this class (e.g. 'merge-commit', 'tool-mismatch', emit-mismatch reasons). */
+  reasons: string[];
+  /** Per-op stamping outcome when the commit carried a waiver. */
+  perOpFindings: OpFinding[];
+  /** Changed files neither reproduced nor excluded (when stamping failed). */
+  uncoveredFiles: string[];
+}
+
+export interface VerifyReport {
+  /** The highest-severity verdict present (REQUEST_CHANGES > COMMENT > APPROVE > ABSTAIN). */
+  verdict: Verdict;
+  commits: PerCommitResult[];
+}
+
 /** Process exit codes (§10). */
 export const EXIT = {
   /** Stamped. */

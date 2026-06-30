@@ -19,6 +19,17 @@ export async function loadWaiver(path: string): Promise<Waiver> {
     throw new WaiverParseError(path, { cause });
   }
 
+  return loadWaiverFromObject(parsed);
+}
+
+/**
+ * Validate an already-parsed value against the v0 schema (schema.ts).
+ *
+ * The seam shared by file loading ({@link loadWaiver}) and the commit-embedded
+ * path (§17.1), which parses the waiver out of a git commit message rather than
+ * a file. Throws {@link WaiverValidationError} if it does not conform.
+ */
+export function loadWaiverFromObject(parsed: unknown): Waiver {
   const result = WaiverSchema.safeParse(parsed);
   if (!result.success) {
     const errors = result.error.issues.map((i) => {

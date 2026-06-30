@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { WaiverParseError, WaiverValidationError } from './errors.js';
-import { loadWaiver } from './load.js';
+import { loadWaiver, loadWaiverFromObject } from './load.js';
 
 const validExample = fileURLToPath(new URL('../examples/valid.waiver.json', import.meta.url));
 
@@ -49,5 +49,22 @@ describe('loadWaiver', () => {
     const err = new WaiverParseError('/tmp/x.json');
     expect(err.path).toBe('/tmp/x.json');
     expect(err.message).not.toContain('/tmp/x.json');
+  });
+});
+
+describe('loadWaiverFromObject', () => {
+  it('validates an already-parsed object and returns it typed', () => {
+    const waiver = loadWaiverFromObject({
+      schema: 'waiver-stamp/v0',
+      tool: 'waiver-stamp@0.1.0',
+      ops: [{ op: 'rename', target: { file: 'src/a.ts', symbol: 'foo' }, to: 'bar' }],
+    });
+    expect(waiver.ops[0]?.op).toBe('rename');
+  });
+
+  it('throws WaiverValidationError on a non-conforming object', () => {
+    expect(() => loadWaiverFromObject({ schema: 'waiver-stamp/v0', tool: 'x', ops: [] })).toThrow(
+      WaiverValidationError,
+    );
   });
 });
