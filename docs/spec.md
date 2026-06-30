@@ -168,9 +168,13 @@ The tool is **waiver-stamp**; its CLI binary is `waiver`.
   confirmed by the automation layer. So the tool's only deps are ts-morph, the package
   manager (for `bump`), and git.
 
-The **JSON Schema** is the single source of truth for the op vocabulary, doing triple
-duty: LLM structured-output constraint, author lint, and the stamper's
-closed-vocabulary gate.
+The **op vocabulary** has a single source of truth: the **Zod schema**
+(`src/schema.ts`). The TypeScript types are inferred from it and the **JSON Schema**
+(`schema/waiver-stamp.v0.schema.json`) is *generated* from it (`pnpm gen:schema`, kept
+honest by a drift-guard test). The generated JSON Schema still does triple duty —
+LLM structured-output constraint, author lint, and the stamper's closed-vocabulary
+gate — but it is a derived artifact, not a hand-authored one, so the types, the
+validator, and the published schema can never drift from each other.
 
 ---
 
@@ -549,6 +553,13 @@ and the alternatives we rejected, so the rationale isn't lost.
   readability gain wasn't worth diverging from strict JSON (which keeps constrained
   LLM decoding trivial; a schema would be needed regardless). The schema does triple
   duty: LLM structured-output constraint, author lint, closed-vocabulary gate.
+- **Schema authored in Zod, JSON Schema generated from it.** *Rejected hand-writing the
+  JSON Schema alongside the TS types:* that's two sources for one vocabulary and they
+  drift. Zod (`src/schema.ts`) is the single source — types via `z.infer`, the published
+  JSON Schema via `z.toJSONSchema()`, runtime validation via `safeParse` (so no separate
+  validator dependency). A drift-guard test asserts the committed JSON Schema equals the
+  generated output. LLMs still consume the generated **JSON Schema** (never Zod), so the
+  authoring/constraint story is unchanged. Uses `zod@3.25` via the `zod/v4` bridge.
 - **Header carries only `schema` + `tool`; the toolchain comes from the repo.**
   *Rejected restating TypeScript/package-manager/compiler-options in the waiver:* they're
   already pinned by the base commit's `package.json`/lockfile/`tsconfig`, so a waiver copy

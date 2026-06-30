@@ -12,7 +12,7 @@
       },
       "name": "computeTotal"
     },
-    { "op": "change-test", "files": ["test/foo.test.ts"] },
+    { "op": "change-test", "files": ["src/foo.test.ts"] },
     { "op": "change-docs", "files": ["README.md"] }
   ]
 }

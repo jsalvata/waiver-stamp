@@ -45,9 +45,14 @@ waiver / header mismatch · `3` internal error (incl. not-yet-implemented).
 }
 ```
 
-The op vocabulary is governed by [`schema/waiver-stamp.v0.schema.json`](schema/waiver-stamp.v0.schema.json)
-— the single source of truth (LLM structured-output constraint, author lint, and the
-stamper's closed-vocabulary gate). Full reference: [`docs/spec.md` §5](docs/spec.md).
+The op vocabulary lives in **one source**: the Zod schemas in
+[`src/schema.ts`](src/schema.ts). From it we derive the TypeScript types
+(`z.infer`) and **generate** the published JSON Schema
+[`schema/waiver-stamp.v0.schema.json`](schema/waiver-stamp.v0.schema.json) via
+`pnpm gen:schema` (a drift-guard test keeps the committed file in sync). The
+generated JSON Schema still serves its triple duty — LLM structured-output
+constraint, author lint, and the stamper's closed-vocabulary gate. Full reference:
+[`docs/spec.md` §5](docs/spec.md).
 
 ## Claude Code plugin
 
@@ -61,17 +66,20 @@ stamper's closed-vocabulary gate). Full reference: [`docs/spec.md` §5](docs/spe
 
 ```bash
 pnpm install
-pnpm build        # tsc → dist/
-pnpm test         # vitest
+pnpm gen:schema   # regenerate schema/*.json from src/schema.ts (Zod)
+pnpm build        # gen:schema + tsc → dist/
+pnpm test         # vitest (tests are colocated, src/*.test.ts)
 pnpm typecheck
 pnpm lint         # biome
-pnpm dev -- check test/fixtures/valid.waiver.json   # run the CLI from source
+pnpm dev -- check examples/valid.waiver.json   # run the CLI from source
 ```
 
 ### Project setup
 
 - **Stack:** TypeScript (ESM, NodeNext), built on [`ts-morph`](https://ts-morph.com).
-- **Package manager:** pnpm. **Tests:** vitest. **Lint/format:** Biome.
+  Op vocabulary, types, and JSON Schema all derive from one Zod source
+  ([`src/schema.ts`](src/schema.ts); `zod@3.25` via the v4 bridge).
+- **Package manager:** pnpm. **Tests:** vitest (colocated). **Lint/format:** Biome.
 - **Commits:** [Conventional Commits](https://www.conventionalcommits.org/),
   enforced by commitlint via a husky `commit-msg` hook.
 - **CI/CD:** GitHub Actions — `ci.yml` (lint, typecheck, build, test, CLI smoke on

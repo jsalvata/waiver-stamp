@@ -1,99 +1,41 @@
 /**
- * waiver-stamp v0 type definitions.
- *
- * Mirrors the op vocabulary in docs/spec.md §5. The JSON Schema
- * (schema/waiver-stamp.v0.schema.json) is the runtime source of truth; these
- * types are the compile-time mirror consumers program against.
+ * waiver-stamp type surface — inferred from the Zod schemas (schema.ts), the
+ * single source of truth. No hand-mirrored shapes: change schema.ts and the
+ * types, the JSON Schema, and runtime validation all follow.
  */
 
-export type SchemaVersion = 'waiver-stamp/v0';
+import type { z } from 'zod/v4';
+import type {
+  BumpOpSchema,
+  ChangeDocsOpSchema,
+  ChangeTestOpSchema,
+  ExtractFunctionOpSchema,
+  MoveToNewFileOpSchema,
+  NodeAnchorSchema,
+  NodeLocatorSchema,
+  OpSchema,
+  RenameOpSchema,
+  SelectorSchema,
+  WaiverSchema,
+} from './schema.js';
 
-/** A parsed, schema-valid waiver. */
-export interface Waiver {
-  /** Vocabulary/validation version. */
-  schema: SchemaVersion;
-  /** Pins op semantics + bundled ts-morph, e.g. `waiver-stamp@0.1.0`. */
-  tool: string;
-  /** Ordered list; transform ops apply in order, exclusion ops are order-free. */
-  ops: Op[];
-}
-
-export type Op =
-  | RenameOp
-  | ExtractFunctionOp
-  | MoveToNewFileOp
-  | BumpOp
-  | ChangeTestOp
-  | ChangeDocsOp;
-
+export type Waiver = z.infer<typeof WaiverSchema>;
+export type Op = z.infer<typeof OpSchema>;
 export type OpKind = Op['op'];
+
+export type RenameOp = z.infer<typeof RenameOpSchema>;
+export type ExtractFunctionOp = z.infer<typeof ExtractFunctionOpSchema>;
+export type MoveToNewFileOp = z.infer<typeof MoveToNewFileOpSchema>;
+export type BumpOp = z.infer<typeof BumpOpSchema>;
+export type ChangeTestOp = z.infer<typeof ChangeTestOpSchema>;
+export type ChangeDocsOp = z.infer<typeof ChangeDocsOpSchema>;
+
+export type Selector = z.infer<typeof SelectorSchema>;
+export type NodeLocator = z.infer<typeof NodeLocatorSchema>;
+export type NodeAnchor = z.infer<typeof NodeAnchorSchema>;
 
 /** Which processing phase an op belongs to (§2). */
 export type Phase = 'transform' | 'exclusion';
-
-// ── Transform · reproductive (behaviour-preserving) ──────────────────────────
-
-export interface RenameOp {
-  op: 'rename';
-  target: Selector;
-  to: string;
-}
-
-export interface ExtractFunctionOp {
-  op: 'extract-function';
-  target: NodeLocator;
-  name: string;
-}
-
-export interface MoveToNewFileOp {
-  op: 'move-to-new-file';
-  symbols: string[];
-  from: string;
-  to: string;
-}
-
-// ── Transform · transitive ───────────────────────────────────────────────────
-
-export interface BumpOp {
-  op: 'bump';
-  packages: string[];
-}
-
-// ── Exclusion · confinement ──────────────────────────────────────────────────
-
-export interface ChangeTestOp {
-  op: 'change-test';
-  files: string[];
-}
-
-export interface ChangeDocsOp {
-  op: 'change-docs';
-  files: string[];
-}
-
-// ── Selectors (§5.2) ─────────────────────────────────────────────────────────
-
-/** A single declaration, addressed by file + TSDoc declaration reference. */
-export interface Selector {
-  file: string;
-  symbol: string;
-}
-
-/** A node or a contiguous sibling span within one body. */
-export interface NodeLocator {
-  file: string;
-  /** The enclosing function/method (a TSDoc symbol) to scope the search to. */
-  within: string;
-  from: NodeAnchor;
-  /** Omit for a single node; present for an inclusive `from..to` sibling span. */
-  to?: NodeAnchor;
-}
-
-/** A verbatim source snippet (normalized at resolution); `nth` disambiguates. */
-export interface NodeAnchor {
-  text: string;
-  nth?: number;
-}
 
 /** Op kinds that mutate the tree and are folded over base, in order (§2). */
 export const TRANSFORM_OP_KINDS = [
