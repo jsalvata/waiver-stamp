@@ -2,18 +2,38 @@
   "model": "claude-opus-4-8",
   "tool": "waiver-stamp@0.0.0",
   "date": "2026-06-30",
-  "runsPerCell": 1,
+  "runsPerCell": 3,
   "metric": "median output tokens",
   "cells": [
     {
       "fanOut": 3,
-      "withoutOutputTokens": 707,
-      "withOutputTokens": 198,
-      "ratio": 3.6,
+      "withoutOutputTokens": 762,
+      "withOutputTokens": 174,
+      "ratio": 4.4,
       "withoutCorrect": true,
       "withCorrect": true,
-      "withoutCostUsd": 0.428941,
-      "withCostUsd": 0.18389499999999998
+      "withoutCostUsd": 0.364899,
+      "withCostUsd": 0.114097
+    },
+    {
+      "fanOut": 12,
+      "withoutOutputTokens": 515,
+      "withOutputTokens": 167,
+      "ratio": 3.1,
+      "withoutCorrect": true,
+      "withCorrect": true,
+      "withoutCostUsd": 0.12318799999999999,
+      "withCostUsd": 0.11433399999999999
+    },
+    {
+      "fanOut": 30,
+      "withoutOutputTokens": 1044,
+      "withOutputTokens": 171,
+      "ratio": 6.1,
+      "withoutCorrect": true,
+      "withCorrect": true,
+      "withoutCostUsd": 0.1362775,
+      "withCostUsd": 0.1144235
     }
   ]
 }

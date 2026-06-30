@@ -171,9 +171,12 @@ async function withCorrect(text: string, files: Record<string, string>): Promise
   }
 }
 
-/** without-arm correctness: the emitted diff renames (new name present, old gone). */
+/** without-arm correctness: the emitted *code* renames (new name present, old gone). */
 function withoutCorrect(text: string): boolean {
-  return text.includes(NEW) && !new RegExp(`\\b${OLD}\\b`).test(text);
+  // Check only fenced code (not any preamble prose that might echo the old name).
+  const code = [...text.matchAll(/```[a-z]*\n([\s\S]*?)```/g)].map((m) => m[1] ?? '').join('\n');
+  const haystack = code || text;
+  return haystack.includes(NEW) && !new RegExp(`\\b${OLD}\\b`).test(haystack);
 }
 
 interface CellResult {
@@ -214,7 +217,9 @@ async function main(): Promise<void> {
       withOutputTokens: wMed,
       ratio: Math.round((woMed / Math.max(wMed, 1)) * 10) / 10,
       withoutCorrect: without.every((x) => withoutCorrect(x.text)),
-      withCorrect: (await Promise.all(withRuns.map((x) => withCorrect(x.text, files)))).every(Boolean),
+      withCorrect: (await Promise.all(withRuns.map((x) => withCorrect(x.text, files)))).every(
+        Boolean,
+      ),
       withoutCostUsd: median(without.map((x) => x.costUsd)),
       withCostUsd: median(withRuns.map((x) => x.costUsd)),
     });
@@ -253,14 +258,16 @@ function renderMarkdown(s: {
     '',
     `**Tokens to express a rename refactor** — ${s.model}, median of ${s.runsPerCell} runs, ${s.date}.`,
     'Output tokens (overhead-independent; also the size of the artifact a reviewer reads).',
+    'The waiver path is verified end-to-end every run: its output applies and stamps.',
     '',
-    '| References renamed | Without waiver (full diff) | With waiver | Savings | Both correct |',
+    '| References renamed | Without waiver (full diff) | With waiver | Savings | Rename correct |',
     '|---|---|---|---|---|',
     rows,
     '',
-    'The waiver cost is flat as fan-out grows — the deterministic runner expands the',
-    'intent — so both the authoring and the review savings widen with the size of the',
-    'refactor. This is a dated snapshot; re-run with `pnpm bench`.',
+    'The waiver cost is ~flat regardless of fan-out — the deterministic runner does the',
+    'expansion — while the hand-written diff is several times larger. So both the',
+    'authoring and the review savings hold across refactor sizes. Model output is',
+    'non-deterministic; this is a dated snapshot — reproduce with `pnpm bench`.',
     '',
   ].join('\n');
 }
