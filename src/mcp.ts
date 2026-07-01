@@ -23,8 +23,24 @@ type ToolResult = {
 const ok = (data: unknown): ToolResult => ({
   content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
 });
+
+/** Structured error properties worth surfacing, across errors.ts's error classes. */
+const ERROR_DETAIL_KEYS = ['ref', 'path', 'errors', 'opKind', 'detail', 'selector'] as const;
+
+/** Render `err.message` plus a compact rendering of whichever {@link ERROR_DETAIL_KEYS} are present. */
+function describeError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const details: Record<string, unknown> = {};
+  for (const key of ERROR_DETAIL_KEYS) {
+    if (Object.hasOwn(err, key)) details[key] = (err as unknown as Record<string, unknown>)[key];
+  }
+  return Object.keys(details).length > 0
+    ? `${err.message} ${JSON.stringify(details)}`
+    : err.message;
+}
+
 const fail = (err: unknown): ToolResult => ({
-  content: [{ type: 'text', text: err instanceof Error ? err.message : String(err) }],
+  content: [{ type: 'text', text: describeError(err) }],
   isError: true,
 });
 

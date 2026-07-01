@@ -55,6 +55,19 @@ describe('mcp server', () => {
     expect(res.isError).toBe(true);
   });
 
+  it('waiver_verify on an unresolvable commit surfaces the structured `ref` field', async () => {
+    const client = await connectClient();
+    g = await makeGitRepo();
+    await g.commit({ 'tsconfig.json': FIXTURE_TSCONFIG_JSON }, 'base');
+    const res = await client.callTool({
+      name: 'waiver_verify',
+      arguments: { commit: 'not-a-real-ref', cwd: g.repo },
+    });
+    expect(res.isError).toBe(true);
+    const text = (res.content as { type: string; text: string }[])[0]!.text;
+    expect(text).toContain('not-a-real-ref');
+  });
+
   it('waiver_verify stamps HEAD when the embedded waiver covers the diff', async () => {
     const client = await connectClient();
     g = await makeGitRepo();

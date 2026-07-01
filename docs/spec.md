@@ -730,7 +730,8 @@ Pure rename across the orders module; no behaviour change.
   account for `C`'s entire diff (§3.1.5 coverage) — a waivered commit may **not** smuggle an
   un-accounted change. **Merge commits** (≥2 parents) are **skipped** with a recorded reason
   (`merge-commit`): they synthesise multiple branches and cannot be a single atomic step.
-  A commit whose first parent lies outside `base..head` is likewise skipped (`out-of-range`).
+  Every non-merge commit is verified against its own first parent, whether or not that
+  parent lies inside `base..head` — there is no out-of-range skip.
 - **Stacking is supported and well-defined.** A multi-step refactor is a *sequence* of
   waivered commits; each stamps against its own parent, and because earlier commits are
   already in the tree, later commits that depend on them stamp correctly. `stamp` walks the
@@ -768,8 +769,9 @@ every commit is *stamped*.
 | **invalid** | has a waiver block (schema key present) but it fails to parse/validate, or stamps FAIL (guard, coverage, or emit-mismatch) |
 | **unwaivered** | no waiver block — a normal commit needing human review |
 
-The merge-commit and any commit whose first parent is outside `base..head` are skipped
-with a recorded reason. The aggregate verdict is the **highest-severity** class present:
+Merge commits are skipped with a recorded reason; every other commit is verified against
+its own first parent, whether or not that parent lies inside `base..head`. The aggregate
+verdict is the **highest-severity** class present:
 
 | Aggregate verdict | Condition | Intended GitHub review action |
 |---|---|---|

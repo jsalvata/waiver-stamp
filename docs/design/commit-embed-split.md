@@ -153,6 +153,9 @@ message formatting, or a bespoke commit wrapper.
    (documented in the README).
 7. **MCP mirrors the CLI.** Drop `waiver_check`; `waiver_verify` reads a commit,
    `waiver_stamp` aggregates a range.
+8. **Out-of-range parents: verify against the true parent rather than skip** — stricter
+   than the earlier spec text (which promised an `out-of-range` skip) and still safe
+   (strictly more verification, never less); the spec text was amended accordingly.
 
 Resulting surface: **`apply` / `verify` / `stamp` / `mcp`**. See spec §10, §16, §17, §18.
 

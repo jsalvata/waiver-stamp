@@ -169,6 +169,12 @@ in the range and emits the aggregate PR verdict: **APPROVE** (every commit stamp
 **COMMENT** (a mix of stamped and unwaivered commits), **REQUEST_CHANGES** (any commit's
 waiver is present but invalid), or **ABSTAIN** (no commit carries a waiver).
 
+**Use merge-commit or rebase-merge, not squash-merge.** A squash-merge discards the
+individually-verified commits: the new squashed commit carries no waiver, so it is
+unwaivered and falls back to normal human review (safe, but the stamp is lost). To keep
+stamps through to the default branch, configure the repo to merge with a merge commit or
+a rebase-merge, so the verified commits land as-is (spec §17.5).
+
 **Adopting this in a repo whose commitlint enforces `body-max-line-length`:** pretty-
 printed waiver JSON can have lines longer than the default 100-char limit. Disable the
 rule (this repo does, in `commitlint.config.js`) so the `commit-msg` hook doesn't reject

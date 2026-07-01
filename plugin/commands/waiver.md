@@ -17,11 +17,17 @@ Invoke the `refactor-with-waiver` skill and follow it to:
    review (fail-closed). Do not use `extract-function` / `move-to-new-file` /
    `bump` — they are not implemented in this build.
 3. Write the waiver JSON conforming to `schema/waiver-stamp.v0.schema.json`.
-4. Validate and land it:
-   - `waiver check <waiver>` (always)
-   - `waiver commit <waiver> -m "refactor: …"` — apply, stage, and commit with
-     the waiver embedded (recommended path)
-   - `waiver verify --base $1 --head $2 --json` — preview the PR verdict (when
-     refs are available)
+4. Apply and land it:
+   - `waiver apply <waiver>` (or the `waiver_apply` MCP tool) — expand the
+     transform ops into the working tree; hand-edit only the test/doc files
+     named by `change-test` / `change-docs`.
+   - **Commit normally** — through the repo's usual commit path — with the
+     waiver embedded as a fenced ` ```waiver ` block in the message body,
+     placed before any trailer paragraph. There is no dedicated commit
+     command — the tool is a verifier, not a commit wrapper.
+   - `waiver verify --json` — confirm the just-written commit (`HEAD`) stamps.
+     If it fails, fix the waiver, re-`apply`, and amend the commit.
+   - `waiver stamp --base $1 --head $2 --json` — preview the aggregate PR
+     verdict (when refs are available).
 
-Show the final waiver JSON and the validation output.
+Show the final waiver JSON and the verification output.
