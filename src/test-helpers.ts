@@ -8,6 +8,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { runGit } from './git.js';
+import type { Waiver } from './types.js';
 
 export interface Fixture {
   /** Absolute path to the temp project root (holds tsconfig.json). */
@@ -75,4 +76,9 @@ export async function makeGitRepo(): Promise<GitRepoFixture> {
   };
 
   return { repo, commit, cleanup: () => rm(repo, { recursive: true, force: true }) };
+}
+
+/** Build a commit message embedding `waiver` as a ` ```waiver ` block (test-only; §17.1). */
+export function waiverCommitMessage(subject: string, waiver: Waiver): string {
+  return `${subject}\n\n\`\`\`waiver\n${JSON.stringify(waiver, null, 2)}\n\`\`\`\n`;
 }

@@ -1,7 +1,7 @@
 /**
  * Commit-embedded waivers (spec §17.1). A refactor commit carries its waiver as
- * a fenced ```json block in the message body. Parsing is pinned and fail-closed:
- * scan *every* json block, select those whose root `schema` equals exactly
+ * a fenced ` ```waiver ` block in the message body. Parsing is pinned and fail-closed:
+ * scan for ` ```waiver ` blocks, select those whose root `schema` equals exactly
  * "waiver-stamp/v0", and require exactly one.
  */
 
@@ -18,8 +18,8 @@ export type WaiverBlock =
 /** Max embedded-waiver size; real waivers are a few ops (spec §17.1 DoS guard). */
 const MAX_BYTES = 64 * 1024;
 
-/** Fenced ```json … ``` blocks, content captured non-greedily. */
-const JSON_FENCE = /```json[^\n]*\n([\s\S]*?)```/g;
+/** Fenced ` ```waiver ` … ``` blocks, content captured non-greedily. */
+const WAIVER_FENCE = /```waiver[^\n]*\n([\s\S]*?)```/g;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -33,7 +33,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  */
 export function extractWaiverBlock(message: string): WaiverBlock {
   const waiverBlocks: { raw: string; parsed: unknown }[] = [];
-  for (const match of message.matchAll(JSON_FENCE)) {
+  for (const match of message.matchAll(WAIVER_FENCE)) {
     const raw = (match[1] ?? '').trim();
     let parsed: unknown;
     try {
@@ -61,10 +61,4 @@ export function extractWaiverBlock(message: string): WaiverBlock {
       err instanceof WaiverValidationError ? 'waiver failed schema validation' : 'invalid waiver';
     return { kind: 'invalid', reason };
   }
-}
-
-/** Produce a commit message that embeds `waiver` as a fenced ```json block (§17.1, §17.4). */
-export function embedWaiver(subject: string, waiver: Waiver): string {
-  const json = JSON.stringify(waiver, null, 2);
-  return `${subject}\n\n\`\`\`json\n${json}\n\`\`\`\n`;
 }
