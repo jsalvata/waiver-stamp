@@ -2,9 +2,8 @@
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { apply } from './apply.js';
-import { check } from './check.js';
-import { commitWaiver } from './commit.js';
 import {
+  CommitResolutionError,
   DirtyTreeError,
   NotImplementedError,
   WaiverParseError,
@@ -33,6 +32,9 @@ async function run(body: () => Promise<void>): Promise<void> {
     } else if (err instanceof DirtyTreeError) {
       console.error('error: working tree has tracked changes; commit or stash them first');
       setExit(EXIT.FAILURE);
+    } else if (err instanceof CommitResolutionError) {
+      console.error(`error: '${err.ref}' does not resolve to a commit`);
+      setExit(EXIT.MALFORMED);
     } else if (err instanceof NotImplementedError) {
       console.error(`error: '${err.feature}' is not implemented in v0`);
       setExit(EXIT.INTERNAL);
@@ -67,77 +69,38 @@ program
   });
 
 program
-  .command('stamp')
-  .argument('<waiver>', 'path to the waiver JSON file, or `-` for stdin')
-  .requiredOption('--base <ref>', 'base git ref')
-  .requiredOption('--head <ref>', 'head git ref')
-  .option('--json', 'emit a machine-readable JSON report')
-  .description("validate a PR's diff against its waiver")
-  .action(async (waiver: string, opts: { base: string; head: string; json?: boolean }) => {
+  .command('verify')
+  .argument('[commit]', 'commit-ish to verify (default HEAD)')
+  .option('--json', 'emit a machine-readable report')
+  .description('verify one commit against its embedded waiver (§17.4)')
+  .action(async (commit: string | undefined, opts: { json?: boolean }) => {
     await run(async () => {
-      const report = await stamp(waiver, {
-        base: opts.base,
-        head: opts.head,
-        cwd: process.cwd(),
-      });
-      if (opts.json) console.log(JSON.stringify(report, null, 2));
-      else console.log(report.stamped ? 'STAMPED' : `FAILED: ${report.failures.join('; ')}`);
-      if (!report.stamped) setExit(EXIT.FAILURE);
+      const r = await verify({ commit, cwd: process.cwd() });
+      if (opts.json) console.log(JSON.stringify(r, null, 2));
+      else {
+        console.log(`${r.class.padEnd(10)} ${r.sha.slice(0, 8)} ${r.subject}`);
+        for (const reason of r.reasons) console.log(`  - ${reason}`);
+      }
+      if (r.class === 'invalid' || r.class === 'unwaivered') setExit(EXIT.FAILURE);
+      // stamped / skipped → default STAMPED (0)
     });
   });
 
 program
-  .command('verify')
+  .command('stamp')
   .requiredOption('--base <ref>', 'base git ref')
   .requiredOption('--head <ref>', 'head git ref')
-  .option('--json', 'emit a machine-readable JSON report')
-  .description('per-commit verdict over a PR range (§17.2)')
+  .option('--json', 'emit a machine-readable report')
+  .description('aggregate the per-commit PR verdict over base..head (§17.2)')
   .action(async (opts: { base: string; head: string; json?: boolean }) => {
     await run(async () => {
-      const report = await verify({
-        base: opts.base,
-        head: opts.head,
-        cwd: process.cwd(),
-      });
-      if (opts.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
+      const report = await stamp({ base: opts.base, head: opts.head, cwd: process.cwd() });
+      if (opts.json) console.log(JSON.stringify(report, null, 2));
+      else {
         console.log(`verdict: ${report.verdict}`);
-        for (const c of report.commits) {
-          console.log(`  ${c.sha.slice(0, 8)} ${c.class.padEnd(10)} ${c.subject}`);
-        }
+        for (const c of report.commits) console.log(`  ${c.sha.slice(0, 8)} ${c.class.padEnd(10)} ${c.subject}`);
       }
       if (report.verdict === 'REQUEST_CHANGES') setExit(EXIT.FAILURE);
-    });
-  });
-
-program
-  .command('commit')
-  .argument('<waiver>', 'path to the waiver JSON file, or `-` for stdin')
-  .option('-m, --message <subject>', 'commit subject line')
-  .description('apply a waiver and commit it with the waiver embedded (§17.4)')
-  .action(async (waiver: string, opts: { message?: string }) => {
-    await run(async () => {
-      const { sha } = await commitWaiver(waiver, { subject: opts.message, cwd: process.cwd() });
-      console.log(`committed ${sha.slice(0, 8)}`);
-    });
-  });
-
-program
-  .command('check')
-  .argument('<waiver>', 'path to the waiver JSON file, or `-` for stdin')
-  .option('--json', 'emit machine-readable output')
-  .description('schema + static-guard validation only (fast lint)')
-  .action(async (waiver: string, opts: { json?: boolean }) => {
-    await run(async () => {
-      const result = await check(waiver);
-      if (opts.json) console.log(JSON.stringify(result, null, 2));
-      else {
-        const label = waiver === '-' ? 'stdin' : waiver;
-        console.log(
-          `ok: ${label} is a valid waiver-stamp/${result.waiver.schema.split('/')[1]} waiver`,
-        );
-      }
     });
   });
 
