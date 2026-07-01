@@ -31,30 +31,36 @@ bypasses review; for any change it can't prove, worst case = status quo.
 
 ## How it works, in one glance
 
-An LLM (guided by the bundled skill) writes a waiver and lands it as a commit that
-**carries its own waiver** in the message:
+An LLM (guided by the bundled skill) writes a waiver, applies it, then commits normally
+with the waiver **embedded in the commit message**:
 
-```bash
-# 1. author + apply + commit, with the waiver embedded in the message
-$ waiver commit rename.json -m "refactor: rename calculateTotal to computeOrderTotal"
-committed 514bb5d0
-```
+````bash
+# 1. apply the waiver's transform ops to the working tree
+$ waiver apply rename.json
+applied: 1 file(s) changed
 
-````text
+# 2. commit normally, with the waiver embedded as a ```waiver fence in the body
+$ git commit -m "$(cat <<'EOF'
 refactor: rename calculateTotal to computeOrderTotal
 
-```json
+```waiver
 { "schema": "waiver-stamp/v0",
   "ops": [ { "op": "rename",
              "target": { "file": "src/orders.ts", "symbol": "calculateTotal" },
              "to": "computeOrderTotal" } ] }
 ```
+EOF
+)"
+
+# 3. confirm locally, right after committing
+$ waiver verify
+stamped    514bb5d0 refactor: rename calculateTotal to computeOrderTotal
 ````
 
-CI then verifies every commit in the PR and emits a single verdict:
+On push, CI aggregates every commit in the PR into a single verdict:
 
 ```bash
-$ waiver verify --base main --head my-branch
+$ waiver stamp --base main --head my-branch
 verdict: APPROVE
   514bb5d0 stamped    refactor: rename calculateTotal to computeOrderTotal
 ```
@@ -116,9 +122,8 @@ pnpm add -g waiver-stamp   # provides the `waiver` binary
 ```
 
 Or use it as a **Claude Code plugin** ([`plugin/`](plugin/)) — it registers the MCP
-server (so an agent can call `waiver_check` / `waiver_apply` / `waiver_stamp` /
-`waiver_verify`) and the **`refactor-with-waiver`** skill that drives the authoring
-loop above:
+server (so an agent can call `waiver_apply` / `waiver_verify` / `waiver_stamp`) and the
+**`refactor-with-waiver`** skill that drives the authoring loop above:
 
 ```text
 /plugin marketplace add jsalvata/waiver-stamp
@@ -131,16 +136,43 @@ its only prerequisite.
 ## CLI
 
 ```bash
-waiver commit <waiver> [-m <subject>]                  # apply + commit with the waiver embedded
-waiver verify --base <ref> --head <ref> [--json]       # per-commit PR verdict
-waiver apply  <waiver>                                  # apply transform ops to the tree
-waiver stamp  <waiver> --base <ref> --head <ref> [--json]  # stamp one waiver file
-waiver check  <waiver> [--json]                         # schema + static-guard lint
-waiver mcp                                              # run the stdio MCP server
+waiver apply <waiver>                             # apply a waiver's transform ops to the working tree (`-` for stdin)
+waiver verify [<commit>] [--json]                 # verify one commit's embedded waiver (default HEAD)
+waiver stamp  --base <ref> --head <ref> [--json]  # aggregate the PR verdict over base..head
+waiver mcp                                        # run the stdio MCP server
 ```
 
-Exit codes: `0` stamped / approve · `1` stamping failure / REQUEST_CHANGES · `2`
-malformed waiver · `3` internal error.
+There is no separate `check` or `commit` command — the tool is a **verifier**, not a
+commit wrapper. `apply` takes a waiver **file**; `verify`/`stamp` read the waiver
+already **embedded** in the commit(s) they inspect (see [Authoring flow](#authoring-flow)
+below).
+
+Exit codes: `0` applied / stamped-or-skipped / verdict ∈ {APPROVE, COMMENT, ABSTAIN} ·
+`1` stamping failure / invalid-or-unwaivered / REQUEST_CHANGES · `2` malformed waiver or
+invocation · `3` internal error.
+
+## Authoring flow
+
+1. **`waiver apply <waiver>`** — expand the transform ops into the working tree
+   (production code; hand-edit only test/doc files, tagged with `change-test` /
+   `change-docs`).
+2. **Commit normally** — full subject/body/footer, through the repo's usual commit
+   path — with the waiver embedded as a fenced ` ```waiver ` block in the message body,
+   placed **before any trailer paragraph** (`Refs:`, `BREAKING CHANGE:`) so tools like
+   `semantic-release` still see the footer as the terminal paragraph.
+3. **`waiver verify`** (no argument → `HEAD`) — confirms the commit you just wrote
+   stamps, before you push. If it fails, fix the waiver, `apply` again, and amend the
+   commit.
+
+On push, CI runs **`waiver stamp --base <ref> --head <ref>`**, which walks every commit
+in the range and emits the aggregate PR verdict: **APPROVE** (every commit stamped),
+**COMMENT** (a mix of stamped and unwaivered commits), **REQUEST_CHANGES** (any commit's
+waiver is present but invalid), or **ABSTAIN** (no commit carries a waiver).
+
+**Adopting this in a repo whose commitlint enforces `body-max-line-length`:** pretty-
+printed waiver JSON can have lines longer than the default 100-char limit. Disable the
+rule (this repo does, in `commitlint.config.js`) so the `commit-msg` hook doesn't reject
+waivered commits.
 
 ## Scope (v0)
 

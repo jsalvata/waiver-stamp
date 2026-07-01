@@ -25,28 +25,29 @@ at all.
 
 ## The guaranteed-stamp authoring loop
 
-The intended loop (spec §3.3, §17.1) makes a stamp predictable:
+The intended loop (spec §3.3, §17.4) makes a stamp predictable:
 
 1. Express the **production-code** change as transform ops — in v0, `rename`.
-2. Write the draft waiver and validate its shape with `waiver check <waiver>`
-   (or the `waiver_check` MCP tool).
-3. **`waiver commit <waiver> -m "refactor: …"`** — this applies the waiver
-   (generating the production edits), stages them, and writes a commit whose
-   message embeds the waiver in a fenced ```json block (§17.4). This is the
-   recommended path: the embed is well-formed by construction, so a later
-   `waiver verify` won't surprise-fail on a hand-mangled block.
-4. Hand-edit only the **test/doc** files; name them with `change-test` /
-   `change-docs` exclusion ops before you commit.
+   Prefer `waiver_apply` (MCP) or `waiver apply <waiver>` (CLI) to expand it into
+   the working tree — don't hand-edit production code.
+2. Hand-edit only the **test/doc** files; name them with `change-test` /
+   `change-docs` exclusion ops in the waiver.
+3. **Write a normal commit** — full subject/body/footer, through the repo's usual
+   commit path — with the waiver embedded as a fenced ` ```waiver ` block in the
+   body, placed **before any trailer paragraph** (`Refs:`, `BREAKING CHANGE:`) so
+   `semantic-release` and other trailer consumers still read the footer as the
+   terminal paragraph. There is no dedicated authoring command — the tool is a
+   verifier, not a commit wrapper.
+4. **`waiver verify`** (or the `waiver_verify` MCP tool) — folds the just-written
+   commit (default `HEAD`) through the stamping principle and confirms it stamps,
+   one command after committing. If it fails, fix the waiver, re-`apply`, and
+   amend the commit (re-embedding the block).
 
-`waiver apply <waiver>` is available if you want to expand the transform ops
-into the working tree without committing — but prefer `waiver commit`, which
-applies + commits + embeds in one step.
-
-CI then runs `waiver verify --base <main> --head <branch>`: it walks each commit
-in the range, stamps each commit's embedded waiver, and prints an aggregate
-verdict — **APPROVE** (all commits valid) / **COMMENT** (some valid) /
-**REQUEST_CHANGES** (any waiver invalid) / **ABSTAIN** (no waivers). It exits 1
-on REQUEST_CHANGES.
+CI then runs `waiver stamp --base <ref> --head <ref>` on push: it walks each
+commit in the range, stamps each commit's embedded waiver, and prints an
+aggregate verdict — **APPROVE** (all commits stamped) / **COMMENT** (a mix of
+stamped and unwaivered) / **REQUEST_CHANGES** (any waiver invalid) / **ABSTAIN**
+(no waivers). It exits 1 on REQUEST_CHANGES.
 
 ## Worked example: rename a widely-referenced function
 
@@ -62,18 +63,31 @@ across the project. The waiver:
 }
 ```
 
-Validate, then commit:
+Apply it, then commit normally with the waiver embedded:
 
-```bash
-waiver check waiver.json
-waiver commit waiver.json -m "refactor: rename computeTotal to computeOrderTotal"
+````bash
+waiver apply waiver.json
+git commit -m "$(cat <<'EOF'
+refactor: rename computeTotal to computeOrderTotal
+
+```waiver
+{
+  "schema": "waiver-stamp/v0",
+  "ops": [
+    { "op": "rename", "target": { "symbol": "computeTotal" }, "to": "computeOrderTotal" }
+  ]
+}
 ```
+EOF
+)"
+waiver verify
+````
 
-`commit` applies the rename across every reference, stages the result, and
-writes the commit with the waiver embedded. On the PR, CI approves with:
+`apply` performs the rename across every reference. `verify` (default `HEAD`)
+confirms the just-written commit stamps. On the PR, CI approves with:
 
 ```bash
-waiver verify --base main --head my-branch --json
+waiver stamp --base main --head my-branch --json
 ```
 
 ## Op vocabulary (v0)
@@ -129,23 +143,23 @@ an empty `ops` array stamps clean.
 ## MCP tools
 
 When running inside the plugin, the engine is also exposed as MCP tools (spec
-§18.1): `waiver_check`, `waiver_apply`, `waiver_stamp`, `waiver_verify`. Each
-takes the **waiver JSON inline** (an object, not a file path) plus an optional
-`cwd` (and `base` / `head` for stamp / verify). Use `waiver_check` for the inner
-authoring loop and `waiver_verify` to preview the PR verdict.
+§18.1): `waiver_apply` (`{ waiver, cwd? }` — waiver JSON inline, not a file
+path), `waiver_verify` (`{ commit?, cwd? }` — defaults to `HEAD`), and
+`waiver_stamp` (`{ base, head, cwd? }`). Use `waiver_apply` for the production
+edits and `waiver_verify` to confirm the commit stamps before push.
 
 ## Validate before finishing
 
-Always run the fast lint and report the result:
+After committing, always confirm the commit stamps and report the result:
 
 ```bash
-waiver check path/to/waiver.json
+waiver verify --json
 ```
 
-If a target repo and base/head refs are available, also preview the verdict:
+If a target repo and base/head refs are available, also preview the PR verdict:
 
 ```bash
-waiver verify --base <ref> --head <ref> --json
+waiver stamp --base <ref> --head <ref> --json
 ```
 
 See `docs/spec.md` for the full model, guards, and worked examples (§11).
