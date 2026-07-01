@@ -49,14 +49,6 @@ export class OpApplicationError extends Error {
   }
 }
 
-/** `waiver commit` refuses to run against a working tree with tracked changes (§17.4). */
-export class DirtyTreeError extends Error {
-  override readonly name = 'DirtyTreeError';
-  constructor(readonly cwd: string) {
-    super('Working tree has tracked changes; commit or stash them first');
-  }
-}
-
 /** A commit-ish argument did not resolve to a commit (§10 malformed invocation). */
 export class CommitResolutionError extends Error {
   override readonly name = 'CommitResolutionError';

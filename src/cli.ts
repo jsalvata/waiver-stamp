@@ -4,7 +4,6 @@ import { Command } from 'commander';
 import { apply } from './apply.js';
 import {
   CommitResolutionError,
-  DirtyTreeError,
   NotImplementedError,
   WaiverParseError,
   WaiverValidationError,
@@ -29,9 +28,6 @@ async function run(body: () => Promise<void>): Promise<void> {
       console.error('error: waiver failed schema validation');
       for (const e of err.errors) console.error(`  - ${e}`);
       setExit(EXIT.MALFORMED);
-    } else if (err instanceof DirtyTreeError) {
-      console.error('error: working tree has tracked changes; commit or stash them first');
-      setExit(EXIT.FAILURE);
     } else if (err instanceof CommitResolutionError) {
       console.error(`error: '${err.ref}' does not resolve to a commit`);
       setExit(EXIT.MALFORMED);
