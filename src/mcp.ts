@@ -1,8 +1,9 @@
 /**
  * Stdio MCP server (spec §18.1) — a thin adapter exposing the engine to a Claude
  * plugin. No second implementation: every tool wraps the same library functions
- * the CLI calls. Waivers are passed inline as JSON (friendlier than file paths
- * for an agent that just authored one). Started by `waiver mcp`.
+ * the CLI calls. Only `apply` takes an inline waiver (friendlier than a file path
+ * for an agent that just authored one) — `verify`/`stamp` read the waiver already
+ * embedded in the commits they inspect. Started by `waiver mcp`.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -11,7 +12,7 @@ import { z } from 'zod/v4';
 import { applyWaiver } from './apply.js';
 import { loadWaiverFromObject } from './load.js';
 import { InlineWaiverSchema } from './schema.js';
-import { stampWaiver } from './stamp-core.js';
+import { stamp } from './stamp.js';
 import { verify } from './verify.js';
 
 type ToolResult = {
@@ -32,22 +33,6 @@ export function createServer(version: string): McpServer {
   const server = new McpServer({ name: 'waiver-stamp', version });
 
   server.registerTool(
-    'waiver_check',
-    {
-      description: 'Validate a draft waiver (schema). The agent inner authoring loop (§18.1).',
-      inputSchema: { waiver: InlineWaiverSchema, cwd: z.string().optional() },
-    },
-    async ({ waiver }) => {
-      try {
-        const w = loadWaiverFromObject(waiver);
-        return ok({ ok: true, waiver: { schema: w.schema } });
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
     'waiver_apply',
     {
       description: 'Deterministically expand a waiver into a working-tree diff (§18.1).',
@@ -65,22 +50,12 @@ export function createServer(version: string): McpServer {
   server.registerTool(
     'waiver_stamp',
     {
-      description: 'Stamp a waiver against base/head refs (§18.1).',
-      inputSchema: {
-        waiver: InlineWaiverSchema,
-        base: z.string(),
-        head: z.string(),
-        cwd: z.string().optional(),
-      },
+      description: 'Aggregate the per-commit PR verdict over base..head (§17.2).',
+      inputSchema: { base: z.string(), head: z.string(), cwd: z.string().optional() },
     },
-    async ({ waiver, base, head, cwd }) => {
+    async ({ base, head, cwd }) => {
       try {
-        const report = await stampWaiver(loadWaiverFromObject(waiver), {
-          base,
-          head,
-          cwd: cwd ?? process.cwd(),
-        });
-        return ok(report);
+        return ok(await stamp({ base, head, cwd: cwd ?? process.cwd() }));
       } catch (err) {
         return fail(err);
       }
@@ -90,13 +65,12 @@ export function createServer(version: string): McpServer {
   server.registerTool(
     'waiver_verify',
     {
-      description:
-        'Per-commit verdict over a range: APPROVE/COMMENT/REQUEST_CHANGES/ABSTAIN (§17.2).',
-      inputSchema: { base: z.string(), head: z.string(), cwd: z.string().optional() },
+      description: 'Verify one commit against its embedded waiver (§17.4).',
+      inputSchema: { commit: z.string().optional(), cwd: z.string().optional() },
     },
-    async ({ base, head, cwd }) => {
+    async ({ commit, cwd }) => {
       try {
-        return ok(await verify({ base, head, cwd: cwd ?? process.cwd() }));
+        return ok(await verify({ commit, cwd: cwd ?? process.cwd() }));
       } catch (err) {
         return fail(err);
       }
