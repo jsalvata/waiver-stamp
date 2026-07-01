@@ -72,23 +72,30 @@ change makes the emit differ → the commit is `invalid` → REQUEST_CHANGES.
 
 ## Why it's worth it — measured, not asserted
 
-How many **output tokens** Claude Opus 4.8 spends to *express* the same rename, two
-ways, on identical code context (median of 3 runs; output tokens are
-environment-overhead-independent and also the size of the artifact a reviewer reads):
+Both ways *actually make the rename* — the same task, given to Claude Opus 4.8 with
+real tools in an isolated project. **Without a waiver**, it edits the files itself
+(editing tools + a shell). **With a waiver**, it writes the waiver and applies it via
+the `waiver_apply` MCP tool. We measure the **output tokens** each spends (the
+overhead-independent measure of the work, and the size of the artifact a reviewer
+reads) and check correctness by compiler emit against a ground-truth scoped rename —
+with decoys (a `calculateTotalTax` look-alike and a same-named `calculateTotal` in an
+`invoices` module) so a scope-blind edit *fails*:
 
-| References renamed | Without a waiver (full diff) | With a waiver | Savings |
-|---|---|---|---|
-| 3  | 762  | 174 | **4.4×** |
-| 12 | 515  | 167 | **3.1×** |
-| 30 | 1,044 | 171 | **6.1×** |
+| References renamed | Without a waiver | With a waiver | Savings | Correct every run? |
+|---|---|---|---|---|
+| 3  | 2611 ± 652  | 1358 ± 267 | **1.9×** | without: **no** · with: yes |
+| 12 | 3981 ± 472  | 1395 ± 322 | **2.9×** | both: yes |
+| 30 | 2954 ± 1021 | 1421 ± 403 | **2.1×** | both: yes |
 
-The waiver stays a near-constant ~170 tokens however many references the rename
-touches — the deterministic runner does the expansion — while the hand-written diff
-runs several times larger. So both the **authoring** cost (tokens to write the change)
-and the **review** cost (tokens to read the artifact that vouches for it) shrink the
-same way, and the waiver path is verified end-to-end every run (its output applies and
-stamps). This is a dated snapshot of non-deterministic model output —
-[`bench/results.md`](bench/results.md), reproduce with `pnpm bench`.
+(Output tokens, mean ± sample stddev over 5 runs.) Two things stand out. The waiver is
+**flat and cheap** — ~1,400 tokens whatever the fan-out, because the deterministic
+runner does the expansion — and it was **correct in all 15 runs**. Editing by hand
+costs **~2–3× more**, varies far more run-to-run, and at 3 references was **not always
+correct** (a run corrupted a decoy or missed a reference). So the waiver wins on both
+axes that matter — fewer tokens to author *and* to review, and a result that's
+mechanically vouched rather than hopefully-right. This is a dated snapshot of
+non-deterministic model output — [`bench/results.md`](bench/results.md), reproduce with
+`pnpm bench`.
 
 ## Trust posture — this is not a proof
 

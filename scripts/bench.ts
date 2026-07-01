@@ -1,29 +1,49 @@
 /**
  * Token-economy benchmark (spec §19). Measures how many tokens Opus 4.8 spends
- * to *express* a refactor two ways, on the SAME inlined code context:
- *   - without — emit the full mechanical rename diff (cost grows O(references));
- *   - with    — emit a waiver-stamp waiver (cost is O(1) intent).
+ * to actually *make* the same rename two ways, on identical code context:
+ *   - without — a normal agent with editing tools + a shell edits the files;
+ *   - with    — an agent writes a waiver-stamp waiver and applies it via the
+ *               `waiver_apply` MCP tool, letting the deterministic runner expand it.
  *
- * Output tokens are the headline metric: a probe showed ~20k of fixed
- * environment input overhead per call (system prompt + tools), identical in both
- * arms, so a total-token comparison would be swamped by noise. Output tokens are
- * the overhead-independent measure of the work, and also a faithful proxy for
- * REVIEW cost — the artifact a reviewer reads is the artifact each arm emits.
+ * Both arms run the real task with real tools (no "print the files / print a
+ * diff" strawman): each is dropped into a scaffolded project and told to perform
+ * the rename, and we measure what it emits to get the job done.
  *
- * Drives the installed `claude` CLI headless in an isolated, minimal env. Writes
+ * Output tokens are the headline metric: they are the overhead-independent measure
+ * of the work and a faithful proxy for REVIEW cost (the artifact a reviewer reads).
+ * For repeatability the child `claude` runs in an isolated CLAUDE_CONFIG_DIR (no
+ * global CLAUDE.md, SessionStart hooks, plugins, or auto-loaded MCP), so the input
+ * overhead is small and identical across both arms; we still report per-arm CONTEXT
+ * size (input tokens at end) for reference. The isolated dir carries no credentials,
+ * so ANTHROPIC_API_KEY (or CLAUDE_CODE_OAUTH_TOKEN) must be set.
+ *
+ * Correctness is checked by COMPILER EMIT against a ground-truth scoped rename
+ * (the same oracle the stamper uses): the fixture is seeded with decoys — a
+ * look-alike `calculateTotalTax` symbol and a same-named `calculateTotal` in an
+ * `invoices` module — so a scope-blind edit (e.g. `sed`) that
+ * corrupts them FAILs correctness while costing few tokens. The table therefore
+ * reads honestly: cheap-and-safe (waiver) vs. what it actually costs an agent to
+ * do the rename *safely*.
+ *
+ * Drives the installed `claude` CLI headless (stream-json). Writes
  * bench/results.json + bench/results.md. Run with `pnpm bench`.
  *
- * Reproducibility: results are a dated snapshot; model output is non-deterministic
- * (each cell runs N times, median reported) and counts may drift across model
- * versions. This is stamped in the output, not hidden.
+ * Cost/reproducibility: these are full agentic sessions, so a run drives the paid
+ * `claude` CLI several turns per cell (N runs × fan-outs × 2 arms) — it is slow and
+ * costs real money. Results are a dated snapshot; model output is non-deterministic
+ * (mean ± sample stddev over N runs) and counts drift across model versions. This
+ * is stamped in the output, not hidden.
  */
 
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { applyWaiver } from '../src/apply.js';
+import { emitForFile } from '../src/engine/emit-compare.js';
+import { loadProject } from '../src/engine/project.js';
 import { loadWaiverFromObject } from '../src/load.js';
 import { scaffoldProject } from '../src/test-helpers.js';
 
@@ -31,30 +51,47 @@ const exec = promisify(execFile);
 
 const OLD = 'calculateTotal';
 const NEW = 'computeOrderTotal';
+/** Substring decoy: `s/calculateTotal/…/g` renames it too; a scoped rename won't. */
+const LOOKALIKE = 'calculateTotalTax';
 const FAN_OUT = (process.env.BENCH_FANOUT ?? '3,12,30').split(',').map(Number);
-const RUNS = Number(process.env.BENCH_RUNS ?? 3);
+const RUNS = Number(process.env.BENCH_RUNS ?? 5);
 const MODEL = 'claude-opus-4-8';
 
-const TSCONFIG = JSON.stringify(
-  {
-    compilerOptions: {
-      target: 'ES2022',
-      module: 'ESNext',
-      moduleResolution: 'Bundler',
-      strict: true,
-      skipLibCheck: true,
-    },
-    include: ['**/*.ts'],
-  },
-  null,
-  2,
-);
+/** Absolute path to the CLI entry, so the with-arm can spawn `waiver mcp` locally. */
+const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
+/**
+ * Absolute path to the local `tsx` binary. The MCP server is spawned by `claude`
+ * with cwd = the (dependency-free) fixture dir, so `node --import tsx` can't
+ * resolve `tsx` from there; invoking the resolved binary directly avoids that.
+ */
+const TSX = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url));
 
-/** A fixture project whose `calculateTotal` is called `refs` times across files. */
+/** Environment for the spawned `claude` processes; `main` isolates it (see below). */
+let childEnv: NodeJS.ProcessEnv = process.env;
+
+/** The known-correct scoped rename, used to build the emit oracle (ground truth). */
+const REF_WAIVER = {
+  schema: 'waiver-stamp/v0',
+  tool: 'waiver-stamp@0.0.0',
+  ops: [{ op: 'rename', target: { file: 'src/orders.ts', symbol: OLD }, to: NEW }],
+} as const;
+
+/**
+ * A fixture project whose `calculateTotal` is called `refs` times across files,
+ * seeded with two decoys a scope-blind edit would corrupt (see the emit oracle).
+ */
 function genFixture(refs: number): Record<string, string> {
   const files: Record<string, string> = {
-    'tsconfig.json': `${TSCONFIG}\n`,
-    'src/orders.ts': `export function ${OLD}(n: number): number {\n  return n * 2;\n}\n`,
+    // The rename target and a look-alike whose name embeds OLD as a prefix (a
+    // naive text substitution renames it too). No in-file hints — a natural trap.
+    'src/orders.ts':
+      `export function ${OLD}(n: number): number {\n  return n * 2;\n}\n\n` +
+      `export function ${LOOKALIKE}(n: number): number {\n  return ${OLD}(n) * 1.1;\n}\n`,
+    // A second module with its own, independent ${OLD} symbol. A scoped rename
+    // leaves it; a word-boundary `sed` still corrupts it.
+    'src/invoices.ts':
+      `function ${OLD}(x: number): number {\n  return x + 1;\n}\n` +
+      `export const invoiceTotal = ${OLD}(41);\n`,
   };
   const perFile = 4;
   let remaining = refs;
@@ -70,174 +107,312 @@ function genFixture(refs: number): Record<string, string> {
   return files;
 }
 
-function renderFiles(files: Record<string, string>): string {
-  return Object.entries(files)
-    .map(([path, content]) => `path: ${path}\n\`\`\`\n${content}\`\`\``)
-    .join('\n\n');
+function withoutPrompt(): string {
+  return [
+    'This is a TypeScript project and you are in its root directory.',
+    `Make a behaviour-preserving rename: rename the function \`${OLD}\` and all references to it to \`${NEW}\`, editing the files directly.`,
+    'Do not use Skill, planning, brainstorming, or sub-agent tools — just make the edits, then stop.',
+  ].join(' ');
 }
 
-function withoutPrompt(files: Record<string, string>): string {
+function withPrompt(): string {
   return [
-    `Here is a TypeScript project. Rename the function \`${OLD}\` to \`${NEW}\` everywhere it is declared or used.`,
-    'Output ONLY the complete new contents of every file that changes, each as a fenced code block preceded by a `path: <path>` line. Do not explain. Output every changed file in full.',
-    '',
-    renderFiles(files),
-  ].join('\n');
-}
-
-function withPrompt(files: Record<string, string>): string {
-  return [
-    `Here is a TypeScript project. Produce a waiver-stamp v0 waiver that renames the function \`${OLD}\` to \`${NEW}\`.`,
-    'Output ONLY the waiver as a single fenced ```json block. Do not explain. The format is exactly:',
-    '```json',
-    `{ "schema": "waiver-stamp/v0", "tool": "waiver-stamp@0.0.0", "ops": [ { "op": "rename", "target": { "file": "<path-to-declaration>", "symbol": "${OLD}" }, "to": "${NEW}" } ] }`,
-    '```',
-    '',
-    renderFiles(files),
-  ].join('\n');
+    'This is a TypeScript project and you are in its root directory.',
+    `Make a behaviour-preserving rename of the function \`${OLD}\` (and all references) to \`${NEW}\`.`,
+    'Do it by writing a waiver-stamp v0 waiver and applying it with the `waiver_apply` tool (from the waiver-stamp MCP server), which performs the rename deterministically. The waiver is exactly:',
+    `{ "schema": "waiver-stamp/v0", "tool": "waiver-stamp@0.0.0", "ops": [ { "op": "rename", "target": { "file": "<file that declares ${OLD}>", "symbol": "${OLD}" }, "to": "${NEW}" } ] }`,
+    'Call waiver_apply with that waiver object. Do not use Skill, planning, brainstorming, or sub-agent tools. When it is applied, stop.',
+  ].join(' ');
 }
 
 interface Run {
+  /** Total output tokens across every turn of the session (the work + review size). */
   outputTokens: number;
-  inputTokens: number;
+  /** Largest prompt context reached (input + cache), i.e. context size at the end. */
+  contextTokens: number;
   costUsd: number;
-  text: string;
 }
 
-async function runClaude(prompt: string, cwd: string, mcpConfig: string): Promise<Run> {
-  const { stdout } = await exec(
-    'claude',
-    [
-      '-p',
-      prompt,
-      '--output-format',
-      'json',
-      '--model',
-      MODEL,
-      '--strict-mcp-config',
-      '--mcp-config',
-      mcpConfig,
-    ],
-    { cwd, maxBuffer: 64 * 1024 * 1024 },
-  );
-  const j = JSON.parse(stdout) as {
-    result: string;
-    total_cost_usd: number;
-    usage: { input_tokens: number; output_tokens: number };
+/** A single stream-json event we care about (assistant usage / final result). */
+interface StreamEvent {
+  type?: string;
+  message?: {
+    usage?: {
+      input_tokens?: number;
+      cache_read_input_tokens?: number;
+      cache_creation_input_tokens?: number;
+    };
   };
-  return {
-    outputTokens: j.usage.output_tokens,
-    inputTokens: j.usage.input_tokens,
-    costUsd: j.total_cost_usd,
-    text: j.result,
-  };
+  total_cost_usd?: number;
+  modelUsage?: Record<string, { outputTokens?: number }>;
 }
 
-function median(xs: number[]): number {
-  const s = [...xs].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? (s[mid] ?? 0) : ((s[mid - 1] ?? 0) + (s[mid] ?? 0)) / 2;
-}
-
-function extractJson(text: string): unknown {
-  const fence = text.match(/```json\s*\n([\s\S]*?)```/);
-  const raw = fence ? fence[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+/** One headless `claude` invocation; rejects with the captured stderr on failure. */
+async function execClaude(prompt: string, cwd: string, extraArgs: string[]): Promise<string> {
   try {
-    return JSON.parse((raw ?? '').trim());
-  } catch {
-    return null;
+    const { stdout } = await exec(
+      'claude',
+      [
+        '-p',
+        prompt,
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--model',
+        MODEL,
+        '--permission-mode',
+        'auto',
+        ...extraArgs,
+      ],
+      { cwd, env: childEnv, maxBuffer: 256 * 1024 * 1024, timeout: 300_000 },
+    );
+    return stdout;
+  } catch (err) {
+    const e = err as { stderr?: string; stdout?: string; message?: string };
+    throw new Error(`claude failed: ${(e.stderr || e.stdout || e.message || '').slice(-800)}`);
   }
 }
 
-/** with-arm correctness: the emitted waiver applies and actually renames. */
-async function withCorrect(text: string, files: Record<string, string>): Promise<boolean> {
-  const obj = extractJson(text);
-  if (!obj) return false;
-  let waiver: ReturnType<typeof loadWaiverFromObject>;
-  try {
-    waiver = loadWaiverFromObject(obj);
-  } catch {
-    return false;
+/** Drive `claude` headless in `cwd`, letting it use tools; sum the token usage.
+ *  Retries a failed invocation twice — these are non-deterministic API sessions
+ *  and an occasional transient failure shouldn't abort a long benchmark. */
+async function runClaude(prompt: string, cwd: string, extraArgs: string[]): Promise<Run> {
+  let stdout = '';
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      stdout = await execClaude(prompt, cwd, extraArgs);
+      lastErr = undefined;
+      break;
+    } catch (err) {
+      lastErr = err;
+    }
   }
+  if (lastErr) throw lastErr;
+
+  let outputTokens = 0;
+  let contextTokens = 0;
+  let costUsd = 0;
+  for (const line of stdout.split('\n')) {
+    const t = line.trim();
+    if (!t.startsWith('{')) continue;
+    let ev: StreamEvent;
+    try {
+      ev = JSON.parse(t) as StreamEvent;
+    } catch {
+      continue;
+    }
+    if (ev.type === 'assistant') {
+      const u = ev.message?.usage;
+      if (u) {
+        const ctx =
+          (u.input_tokens ?? 0) +
+          (u.cache_read_input_tokens ?? 0) +
+          (u.cache_creation_input_tokens ?? 0);
+        if (ctx > contextTokens) contextTokens = ctx;
+      }
+    } else if (ev.type === 'result') {
+      costUsd = ev.total_cost_usd ?? 0;
+      // modelUsage aggregates output across every turn of the session.
+      for (const m of Object.values(ev.modelUsage ?? {})) outputTokens += m.outputTokens ?? 0;
+    }
+  }
+  return { outputTokens, contextTokens, costUsd };
+}
+
+/** Sample stats (n-1 stddev; 0 for a single run). */
+function meanStddev(xs: number[]): { mean: number; stddev: number } {
+  const n = xs.length;
+  const mean = xs.reduce((a, b) => a + b, 0) / Math.max(n, 1);
+  if (n < 2) return { mean, stddev: 0 };
+  const variance = xs.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1);
+  return { mean, stddev: Math.sqrt(variance) };
+}
+
+type Emits = { tsFiles: string[]; emits: Map<string, string> };
+
+/** The ground-truth emit oracle: apply the reference scoped rename, tokenize emit. */
+async function groundTruth(files: Record<string, string>): Promise<Emits> {
   const fix = await scaffoldProject(files);
   try {
-    await applyWaiver(waiver, { cwd: fix.cwd });
-    const orders = await readFile(join(fix.cwd, 'src/orders.ts'), 'utf8');
-    return orders.includes(NEW) && !orders.includes(OLD);
-  } catch {
-    return false;
+    await applyWaiver(loadWaiverFromObject(REF_WAIVER), { cwd: fix.cwd });
+    const project = loadProject(fix.cwd);
+    const tsFiles = Object.keys(files).filter((f) => f.endsWith('.ts'));
+    const emits = new Map(tsFiles.map((rel) => [rel, emitForFile(project, join(fix.cwd, rel))]));
+    return { tsFiles, emits };
   } finally {
     await fix.cleanup();
   }
 }
 
-/** without-arm correctness: the emitted *code* renames (new name present, old gone). */
-function withoutCorrect(text: string): boolean {
-  // Check only fenced code (not any preamble prose that might echo the old name).
-  const code = [...text.matchAll(/```[a-z]*\n([\s\S]*?)```/g)].map((m) => m[1] ?? '').join('\n');
-  const haystack = code || text;
-  return haystack.includes(NEW) && !new RegExp(`\\b${OLD}\\b`).test(haystack);
+/** The agent's mutated tree is correct iff every file's emit equals the oracle's. */
+function agentCorrect(cwd: string, gt: Emits): boolean {
+  try {
+    const project = loadProject(cwd);
+    return gt.tsFiles.every((rel) => emitForFile(project, join(cwd, rel)) === gt.emits.get(rel));
+  } catch {
+    return false;
+  }
+}
+
+/** Run one arm: scaffold a fresh tree, let the agent edit it, score correctness. */
+async function runArm(
+  prompt: string,
+  files: Record<string, string>,
+  gt: Emits,
+  mcpConfig: string,
+): Promise<{ run: Run; ok: boolean }> {
+  const fix = await scaffoldProject(files);
+  try {
+    const run = await runClaude(prompt, fix.cwd, [
+      '--strict-mcp-config',
+      '--mcp-config',
+      mcpConfig,
+    ]);
+    return { run, ok: agentCorrect(fix.cwd, gt) };
+  } finally {
+    await fix.cleanup();
+  }
 }
 
 interface CellResult {
   fanOut: number;
-  withoutOutputTokens: number;
-  withOutputTokens: number;
+  withoutOutput: { mean: number; stddev: number };
+  withOutput: { mean: number; stddev: number };
   ratio: number;
+  withoutContext: number;
+  withContext: number;
   withoutCorrect: boolean;
   withCorrect: boolean;
   withoutCostUsd: number;
   withCostUsd: number;
 }
 
-async function main(): Promise<void> {
-  const cwd = await mkdtemp(join(tmpdir(), 'ws-bench-'));
-  const mcpConfig = join(cwd, 'empty-mcp.json');
-  await writeFile(mcpConfig, JSON.stringify({ mcpServers: {} }), 'utf8');
+/** One arm-run's measured result — the unit the checkpoint caches. */
+type ArmResult = { run: Run; ok: boolean };
 
+/** On-disk checkpoint so a teardown mid-benchmark resumes rather than restarting. */
+interface Cache {
+  sig: string;
+  entries: Record<string, ArmResult>;
+}
+
+/** Bench runs are expensive agentic sessions; persist each so a kill costs ≤1. */
+const CACHE = 'bench/.bench-cache.json';
+/** Bump/parameterize to invalidate a stale checkpoint (e.g. on a model change). */
+const CACHE_SIG = MODEL;
+
+async function loadCache(): Promise<Cache> {
+  const fresh: Cache = { sig: CACHE_SIG, entries: {} };
+  try {
+    const c = JSON.parse(await readFile(CACHE, 'utf8')) as Cache;
+    return c.sig === CACHE_SIG ? c : fresh;
+  } catch {
+    return fresh;
+  }
+}
+
+async function saveCache(cache: Cache): Promise<void> {
+  await writeFile(CACHE, `${JSON.stringify(cache)}\n`, 'utf8');
+}
+
+async function main(): Promise<void> {
+  const tmp = await mkdtemp(join(tmpdir(), 'ws-bench-'));
+
+  // Repeatability: run the child `claude` in an isolated CLAUDE_CONFIG_DIR so it
+  // sees no global CLAUDE.md, SessionStart hooks, plugins, or auto-loaded MCP
+  // servers — only what we pass. The empty config dir has no stored credentials,
+  // so a token must supply auth.
+  const token = process.env.ANTHROPIC_API_KEY ?? process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  if (!token) {
+    throw new Error(
+      'set ANTHROPIC_API_KEY (or CLAUDE_CODE_OAUTH_TOKEN) so the isolated benchmark can ' +
+        'authenticate; the isolated CLAUDE_CONFIG_DIR carries no stored credentials.',
+    );
+  }
+  const configDir = join(tmp, 'claude-config');
+  await mkdir(configDir);
+  childEnv = { ...process.env, CLAUDE_CONFIG_DIR: configDir };
+
+  const emptyMcp = join(tmp, 'empty-mcp.json');
+  const waiverMcp = join(tmp, 'waiver-mcp.json');
+  await writeFile(emptyMcp, JSON.stringify({ mcpServers: {} }), 'utf8');
+  await writeFile(
+    waiverMcp,
+    JSON.stringify({
+      mcpServers: {
+        'waiver-stamp': { command: TSX, args: [CLI, 'mcp'] },
+      },
+    }),
+    'utf8',
+  );
+
+  const cache = await loadCache();
   const cells: CellResult[] = [];
   for (const fanOut of FAN_OUT) {
     const files = genFixture(fanOut);
+    const gt = await groundTruth(files);
     process.stderr.write(`fan-out ${fanOut}: `);
 
-    const without: Run[] = [];
-    const withRuns: Run[] = [];
+    const arms = [
+      { name: 'without', prompt: withoutPrompt(), mcp: emptyMcp },
+      { name: 'with', prompt: withPrompt(), mcp: waiverMcp },
+    ] as const;
+
     for (let r = 0; r < RUNS; r++) {
-      without.push(await runClaude(withoutPrompt(files), cwd, mcpConfig));
-      withRuns.push(await runClaude(withPrompt(files), cwd, mcpConfig));
-      process.stderr.write('.');
+      for (const arm of arms) {
+        const key = `${fanOut}|${arm.name}|${r}`;
+        if (cache.entries[key]) {
+          process.stderr.write('='); // resumed from checkpoint
+        } else {
+          cache.entries[key] = await runArm(arm.prompt, files, gt, arm.mcp);
+          await saveCache(cache);
+          process.stderr.write('.');
+        }
+      }
     }
     process.stderr.write('\n');
 
-    const woMed = median(without.map((x) => x.outputTokens));
-    const wMed = median(withRuns.map((x) => x.outputTokens));
+    const pick = (name: string): ArmResult[] =>
+      Array.from({ length: RUNS }, (_, r) => cache.entries[`${fanOut}|${name}|${r}`]).filter(
+        (e): e is ArmResult => Boolean(e),
+      );
+    const without = pick('without');
+    const withRuns = pick('with');
+    const woOut = meanStddev(without.map((x) => x.run.outputTokens));
+    const wOut = meanStddev(withRuns.map((x) => x.run.outputTokens));
     cells.push({
       fanOut,
-      withoutOutputTokens: woMed,
-      withOutputTokens: wMed,
-      ratio: Math.round((woMed / Math.max(wMed, 1)) * 10) / 10,
-      withoutCorrect: without.every((x) => withoutCorrect(x.text)),
-      withCorrect: (await Promise.all(withRuns.map((x) => withCorrect(x.text, files)))).every(
-        Boolean,
-      ),
-      withoutCostUsd: median(without.map((x) => x.costUsd)),
-      withCostUsd: median(withRuns.map((x) => x.costUsd)),
+      withoutOutput: woOut,
+      withOutput: wOut,
+      ratio: Math.round((woOut.mean / Math.max(wOut.mean, 1)) * 10) / 10,
+      withoutContext: Math.round(meanStddev(without.map((x) => x.run.contextTokens)).mean),
+      withContext: Math.round(meanStddev(withRuns.map((x) => x.run.contextTokens)).mean),
+      withoutCorrect: without.every((x) => x.ok),
+      withCorrect: withRuns.every((x) => x.ok),
+      withoutCostUsd: meanStddev(without.map((x) => x.run.costUsd)).mean,
+      withCostUsd: meanStddev(withRuns.map((x) => x.run.costUsd)).mean,
     });
   }
 
-  await rm(cwd, { recursive: true, force: true });
+  await rm(tmp, { recursive: true, force: true });
+  await rm(CACHE, { force: true }); // completed cleanly — drop the checkpoint
 
   const stamp = {
     model: MODEL,
     tool: 'waiver-stamp@0.0.0',
     date: new Date().toISOString().slice(0, 10),
     runsPerCell: RUNS,
-    metric: 'median output tokens',
+    metric: 'output tokens to make the change with tools (mean ± sample stddev)',
     cells,
   };
   await writeFile('bench/results.json', `${JSON.stringify(stamp, null, 2)}\n`, 'utf8');
   await writeFile('bench/results.md', renderMarkdown(stamp), 'utf8');
   process.stderr.write('wrote bench/results.json + bench/results.md\n');
+}
+
+function fmt(m: { mean: number; stddev: number }): string {
+  return `${Math.round(m.mean)} ± ${m.stddev.toFixed(1)}`;
 }
 
 function renderMarkdown(s: {
@@ -250,24 +425,26 @@ function renderMarkdown(s: {
   const rows = s.cells
     .map(
       (c) =>
-        `| ${c.fanOut} | ${c.withoutOutputTokens} | ${c.withOutputTokens} | **${c.ratio}×** | ${c.withCorrect && c.withoutCorrect ? '✓' : '✗'} |`,
+        `| ${c.fanOut} | ${fmt(c.withoutOutput)} | ${fmt(c.withOutput)} | **${c.ratio}×** | ${c.withoutContext} | ${c.withContext} | ${c.withCorrect && c.withoutCorrect ? '✓' : '✗'} |`,
     )
     .join('\n');
   return [
-    `<!-- generated by \`pnpm bench\` — ${s.model}, ${s.tool}, ${s.date}, median of ${s.runsPerCell} runs -->`,
+    `<!-- generated by \`pnpm bench\` — ${s.model}, ${s.tool}, ${s.date}, mean ± stddev of ${s.runsPerCell} runs -->`,
     '',
-    `**Tokens to express a rename refactor** — ${s.model}, median of ${s.runsPerCell} runs, ${s.date}.`,
-    'Output tokens (overhead-independent; also the size of the artifact a reviewer reads).',
-    'The waiver path is verified end-to-end every run: its output applies and stamps.',
+    `**Tokens to make a rename refactor** — ${s.model}, mean ± sample stddev of ${s.runsPerCell} runs, ${s.date}.`,
+    'Both arms *make the change* with real tools: the without-arm edits the files (editing tools + a shell);',
+    'the with-arm writes a waiver and applies it via the `waiver_apply` MCP tool. Output tokens are the',
+    'overhead-independent measure of the work and the size of the artifact a reviewer reads.',
     '',
-    '| References renamed | Without waiver (full diff) | With waiver | Savings | Rename correct |',
-    '|---|---|---|---|---|',
+    '| References renamed | Without waiver, output (mean±sd) | With waiver, output (mean±sd) | Savings | Without context | With context | Both correct |',
+    '|---|---|---|---|---|---|---|',
     rows,
     '',
-    'The waiver cost is ~flat regardless of fan-out — the deterministic runner does the',
-    'expansion — while the hand-written diff is several times larger. So both the',
-    'authoring and the review savings hold across refactor sizes. Model output is',
-    'non-deterministic; this is a dated snapshot — reproduce with `pnpm bench`.',
+    'Correctness is by compiler emit against a ground-truth scoped rename; the fixture seeds decoys (a',
+    '`calculateTotalTax` look-alike and a same-named `calculateTotal` in an invoices module) so a scope-blind',
+    'edit FAILs. Context is input tokens at end; the child `claude` runs in an isolated config dir, so that',
+    'overhead is small and identical across both arms. Model output is non-deterministic; this is a dated',
+    'snapshot — reproduce with `pnpm bench` (needs ANTHROPIC_API_KEY for the isolated run).',
     '',
   ].join('\n');
 }

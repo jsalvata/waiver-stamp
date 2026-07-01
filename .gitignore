@@ -5,6 +5,8 @@ coverage/
 .DS_Store
 *.tsbuildinfo
 .eslintcache
+.env
 
 # Serena cache
 .serena/
+bench/.bench-cache.json

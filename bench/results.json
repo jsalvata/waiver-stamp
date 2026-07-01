@@ -1,39 +1,63 @@
 {
   "model": "claude-opus-4-8",
   "tool": "waiver-stamp@0.0.0",
-  "date": "2026-06-30",
-  "runsPerCell": 3,
-  "metric": "median output tokens",
+  "date": "2026-07-01",
+  "runsPerCell": 5,
+  "metric": "output tokens to make the change with tools (mean ± sample stddev)",
   "cells": [
     {
       "fanOut": 3,
-      "withoutOutputTokens": 762,
-      "withOutputTokens": 174,
-      "ratio": 4.4,
-      "withoutCorrect": true,
+      "withoutOutput": {
+        "mean": 2611.2,
+        "stddev": 652.1692265049004
+      },
+      "withOutput": {
+        "mean": 1358.4,
+        "stddev": 267.0033707652396
+      },
+      "ratio": 1.9,
+      "withoutContext": 24251,
+      "withContext": 28763,
+      "withoutCorrect": false,
       "withCorrect": true,
-      "withoutCostUsd": 0.364899,
-      "withCostUsd": 0.114097
+      "withoutCostUsd": 0.2084336,
+      "withCostUsd": 0.27093730000000005
     },
     {
       "fanOut": 12,
-      "withoutOutputTokens": 515,
-      "withOutputTokens": 167,
-      "ratio": 3.1,
+      "withoutOutput": {
+        "mean": 3980.6,
+        "stddev": 471.5451197923694
+      },
+      "withOutput": {
+        "mean": 1395.4,
+        "stddev": 322.1681238111555
+      },
+      "ratio": 2.9,
+      "withoutContext": 27390,
+      "withContext": 27625,
       "withoutCorrect": true,
       "withCorrect": true,
-      "withoutCostUsd": 0.12318799999999999,
-      "withCostUsd": 0.11433399999999999
+      "withoutCostUsd": 0.3046591,
+      "withCostUsd": 0.2468528
     },
     {
       "fanOut": 30,
-      "withoutOutputTokens": 1044,
-      "withOutputTokens": 171,
-      "ratio": 6.1,
+      "withoutOutput": {
+        "mean": 2954,
+        "stddev": 1020.4768493209436
+      },
+      "withOutput": {
+        "mean": 1420.6,
+        "stddev": 403.33522038126057
+      },
+      "ratio": 2.1,
+      "withoutContext": 28677,
+      "withContext": 31310,
       "withoutCorrect": true,
       "withCorrect": true,
-      "withoutCostUsd": 0.1362775,
-      "withCostUsd": 0.1144235
+      "withoutCostUsd": 0.2840267,
+      "withCostUsd": 0.3084973
     }
   ]
 }
