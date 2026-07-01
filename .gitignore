@@ -10,3 +10,4 @@ coverage/
 # Serena cache
 .serena/
 bench/.bench-cache.json
+bench/transcripts/

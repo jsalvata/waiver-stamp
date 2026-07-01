@@ -147,10 +147,16 @@ interface StreamEvent {
   modelUsage?: Record<string, { outputTokens?: number }>;
 }
 
+/** Raw captured output of one `claude` invocation, kept for post-hoc inspection. */
+interface ClaudeOutput {
+  stdout: string;
+  stderr: string;
+}
+
 /** One headless `claude` invocation; rejects with the captured stderr on failure. */
-async function execClaude(prompt: string, cwd: string, extraArgs: string[]): Promise<string> {
+async function execClaude(prompt: string, cwd: string, extraArgs: string[]): Promise<ClaudeOutput> {
   try {
-    const { stdout } = await exec(
+    const { stdout, stderr } = await exec(
       'claude',
       [
         '-p',
@@ -166,7 +172,7 @@ async function execClaude(prompt: string, cwd: string, extraArgs: string[]): Pro
       ],
       { cwd, env: childEnv, maxBuffer: 256 * 1024 * 1024, timeout: 300_000 },
     );
-    return stdout;
+    return { stdout, stderr };
   } catch (err) {
     const e = err as { stderr?: string; stdout?: string; message?: string };
     throw new Error(`claude failed: ${(e.stderr || e.stdout || e.message || '').slice(-800)}`);
@@ -175,13 +181,20 @@ async function execClaude(prompt: string, cwd: string, extraArgs: string[]): Pro
 
 /** Drive `claude` headless in `cwd`, letting it use tools; sum the token usage.
  *  Retries a failed invocation twice — these are non-deterministic API sessions
- *  and an occasional transient failure shouldn't abort a long benchmark. */
-async function runClaude(prompt: string, cwd: string, extraArgs: string[]): Promise<Run> {
-  let stdout = '';
+ *  and an occasional transient failure shouldn't abort a long benchmark.
+ *  If `transcriptRel` is given, the full raw stream-json stdout (and any stderr)
+ *  of the successful attempt is written there for post-hoc inspection. */
+async function runClaude(
+  prompt: string,
+  cwd: string,
+  extraArgs: string[],
+  transcriptRel?: string,
+): Promise<Run> {
+  let out: ClaudeOutput = { stdout: '', stderr: '' };
   let lastErr: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      stdout = await execClaude(prompt, cwd, extraArgs);
+      out = await execClaude(prompt, cwd, extraArgs);
       lastErr = undefined;
       break;
     } catch (err) {
@@ -190,6 +203,17 @@ async function runClaude(prompt: string, cwd: string, extraArgs: string[]): Prom
   }
   if (lastErr) throw lastErr;
 
+  if (transcriptRel) {
+    // Deterministic filename → a re-run overwrites its own transcript in place;
+    // we never clear the directory (see main), so checkpoint-resumed cells keep
+    // the transcript written by their original run.
+    await writeFile(transcriptRel, out.stdout, 'utf8');
+    if (out.stderr.trim()) {
+      await writeFile(transcriptRel.replace(/\.jsonl$/, '.stderr.log'), out.stderr, 'utf8');
+    }
+  }
+
+  const { stdout } = out;
   let outputTokens = 0;
   let contextTokens = 0;
   let costUsd = 0;
@@ -255,21 +279,24 @@ function agentCorrect(cwd: string, gt: Emits): boolean {
   }
 }
 
-/** Run one arm: scaffold a fresh tree, let the agent edit it, score correctness. */
+/** Run one arm: scaffold a fresh tree, let the agent edit it, score correctness.
+ *  `transcriptRel` names where this run's raw session output is persisted. */
 async function runArm(
   prompt: string,
   files: Record<string, string>,
   gt: Emits,
   mcpConfig: string,
-): Promise<{ run: Run; ok: boolean }> {
+  transcriptRel: string,
+): Promise<ArmResult> {
   const fix = await scaffoldProject(files);
   try {
-    const run = await runClaude(prompt, fix.cwd, [
-      '--strict-mcp-config',
-      '--mcp-config',
-      mcpConfig,
-    ]);
-    return { run, ok: agentCorrect(fix.cwd, gt) };
+    const run = await runClaude(
+      prompt,
+      fix.cwd,
+      ['--strict-mcp-config', '--mcp-config', mcpConfig],
+      transcriptRel,
+    );
+    return { run, ok: agentCorrect(fix.cwd, gt), transcript: transcriptRel };
   } finally {
     await fix.cleanup();
   }
@@ -288,8 +315,9 @@ interface CellResult {
   withCostUsd: number;
 }
 
-/** One arm-run's measured result — the unit the checkpoint caches. */
-type ArmResult = { run: Run; ok: boolean };
+/** One arm-run's measured result — the unit the checkpoint caches.
+ *  `transcript` is the repo-relative path to this run's persisted raw session. */
+type ArmResult = { run: Run; ok: boolean; transcript?: string };
 
 /** On-disk checkpoint so a teardown mid-benchmark resumes rather than restarting. */
 interface Cache {
@@ -301,6 +329,9 @@ interface Cache {
 const CACHE = 'bench/.bench-cache.json';
 /** Bump/parameterize to invalidate a stale checkpoint (e.g. on a model change). */
 const CACHE_SIG = MODEL;
+
+/** Per-run raw session transcripts + their outcome index, for post-hoc inspection. */
+const TRANSCRIPTS = 'bench/transcripts';
 
 async function loadCache(): Promise<Cache> {
   const fresh: Cache = { sig: CACHE_SIG, entries: {} };
@@ -347,6 +378,12 @@ async function main(): Promise<void> {
     'utf8',
   );
 
+  // Keep transcripts across runs rather than clearing: filenames are deterministic
+  // (fanN-arm-runR.jsonl), so a fresh run overwrites its own cells in place, while
+  // checkpoint-resumed cells — which don't re-invoke `claude` — retain the
+  // transcript their original run wrote. Clearing here would orphan those.
+  await mkdir(TRANSCRIPTS, { recursive: true });
+
   const cache = await loadCache();
   const cells: CellResult[] = [];
   for (const fanOut of FAN_OUT) {
@@ -363,9 +400,10 @@ async function main(): Promise<void> {
       for (const arm of arms) {
         const key = `${fanOut}|${arm.name}|${r}`;
         if (cache.entries[key]) {
-          process.stderr.write('='); // resumed from checkpoint
+          process.stderr.write('='); // resumed from checkpoint (keeps its old transcript)
         } else {
-          cache.entries[key] = await runArm(arm.prompt, files, gt, arm.mcp);
+          const transcriptRel = `${TRANSCRIPTS}/fan${fanOut}-${arm.name}-run${r}.jsonl`;
+          cache.entries[key] = await runArm(arm.prompt, files, gt, arm.mcp, transcriptRel);
           await saveCache(cache);
           process.stderr.write('.');
         }
@@ -394,6 +432,24 @@ async function main(): Promise<void> {
       withCostUsd: meanStddev(withRuns.map((x) => x.run.costUsd)).mean,
     });
   }
+
+  // Outcome index: one row per arm-run, so the surprising cell (failed correctness
+  // or outlier tokens) can be spotted and its transcript opened directly. Built from
+  // the cache, so it covers freshly-run and checkpoint-resumed cells alike.
+  const index = Object.entries(cache.entries).map(([k, res]) => {
+    const [fanOut, arm, run] = k.split('|');
+    return {
+      fanOut: Number(fanOut),
+      arm,
+      run: Number(run),
+      transcript: res.transcript ?? null,
+      outputTokens: res.run.outputTokens,
+      contextTokens: res.run.contextTokens,
+      costUsd: res.run.costUsd,
+      ok: res.ok,
+    };
+  });
+  await writeFile(`${TRANSCRIPTS}/index.json`, `${JSON.stringify(index, null, 2)}\n`, 'utf8');
 
   await rm(tmp, { recursive: true, force: true });
   await rm(CACHE, { force: true }); // completed cleanly — drop the checkpoint
