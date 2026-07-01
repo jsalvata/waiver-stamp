@@ -434,10 +434,10 @@ command; there is no separate `check` (its schema/guard job is subsumed by `appl
 - **`apply`** exit: `0` applied · `1` op-application failure · `2` malformed waiver file
   · `3` internal.
 - **`verify [<commit>]`** (default `HEAD`) applies the §3.1 stamping principle to a
-  single commit, folding its embedded waiver over the commit's first parent. Exit: `0`
-  the commit is **stamped** · `1` **invalid** (embedded waiver present but fails) or
-  **unwaivered** (no block) · `2` malformed invocation (no such commit, or a root commit
-  with no parent) · `3` internal.
+  single commit, folding its embedded waiver over the commit's first parent. A merge or
+  root commit is **skipped** (§17.1). Exit: `0` the commit is **stamped** or **skipped**
+  · `1` **invalid** (embedded waiver present but fails) or **unwaivered** (no block) · `2`
+  malformed invocation (unresolvable commit-ish) · `3` internal.
 - **`stamp --base --head`** walks `base..head`, verifies each commit, and emits the
   aggregate PR verdict (§17.2). Exit: `0` verdict ∈ {APPROVE, COMMENT, ABSTAIN} · `1`
   REQUEST_CHANGES · `2` malformed invocation · `3` internal.
@@ -751,10 +751,10 @@ waiver stamp  --base <ref> --head <ref> [--json] # aggregate the verdict over ba
 folds `commit^..commit` through the §3.1 principle, and classifies the commit as
 **stamped** / **invalid** / **unwaivered** (table below). It is the author's local
 check: run it on `HEAD` right after committing and a failed claim surfaces immediately,
-not at review time. A **merge commit** (≥2 parents) is reported **skipped**
-(`merge-commit`, §17.1), never folded. Exit `0` stamped or skipped · `1` invalid or
-unwaivered · `2` malformed invocation (no such commit, or a root commit with no parent)
-· `3` internal.
+not at review time. A **merge commit** (≥2 parents) or a **root commit** (no parent) is
+reported **skipped** (`merge-commit` / `root-commit`, §17.1), never folded — it cannot be
+a single atomic step. Exit `0` stamped or skipped · `1` invalid or unwaivered · `2`
+malformed invocation (unresolvable commit-ish) · `3` internal.
 
 **`waiver stamp --base --head`** is the **PR rubber-stamp**: it verifies every commit in
 `base..head` and emits the aggregate verdict. A PR is *stamped* (APPROVE) exactly when
