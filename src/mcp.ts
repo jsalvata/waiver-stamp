@@ -11,7 +11,7 @@ import { z } from 'zod/v4';
 import { applyWaiver } from './apply.js';
 import { loadWaiverFromObject } from './load.js';
 import { InlineWaiverSchema } from './schema.js';
-import { stampWaiver } from './stamp.js';
+import { stampWaiver } from './stamp-core.js';
 import { verify } from './verify.js';
 
 type ToolResult = {

@@ -7,7 +7,7 @@
 import { extractWaiverBlock } from './commit-waiver.js';
 import { commitMessage, commitSubject, commitsInRange, parents } from './git.js';
 import type { PerCommitResult, Verdict, VerifyReport } from './report.js';
-import { stampWaiver } from './stamp.js';
+import { stampWaiver } from './stamp-core.js';
 
 export interface VerifyOptions {
   base: string;
