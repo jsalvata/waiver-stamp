@@ -50,4 +50,16 @@ describe('verify — single commit (§17.4)', () => {
     await g.commit({ 'tsconfig.json': FIXTURE_TSCONFIG_JSON, 'src/orders.ts': ORDERS_BASE }, 'base');
     await expect(verify({ commit: 'nope-not-a-ref', cwd: g.repo })).rejects.toThrow('did not resolve');
   });
+
+  it('a commit with a broken waiver block (invalid JSON) → invalid', async () => {
+    g = await makeGitRepo();
+    await g.commit({ 'tsconfig.json': FIXTURE_TSCONFIG_JSON, 'src/orders.ts': ORDERS_BASE }, 'base');
+    await g.commit(
+      { 'src/orders.ts': `${ORDERS_RENAMED}` },
+      'refactor: x\n\n```waiver\nnot json at all\n```\n',
+    );
+    const r = await verify({ cwd: g.repo });
+    expect(r.class).toBe('invalid');
+    expect(r.reasons.length).toBeGreaterThan(0);
+  });
 });

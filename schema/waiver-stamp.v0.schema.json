@@ -28,12 +28,14 @@
                 "properties": {
                   "file": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "pattern": "^(?:(?!```)[\\s\\S])*$"
                   },
                   "symbol": {
                     "description": "A TSDoc declaration reference, never line:col.",
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "pattern": "^(?:(?!```)[\\s\\S])*$"
                   }
                 },
                 "required": [
@@ -44,7 +46,8 @@
               },
               "to": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "pattern": "^(?:(?!```)[\\s\\S])*$"
               }
             },
             "required": [
@@ -68,12 +71,14 @@
                 "properties": {
                   "file": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "pattern": "^(?:(?!```)[\\s\\S])*$"
                   },
                   "within": {
                     "description": "The enclosing function/method (a TSDoc symbol).",
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "pattern": "^(?:(?!```)[\\s\\S])*$"
                   },
                   "from": {
                     "type": "object",
@@ -81,7 +86,8 @@
                       "text": {
                         "description": "A verbatim source snippet; normalized at resolution.",
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "pattern": "^(?:(?!```)[\\s\\S])*$"
                       },
                       "nth": {
                         "description": "Disambiguates in document order.",
@@ -102,7 +108,8 @@
                       "text": {
                         "description": "A verbatim source snippet; normalized at resolution.",
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "pattern": "^(?:(?!```)[\\s\\S])*$"
                       },
                       "nth": {
                         "description": "Disambiguates in document order.",
@@ -126,7 +133,8 @@
               },
               "name": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "pattern": "^(?:(?!```)[\\s\\S])*$"
               }
             },
             "required": [
@@ -149,16 +157,19 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "^(?:(?!```)[\\s\\S])*$"
                 }
               },
               "from": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "pattern": "^(?:(?!```)[\\s\\S])*$"
               },
               "to": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "pattern": "^(?:(?!```)[\\s\\S])*$"
               }
             },
             "required": [
@@ -182,7 +193,8 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "^(?:(?!```)[\\s\\S])*$"
                 }
               }
             },
@@ -205,7 +217,8 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "^(?:(?!```)[\\s\\S])*$"
                 }
               }
             },
@@ -228,7 +241,8 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "^(?:(?!```)[\\s\\S])*$"
                 }
               }
             },

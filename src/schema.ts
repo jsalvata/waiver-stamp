@@ -20,7 +20,7 @@ export const SCHEMA_ID = 'https://waiver-stamp.dev/schema/waiver-stamp.v0.schema
 const nonEmpty = z
   .string()
   .min(1)
-  .refine((s) => !s.includes('```'), 'must not contain triple backticks');
+  .regex(/^(?:(?!```)[\s\S])*$/, 'must not contain triple backticks');
 
 // ── Selectors (§5.2) ─────────────────────────────────────────────────────────
 
