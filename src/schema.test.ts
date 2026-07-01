@@ -30,6 +30,20 @@ describe('WaiverSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects a string value containing triple backticks (§17.1: keeps the waiver fence unambiguous)', () => {
+    const result = WaiverSchema.safeParse({
+      schema: 'waiver-stamp/v0',
+      ops: [
+        {
+          op: 'rename',
+          target: { file: 'src/orders.ts', symbol: 'calculateTotal' },
+          to: 'compute```Total',
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('accepts an empty ops list (formatting/type-only changes stamp with no ops)', () => {
     const result = WaiverSchema.safeParse({
       schema: 'waiver-stamp/v0',

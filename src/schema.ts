@@ -13,7 +13,14 @@ import { z } from 'zod/v4';
 export const SCHEMA_VERSION = 'waiver-stamp/v0';
 export const SCHEMA_ID = 'https://waiver-stamp.dev/schema/waiver-stamp.v0.schema.json';
 
-const nonEmpty = z.string().min(1);
+/**
+ * Shared string type. Forbids triple backticks so an embedded waiver can never
+ * contain a ` ``` ` fence — keeping the §17.1 commit-message fence unambiguous.
+ */
+const nonEmpty = z
+  .string()
+  .min(1)
+  .refine((s) => !s.includes('```'), 'must not contain triple backticks');
 
 // ── Selectors (§5.2) ─────────────────────────────────────────────────────────
 

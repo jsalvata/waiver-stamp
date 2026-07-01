@@ -31,8 +31,24 @@ describe('extractWaiverBlock — waiver fence (§17.1)', () => {
     expect(extractWaiverBlock(msg).kind).toBe('none');
   });
 
-  it('```waiver block with non-v0 schema → none (not selected)', () => {
+  it('```waiver block with non-v0 schema → invalid (§17.1: a present-but-broken claim, never dropped)', () => {
     const msg = 'x\n\n```waiver\n{"schema":"waiver-stamp/v1","ops":[]}\n```\n';
+    expect(extractWaiverBlock(msg)).toEqual({
+      kind: 'invalid',
+      reason: 'waiver block schema is not waiver-stamp/v0',
+    });
+  });
+
+  it('```waiver block that is not valid JSON → invalid (§17.1: fail closed)', () => {
+    const msg = 'x\n\n```waiver\nnot json at all {\n```\n';
+    expect(extractWaiverBlock(msg)).toEqual({
+      kind: 'invalid',
+      reason: 'waiver block is not valid JSON',
+    });
+  });
+
+  it('```waiver-draft fence is not a waiver block → none (info string must be exactly `waiver`)', () => {
+    const msg = 'x\n\n```waiver-draft\n{"schema":"waiver-stamp/v0","ops":[]}\n```\n';
     expect(extractWaiverBlock(msg)).toEqual({ kind: 'none' });
   });
 
