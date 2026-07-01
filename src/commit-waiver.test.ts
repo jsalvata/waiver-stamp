@@ -6,14 +6,40 @@ import type { Waiver } from './types.js';
 const W: Waiver = { schema: 'waiver-stamp/v0', ops: [] };
 
 describe('extractWaiverBlock — waiver fence (§17.1)', () => {
-  it('selects a ```waiver block', () => {
-    const block = extractWaiverBlock(waiverCommitMessage('refactor: x', W));
-    expect(block.kind).toBe('one');
+  it('no fenced block at all → none', () => {
+    const msg = 'refactor: just a normal commit\n\nbody text';
+    expect(extractWaiverBlock(msg)).toEqual({ kind: 'none' });
+  });
+
+  it('selects a ```waiver block with deep equality', () => {
+    const W_nontrivial: Waiver = {
+      schema: 'waiver-stamp/v0',
+      ops: [
+        {
+          op: 'rename',
+          target: { file: 'src/orders.ts', symbol: 'calculateTotal' },
+          to: 'computeTotal',
+        },
+      ],
+    };
+    const block = extractWaiverBlock(waiverCommitMessage('refactor: x', W_nontrivial));
+    expect(block).toEqual({ kind: 'one', waiver: W_nontrivial });
   });
 
   it('ignores an incidental ```json block with waiver-shaped content', () => {
     const msg = 'refactor: x\n\n```json\n{"schema":"waiver-stamp/v0","ops":[]}\n```\n';
     expect(extractWaiverBlock(msg).kind).toBe('none');
+  });
+
+  it('```waiver block with non-v0 schema → none (not selected)', () => {
+    const msg = 'x\n\n```waiver\n{"schema":"waiver-stamp/v1","ops":[]}\n```\n';
+    expect(extractWaiverBlock(msg)).toEqual({ kind: 'none' });
+  });
+
+  it('```waiver block with v0 schema but invalid ops → invalid with validation reason', () => {
+    const msg = 'x\n\n```waiver\n{"schema":"waiver-stamp/v0","ops":[{"op":"bogus"}]}\n```\n';
+    const block = extractWaiverBlock(msg);
+    expect(block).toEqual({ kind: 'invalid', reason: 'waiver failed schema validation' });
   });
 
   it('two ```waiver blocks → invalid', () => {
