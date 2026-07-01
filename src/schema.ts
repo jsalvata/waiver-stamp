@@ -125,6 +125,22 @@ export const WaiverSchema = z
   .strict();
 
 /**
+ * The waiver as an MCP tool input (spec §18.1): the full {@link WaiverSchema}
+ * object shape — so the tool is self-documenting and an LLM caller is guided to
+ * pass structured JSON — but tolerant of a JSON *string* argument, which LLM
+ * callers routinely send. A non-JSON string falls through to WaiverSchema and
+ * fails with a normal validation error.
+ */
+export const InlineWaiverSchema = z.preprocess((v) => {
+  if (typeof v !== 'string') return v;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
+}, WaiverSchema);
+
+/**
  * The published JSON Schema, generated from {@link WaiverSchema}.
  *
  * Kept as a derived artifact so the op vocabulary has one source (Zod) while the

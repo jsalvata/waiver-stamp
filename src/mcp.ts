@@ -7,9 +7,10 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { applyWaiver } from './apply.js';
 import { loadWaiverFromObject } from './load.js';
+import { InlineWaiverSchema } from './schema.js';
 import { stampWaiver } from './stamp.js';
 import { verify } from './verify.js';
 
@@ -35,7 +36,7 @@ export function createServer(tool: string): McpServer {
     'waiver_check',
     {
       description: 'Validate a draft waiver (schema). The agent inner authoring loop (§18.1).',
-      inputSchema: { waiver: z.unknown(), cwd: z.string().optional() },
+      inputSchema: { waiver: InlineWaiverSchema, cwd: z.string().optional() },
     },
     async ({ waiver }) => {
       try {
@@ -51,7 +52,7 @@ export function createServer(tool: string): McpServer {
     'waiver_apply',
     {
       description: 'Deterministically expand a waiver into a working-tree diff (§18.1).',
-      inputSchema: { waiver: z.unknown(), cwd: z.string().optional() },
+      inputSchema: { waiver: InlineWaiverSchema, cwd: z.string().optional() },
     },
     async ({ waiver, cwd }) => {
       try {
@@ -67,7 +68,7 @@ export function createServer(tool: string): McpServer {
     {
       description: 'Stamp a waiver against base/head refs (§18.1).',
       inputSchema: {
-        waiver: z.unknown(),
+        waiver: InlineWaiverSchema,
         base: z.string(),
         head: z.string(),
         cwd: z.string().optional(),

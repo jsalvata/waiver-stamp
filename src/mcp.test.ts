@@ -36,6 +36,15 @@ describe('mcp server', () => {
     expect(res.isError).toBeFalsy();
   });
 
+  it('waiver_check accepts a waiver passed as a JSON string', async () => {
+    const client = await connectClient();
+    const res = await client.callTool({
+      name: 'waiver_check',
+      arguments: { waiver: JSON.stringify(VALID) },
+    });
+    expect(res.isError).toBeFalsy();
+  });
+
   it('waiver_check rejects an invalid inline waiver', async () => {
     const client = await connectClient();
     const res = await client.callTool({
