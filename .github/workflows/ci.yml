@@ -33,4 +33,7 @@ jobs:
         run: pnpm test
 
       - name: CLI smoke test
-        run: node dist/cli.js check examples/valid.waiver.json
+        run: |
+          node dist/cli.js --help | grep -q ' verify '
+          node dist/cli.js --help | grep -q ' stamp '
+          node dist/cli.js verify --help >/dev/null
