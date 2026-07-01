@@ -161,12 +161,13 @@ The tool is **waiver-stamp**; its CLI binary is `waiver`.
   working tree, deterministically. (Exclusion ops describe hand-edits the author
   already made; `apply` does not generate those.) Built on **ts-morph** (substrate)
   with the TS compiler API as escape hatch.
-- **Stamper** — `waiver stamp`: reads a waiver and, against `base` vs `head`, runs the
-  §3.1 stamping principle (fold + emit-compare + guards) and emits a PASS/FAIL JSON
-  report. No separate trusted code — the stamper *is* the runner's verification mode. It
-  does **not** run `tsc` or tests: the backstop (§3.1.6) is the host CI's existing gate,
-  confirmed by the automation layer. So the tool's only deps are ts-morph, the package
-  manager (for `bump`), and git.
+- **Verifier** — `waiver verify`: reads a commit's embedded waiver and, against the
+  commit's first parent vs the commit, runs the §3.1 stamping principle (fold +
+  emit-compare + guards) and emits a PASS/FAIL JSON report; `waiver stamp` aggregates
+  these per-commit verdicts over a PR range (§17.2). No separate trusted code — the
+  verifier *is* the runner's verification mode. It does **not** run `tsc` or tests: the
+  backstop (§3.1.6) is the host CI's existing gate, confirmed by the automation layer. So
+  the tool's only deps are ts-morph, the package manager (for `bump`), and git.
 
 The **op vocabulary** has a single source of truth: the **Zod schema**
 (`src/schema.ts`). The TypeScript types are inferred from it and the **JSON Schema**
@@ -419,15 +420,30 @@ Given those, the rest is mechanical:
 ## 10. CLI & report
 
 ```
-waiver apply <waiver>                                   # applies transform ops; writes files
-waiver stamp <waiver> --base <ref> --head <ref> [--json]
-waiver check <waiver>                                    # schema + static guards only (fast lint)
+waiver apply <waiver>                            # apply transform ops to the working tree
+waiver verify [<commit>] [--json]                # verify one commit (default HEAD)
+waiver stamp  --base <ref> --head <ref> [--json] # aggregate the PR verdict over base..head
 ```
 
-Exit: `0` stamped · `1` stamping/guard/coverage failure · `2` malformed waiver
-· `3` internal error. `--json` emits a machine report (`stamped`,
-per-op + per-file findings, uncovered-diff list, failure reasons) — the seam for the
-CI/automation layer.
+`apply` takes a waiver **file**; `verify` and `stamp` take a **commit / range** and read
+each commit's **embedded** ` ```waiver ` block (§17.1) — the waiver travels with the
+change, so there is no waiver-file argument at check time. `apply` is the only file-taking
+command; there is no separate `check` (its schema/guard job is subsumed by `apply` and
+`verify`, §17.4).
+
+- **`apply`** exit: `0` applied · `1` op-application failure · `2` malformed waiver file
+  · `3` internal.
+- **`verify [<commit>]`** (default `HEAD`) applies the §3.1 stamping principle to a
+  single commit, folding its embedded waiver over the commit's first parent. Exit: `0`
+  the commit is **stamped** · `1` **invalid** (embedded waiver present but fails) or
+  **unwaivered** (no block) · `2` malformed invocation (no such commit, or a root commit
+  with no parent) · `3` internal.
+- **`stamp --base --head`** walks `base..head`, verifies each commit, and emits the
+  aggregate PR verdict (§17.2). Exit: `0` verdict ∈ {APPROVE, COMMENT, ABSTAIN} · `1`
+  REQUEST_CHANGES · `2` malformed invocation · `3` internal.
+
+`--json` emits the machine report (§17.3) — per-commit findings and, for `stamp`, the
+aggregate verdict — the seam for the CI/automation layer.
 
 ---
 
@@ -632,15 +648,16 @@ because it is mechanically vouched.
    produces the production-code diff deterministically.
 3. It commits with the **waiver embedded in the commit message** (§17). One commit = one
    atomic, self-certifying refactor step.
-4. On push, **`waiver verify`** (§17.2) re-folds each commit's embedded waiver and
-   stamps it. A correctly authored waiver stamps **by construction** (§3.3) — the LLM
-   never debugs a surprise stamp failure on the reproduced part.
+4. On push, **`waiver stamp`** (§17.2) verifies each commit's embedded waiver and
+   aggregates the PR verdict (the author can run **`waiver verify`** on a single commit
+   locally first, §17.4). A correctly authored waiver stamps **by construction** (§3.3) —
+   the LLM never debugs a surprise stamp failure on the reproduced part.
 
 **Two measurable wins (§19 publishes both; §20 leads with the second):**
 
 1. **Authoring tokens** — writing the intent costs *O(intent)* output tokens; hand-editing
    costs *O(diff)*. This is the number the project was asked to produce. It is **real but
-   conditional**: a wrong selector costs a `waiver_check` round-trip and a rewrite, so the
+   conditional**: a wrong selector costs a `waiver_apply` round-trip and a rewrite, so the
    honest metric *includes the validation/retry loop* (§19), and the win **grows with
    mechanical fan-out** — a 30-reference rename wins big; a one-call extract may be a wash.
    The skill (§18.2) exists precisely to keep selector authoring on the happy path.
@@ -662,13 +679,14 @@ mode (selector iteration) is taught against in the skill, not pretended away.
 
 ## 17. Commit-embedded waivers & per-commit PR verification
 
-§10's `stamp` takes a waiver **file**. That primitive stays, but the LLM-authoring path
-(§16) needs the waiver to **travel with the change**. The unit of certification becomes
-the **commit**, not a side-car file.
+`apply` takes a waiver **file**, but the LLM-authoring path (§16) needs the waiver to
+**travel with the change** at verification time. So the unit of certification is the
+**commit**, not a side-car file: `verify`/`stamp` read the waiver from the commit's
+embedded ` ```waiver ` block rather than from a path.
 
 ### 17.1 The commit-embedded waiver format
 
-A refactor commit carries its waiver as a **fenced ` ```json ` block** in the commit
+A refactor commit carries its waiver as a **fenced ` ```waiver ` block** in the commit
 message body:
 
 ````text
@@ -676,7 +694,7 @@ refactor: rename calculateTotal to computeTotal
 
 Pure rename across the orders module; no behaviour change.
 
-```json
+```waiver
 {
   "schema": "waiver-stamp/v0",
   "ops": [
@@ -690,17 +708,19 @@ Pure rename across the orders module; no behaviour change.
 
 - **Parsing algorithm (pinned, fail-closed).** `verify` reads the **full** message via
   `git log --format=%B` (never the truncated subject). It scans for **every** fenced
-  ` ```json … ``` ` block, parses each as JSON, and selects the **waiver blocks** as those
-  whose root object has `schema` **exactly equal to** `"waiver-stamp/v0"` (string equality,
-  not prefix/substring — the §5 Zod literal is the authority). Then:
+  ` ```waiver … ``` ` block (info-string exactly `waiver`) and parses each as JSON. The
+  block is **self-identifying by its fence** — no need to sniff unrelated ` ```json `
+  blocks — and its root `schema` must still equal `"waiver-stamp/v0"` **exactly** (string
+  equality, not prefix/substring — the §5 Zod literal is the authority; a ` ```waiver `
+  block whose `schema` differs or is absent is a present-but-broken claim). Then:
   - **0 waiver blocks** → the commit is **unwaivered**.
   - **exactly 1 waiver block** → the commit is **waivered**; it must pass full schema
-    validation (§5) and stamping (§3.1). A block carrying the `schema` key but failing
-    validation is **invalid** (§17.3), never silently dropped. Decoy non-waiver `json`
-    blocks (no/other `schema`) are ignored.
-  - **≥2 waiver blocks** → **invalid** (a commit is one atomic step). This also defeats the
-    "decoy-first-block" attack — selection is by `schema` equality across *all* blocks, not
-    "first json block."
+    validation (§5) and stamping (§3.1). A block that fails to parse or validate is
+    **invalid** (§17.3), never silently dropped. Incidental ` ```json ` (or other) fences
+    are ignored by construction — they are not ` ```waiver ` blocks.
+  - **≥2 waiver blocks** → **invalid** (a commit is one atomic step). Because selection is
+    by the ` ```waiver ` fence, the old "decoy-first-block" attack (hiding the real waiver
+    behind a decoy json block) does not arise.
 - **Robustness rules.** The block is matched tolerant of trailing whitespace and CRLF;
   the embedded JSON **may not itself contain a ` ``` ` fence** (the §5 schema forbids
   triple-backticks in string values, so the fence is always unambiguous). An embedded
@@ -713,17 +733,34 @@ Pure rename across the orders module; no behaviour change.
   A commit whose first parent lies outside `base..head` is likewise skipped (`out-of-range`).
 - **Stacking is supported and well-defined.** A multi-step refactor is a *sequence* of
   waivered commits; each stamps against its own parent, and because earlier commits are
-  already in the tree, later commits that depend on them stamp correctly. `verify` walks the
-  range in order. (Example: commit 1 renames a private helper; commit 2 renames the public
-  API that now uses it — both stamp.)
+  already in the tree, later commits that depend on them stamp correctly. `stamp` walks the
+  range in order (verifying each commit). (Example: commit 1 renames a private helper;
+  commit 2 renames the public API that now uses it — both stamp.)
 
-### 17.2 `waiver verify` — per-commit aggregation
+### 17.2 `waiver verify` (one commit) and `waiver stamp` (the PR)
+
+Two commands over the same engine — a single-commit primitive and its range
+aggregation:
 
 ```
-waiver verify --base <ref> --head <ref> [--json]
+waiver verify [<commit>] [--json]                # default HEAD — classify one commit
+waiver stamp  --base <ref> --head <ref> [--json] # aggregate the verdict over base..head
 ```
 
-Walks every commit in `base..head` in order and classifies each:
+**`waiver verify [<commit>]`** reads the commit's embedded ` ```waiver ` block (§17.1),
+folds `commit^..commit` through the §3.1 principle, and classifies the commit as
+**stamped** / **invalid** / **unwaivered** (table below). It is the author's local
+check: run it on `HEAD` right after committing and a failed claim surfaces immediately,
+not at review time. A **merge commit** (≥2 parents) is reported **skipped**
+(`merge-commit`, §17.1), never folded. Exit `0` stamped or skipped · `1` invalid or
+unwaivered · `2` malformed invocation (no such commit, or a root commit with no parent)
+· `3` internal.
+
+**`waiver stamp --base --head`** is the **PR rubber-stamp**: it verifies every commit in
+`base..head` and emits the aggregate verdict. A PR is *stamped* (APPROVE) exactly when
+every commit is *stamped*.
+
+`verify` classifies a single commit:
 
 | Per-commit class | Meaning |
 |---|---|
@@ -756,7 +793,7 @@ an automation layer wires these up, the worst case is status quo: the only verdi
 layer that treated COMMENT as approval would be its own bug, not a property of this tool;
 §18.3 fixes the contract so it can't.
 
-**Exit codes (extends §10 for `verify`):** `0` = analysis completed with verdict ∈
+**Exit codes (extends §10 for `stamp`):** `0` = analysis completed with verdict ∈
 {APPROVE, COMMENT, ABSTAIN} (no failed claim); `1` = REQUEST_CHANGES (≥1 `invalid` commit
 — a failed claim); `2` = malformed invocation; `3` = internal error. The *verdict* is the
 authoritative signal and always lives in `--json`; the exit code is the coarse "did any
@@ -774,10 +811,10 @@ artifact can differ from what was verified, both handled fail-closed:
   its whole diff; otherwise the team uses merge/rebase-merge so the verified commits land
   as-is. The README documents this as the supported merge mode.
 - **Rebase / force-push after verification.** A verdict is only honourable on the **exact
-  head SHA** it was computed for. The automation layer (§18.3) must run `verify` on the
+  head SHA** it was computed for. The automation layer (§18.3) must run `stamp` on the
   same head SHA it will merge, *after* the last push — and confirm host CI (§3.1.6) is green
   on that same SHA. A force-push that inserts a new commit produces a new head SHA → a new
-  verify run → the new (possibly unwaivered) commit is seen. Stale verdicts are never
+  `stamp` run → the new (possibly unwaivered) commit is seen. Stale verdicts are never
   reused.
 
 **Backstop binds to the verified head, not per-commit (clarifies §3.1.6).** "`tsc` clean +
@@ -798,28 +835,43 @@ commit yields an inline-able finding, and the verdict selects
 automation layer confirms host CI is green on the exact head SHA before honouring an
 APPROVE.
 
-### 17.4 `waiver commit` (authoring convenience)
+### 17.4 Authoring a waivered commit
 
-```
-waiver commit <waiver> [-m <subject>]
-```
+There is **no dedicated authoring command** — a waivered commit is an ordinary commit
+whose message body carries the ` ```waiver ` block (§17.1). The tool is a **verifier**,
+not a commit wrapper, so authoring goes through the repo's normal commit path (the
+`git-commit` skill + the `commit-msg` hook): the message carries a full
+subject/body/footer and is linted like any other commit. The flow, driven by the §18.2
+skill:
 
-The **recommended** way to land a waivered commit (not merely a convenience): it
-guarantees the embedded ` ```json ` block is byte-for-byte well-formed, so the author never
-discovers a malformed-embedding `invalid` at `verify` time. Sequence:
+1. **`waiver apply <waiver>`** — expand the transform ops into the working tree
+   (production code; hand-edit only test/doc files, §3.3).
+2. **Write a normal commit**, including the waiver as a fenced ` ```waiver ` block in the
+   message body. Place it **before any trailer paragraph** (`Refs:`, `BREAKING CHANGE:`)
+   so `semantic-release` and other trailer consumers still read the footer as the
+   terminal paragraph; `verify`/`extractWaiverBlock` are placement-agnostic (§17.1) and
+   do not care. The block's JSON is the waiver verbatim.
+3. **`waiver verify`** (no argument → `HEAD`) — folds the just-written commit through the
+   §3.1 principle. This is the identical computation `stamp` runs on push, so the author
+   confirms the claim **locally, one command after committing** — an under-covering
+   waiver, a guard violation, or a malformed block is caught now, not at review time. If
+   it fails, fix the waiver, `apply` again, and amend the commit (re-embedding the block).
 
-1. **Refuse on a dirty tree** (uncommitted changes that aren't the waiver's output → abort,
-   so `apply`'s output is unambiguous).
-2. Run **`check`** (schema + static guards, §10) on the waiver; abort on failure. It does
-   **not** run `stamp` — there is no base/head pair at commit time; stamping is `verify`'s
-   job on push. Fail-closed: an un-stampable waiver that passed `check` is still caught at
-   `verify` (→ REQUEST_CHANGES).
-3. `apply` the transform ops; **stage** exactly the changed files.
-4. Write the commit with the validated waiver embedded as a ` ```json ` block under
-   `-m <subject>`. On any failure the working tree is left untouched (no partial commit).
+**Why no wrapper, no `check`.** The former `waiver commit` (a one-shot `apply`+commit
+that could express only a subject and bypassed the linted path) and `waiver check`
+(schema + static guards) are **both removed**. In this flow every failure mode is
+already covered: `apply` rejects a malformed schema or an unresolvable selector, and
+`verify` — folding over the committed base — catches guards, coverage and emit
+divergence (which is *stricter* than `check`'s current-tree guards). "Well-formed by
+construction" is replaced by "confirmed before push," at the cost of one command.
 
-The skill (§18.2) drives this path so the LLM lands a stamp-by-construction commit with no
-surprise failures.
+**commitlint carve-out.** Pretty-printed waiver JSON can have lines longer than
+commitlint's `body-max-line-length` (100). The block is machine content in the body, so
+this repo sets `body-max-line-length: [0]` in `commitlint.config.js` and the single
+`commit-msg` hook run at commit time accepts it. **Adoption note:** any repo adopting
+waiver-stamp whose commitlint enforces `body-max-line-length` must do the same, or the
+hook rejects waivered commits. This is the message channel's one standing tax — a
+per-repo config line, documented in the README.
 
 ---
 
@@ -833,7 +885,7 @@ without shelling out by hand. Three integration layers, smallest trusted surface
 A **stdio** MCP server (the local-subprocess transport every Claude plugin MCP server
 uses) exposing the engine as tools. Stdio, not HTTP/SSE — the tool is a local CLI over a
 local checkout; there is no network service to host. The server is a thin adapter over
-the same library functions the CLI calls (`apply`, `stamp`, `check`, `verify`) — **no
+the same library functions the CLI calls (`apply`, `verify`, `stamp`) — **no
 second implementation**, so the §4 "one binary, no separate trusted code" property holds.
 
 Built on `@modelcontextprotocol/sdk` (stdio transport) — the one new runtime dependency,
@@ -841,15 +893,16 @@ added to `package.json` and confined to `src/mcp.ts`; the engine library stays
 SDK-free. Started by a new `waiver mcp` subcommand (the same binary), so a plugin
 manifest points at `waiver mcp`.
 
-Exposed tools (names stable; **waivers are passed inline as JSON objects**, not file paths
-— friendlier for an agent that just authored one in memory):
+Exposed tools (names stable; the MCP surface **mirrors the CLI**). `apply` takes the
+waiver **inline as a JSON object** — friendlier for an agent that just authored one in
+memory; `verify`/`stamp` read the **embedded** waiver from committed history, so they take
+a commit / range, not a waiver:
 
 | MCP tool | Wraps | Inputs | Returns |
 |---|---|---|---|
-| `waiver_check` | `check` | `{ waiver, cwd? }` | check result — the agent's inner authoring loop (no checkout work) |
 | `waiver_apply` | `apply` | `{ waiver, cwd? }` | `{ files[] }` — expands the transform ops into the working tree at `cwd` |
-| `waiver_stamp` | `stamp` | `{ waiver, base, head, cwd? }` | `StampReport` (§10) |
-| `waiver_verify` | `verify` | `{ base, head, cwd? }` | `VerifyReport` (§17.3) |
+| `waiver_verify` | `verify` | `{ commit?, cwd? }` | single-commit report (§17.3); `commit` defaults to `HEAD` |
+| `waiver_stamp` | `stamp` | `{ base, head, cwd? }` | aggregate PR report (§17.2/§17.3) |
 
 `cwd` defaults to the server's launch directory (the repo root) and bounds every file
 mutation; an agent juggling multiple checkouts passes it explicitly. Each tool returns the
@@ -863,8 +916,9 @@ needless per-call round-trip.
 
 A plugin **skill** that teaches the agent the §16 loop end-to-end: when a refactor is
 waiver-eligible (app-internal, single-project, symbol-level — §8), how to write the
-selectors (§5.2), to prefer `waiver_check`→`waiver_apply` over hand-editing, and to land
-the result via `waiver commit` (§17.4) so the waiver is embedded correctly. It **replaces**
+selectors (§5.2), to prefer `waiver_apply` over hand-editing, and to land the result by
+writing a normal commit with the ` ```waiver ` block in its body and confirming with
+`waiver verify` (§17.4). It **replaces**
 the scaffold's `generate-waiver` skill — on release `plugin/skills/generate-waiver/` is
 removed and the manifest points only at `refactor-with-waiver`. The skill encodes the
 **guaranteed-stamp discipline** (§3.3): apply for production code, hand-edit only test/doc
@@ -876,7 +930,7 @@ selector-iteration failure mode (§16) is taught against, not discovered in the 
 
 ### 18.3 Automation layer (out of scope, named seam)
 
-Turning a `waiver verify --json` verdict into an actual GitHub review (approve / comment /
+Turning a `waiver stamp --json` verdict into an actual GitHub review (approve / comment /
 request-changes via the API) is the **automation layer** — still out of scope per §12,
 but §17.3 fixes its input contract. A reference GitHub Action is a §20 README example,
 not part of the tool.
@@ -908,14 +962,15 @@ with input/total and `total_cost_usd` alongside for completeness, and runs each 
 times** reporting median + range (model output is non-deterministic).
 
 **The two numbers (§16):**
-- **Authoring** — *with*: the agent reads the code, writes a waiver, calls `waiver_check`
-  until it passes, then `waiver_apply`; the cost **includes the check→revise retry loop**
-  (selector errors are charged to the waiver path, per §16's honesty requirement).
+- **Authoring** — *with*: the agent reads the code, writes a waiver, and calls
+  `waiver_apply`; the cost **includes the apply→revise retry loop** (a malformed schema or
+  unresolvable selector fails `apply` and is charged to the waiver path, per §16's honesty
+  requirement).
   *without*: the agent reads the **same** code and emits the full refactor by editing files,
   **no refactor tool**. Both arms read the code — the win is not re-deriving the mechanical
   edits. Reported as output-token ratio without/with per task.
 - **Review** — *with*: a reviewer confirms the change by reading the waiver + running
-  `waiver verify` (≈0 model tokens to re-verify mechanically). *without*: an LLM reviewer
+  `waiver stamp` (≈0 model tokens to re-verify mechanically). *without*: an LLM reviewer
   reads the full diff to judge it. Approximated as "tokens to emit/read the diff" vs "tokens
   to read the waiver." This is the larger ratio and the README headline.
 
@@ -925,8 +980,8 @@ selector-stress task** (overloaded or static-method rename) to surface authoring
 honestly. The README states the **break-even**: at low fan-out the arms converge; the win
 grows with references touched.
 
-**Correctness gate (a token win only counts if the refactor is real).** *with*: `apply`
-output must `stamp` against the fixture. *without*: the emitted diff must `tsc --noEmit`
+**Correctness gate (a token win only counts if the refactor is real).** *with*: the
+committed `apply` output must **`verify`** against the fixture (§17.4). *without*: the emitted diff must `tsc --noEmit`
 clean **and** be judged intent-matching by an independent `claude -p` grader against a
 checked-in rubric. Any arm that fails is recorded as a **quality** result (e.g. the
 *without* path silently broke a call site), reported **separately** from the token ratio,
@@ -967,8 +1022,8 @@ The README is the project's front door and must do four jobs, in order:
 
 ## 21. Roadmap delta (additions to §13)
 
-**v0 also ships:** commit-embedded waivers + `waiver verify` per-commit aggregation
-(§17), the stdio MCP server (§18.1), the `refactor-with-waiver` skill (§18.2), the
-`bench/` token-economy harness (§19), and a README that leads with the problem and
-publishes the benchmark (§20). The GitHub-review automation layer (§18.3) remains out of
-scope — `waiver verify --json` is its contract.
+**v0 also ships:** commit-embedded waivers + `waiver verify` (one commit) / `waiver stamp`
+(per-commit PR aggregation) (§17), the stdio MCP server (§18.1), the `refactor-with-waiver`
+skill (§18.2), the `bench/` token-economy harness (§19), and a README that leads with the
+problem and publishes the benchmark (§20). The GitHub-review automation layer (§18.3)
+remains out of scope — `waiver stamp --json` is its contract.
