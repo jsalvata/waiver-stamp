@@ -1,9 +1,17 @@
 /** CLI surface (§10): apply/verify/stamp/mcp are registered; commit/check are gone. */
 import { execFile } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from './test-helpers.js';
+import {
+  FIXTURE_TSCONFIG_JSON,
+  type Fixture,
+  type GitRepoFixture,
+  makeGitRepo,
+  scaffoldProject,
+} from './test-helpers.js';
 
 const run = promisify(execFile);
 
@@ -29,9 +37,12 @@ function commandNames(helpText: string): string[] {
 }
 
 let g: GitRepoFixture | undefined;
+let fix: Fixture | undefined;
 afterEach(async () => {
   await g?.cleanup();
   g = undefined;
+  await fix?.cleanup();
+  fix = undefined;
 });
 
 describe('CLI surface (§10)', () => {
@@ -52,6 +63,21 @@ describe('CLI surface (§10)', () => {
     const { stdout } = await runCli(['stamp', '--help']);
     expect(stdout).toContain('--base <ref>');
     expect(stdout).toContain('--head <ref>');
+  });
+
+  it('apply op-application failure exits 1, not 3 (§10)', async () => {
+    fix = await scaffoldProject({ 'src/a.ts': 'export const a = 1;\n' });
+    const waiver = {
+      schema: 'waiver-stamp/v0',
+      ops: [{ op: 'rename', target: { file: 'src/missing.ts', symbol: 'x' }, to: 'y' }],
+    };
+    await writeFile(join(fix.cwd, 'w.json'), JSON.stringify(waiver), 'utf8');
+    const err = await runCli(['apply', 'w.json'], fix.cwd).then(
+      () => null,
+      (e: unknown) => e as { code?: number; stderr?: string },
+    );
+    expect(err?.code).toBe(1);
+    expect(err?.stderr).toContain('did not resolve');
   });
 
   it('verify with no args on a root-commit-only repo exits 0 and reports skipped', async () => {

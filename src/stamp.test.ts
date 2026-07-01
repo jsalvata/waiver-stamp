@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { CommitResolutionError } from './errors.js';
 import type { PerCommitResult } from './report.js';
 import {
   FIXTURE_TSCONFIG_JSON,
@@ -86,6 +87,14 @@ describe('stamp aggregation (the verdict matrix, §17.2)', () => {
     );
     const report = await stamp({ base: b, head, cwd: g.repo });
     expect(report.verdict).toBe('REQUEST_CHANGES');
+  });
+
+  it('rejects with CommitResolutionError when base/head do not resolve (§10: malformed → exit 2)', async () => {
+    g = await makeGitRepo();
+    await base();
+    await expect(stamp({ base: 'nope1', head: 'nope2', cwd: g.repo })).rejects.toThrow(
+      CommitResolutionError,
+    );
   });
 
   it('ABSTAINS when no commit carries a waiver', async () => {

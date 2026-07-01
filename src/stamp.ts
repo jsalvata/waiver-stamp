@@ -2,7 +2,7 @@
  * PR-level rubber-stamp (§17.2): walk base..head, classify each commit by its embedded
  * waiver, and aggregate to a single verdict. Only APPROVE removes review.
  */
-import { commitsInRange } from './git.js';
+import { commitsInRange, resolveCommit } from './git.js';
 import type { PerCommitResult, Verdict, VerifyReport } from './report.js';
 import { classifyCommit } from './verify.js';
 
@@ -15,7 +15,11 @@ export interface StampRangeOptions {
 
 export async function stamp(options: StampRangeOptions): Promise<VerifyReport> {
   const cwd = options.cwd ?? process.cwd();
-  const shas = await commitsInRange(cwd, options.base, options.head);
+  // Resolve refs up front: an unresolvable --base/--head is a malformed
+  // invocation (§10 → exit 2, via CommitResolutionError), not an internal error.
+  const base = await resolveCommit(cwd, options.base);
+  const head = await resolveCommit(cwd, options.head);
+  const shas = await commitsInRange(cwd, base, head);
   const commits: PerCommitResult[] = [];
   for (const sha of shas) commits.push(await classifyCommit(cwd, sha));
   return { verdict: aggregate(commits), commits };

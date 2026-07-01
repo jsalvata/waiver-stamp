@@ -5,6 +5,8 @@ import { apply } from './apply.js';
 import {
   CommitResolutionError,
   NotImplementedError,
+  OpApplicationError,
+  SelectorResolutionError,
   WaiverParseError,
   WaiverValidationError,
 } from './errors.js';
@@ -31,6 +33,12 @@ async function run(body: () => Promise<void>): Promise<void> {
     } else if (err instanceof CommitResolutionError) {
       console.error(`error: '${err.ref}' does not resolve to a commit`);
       setExit(EXIT.MALFORMED);
+    } else if (err instanceof OpApplicationError) {
+      console.error(`error: ${err.opKind} failed: ${err.detail}`);
+      setExit(EXIT.FAILURE);
+    } else if (err instanceof SelectorResolutionError) {
+      console.error(`error: selector '${err.selector}' did not resolve: ${err.detail}`);
+      setExit(EXIT.FAILURE);
     } else if (err instanceof NotImplementedError) {
       console.error(`error: '${err.feature}' is not implemented in v0`);
       setExit(EXIT.INTERNAL);
