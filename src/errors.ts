@@ -56,3 +56,11 @@ export class DirtyTreeError extends Error {
     super('Working tree has tracked changes; commit or stash them first');
   }
 }
+
+/** A commit-ish argument did not resolve to a commit (§10 malformed invocation). */
+export class CommitResolutionError extends Error {
+  override readonly name = 'CommitResolutionError';
+  constructor(readonly ref: string) {
+    super('Argument did not resolve to a commit');
+  }
+}

@@ -1,11 +1,33 @@
-/** File-based stamping CLI seam (§10). Reads a waiver file and stamps a base/head diff. */
-import { loadWaiver } from './load.js';
-import type { StampReport } from './report.js';
-import { stampWaiver, type StampOptions } from './stamp-core.js';
+/**
+ * PR-level rubber-stamp (§17.2): walk base..head, classify each commit by its embedded
+ * waiver, and aggregate to a single verdict. Only APPROVE removes review.
+ */
+import { commitsInRange } from './git.js';
+import type { PerCommitResult, Verdict, VerifyReport } from './report.js';
+import { classifyCommit } from './verify.js';
 
-export type { StampOptions } from './stamp-core.js';
-export { stampWaiver } from './stamp-core.js';
+export interface StampRangeOptions {
+  base: string;
+  head: string;
+  /** Repo path. Defaults to process.cwd(). */
+  cwd?: string;
+}
 
-export async function stamp(path: string, options: StampOptions): Promise<StampReport> {
-  return stampWaiver(await loadWaiver(path), options);
+export async function stamp(options: StampRangeOptions): Promise<VerifyReport> {
+  const cwd = options.cwd ?? process.cwd();
+  const shas = await commitsInRange(cwd, options.base, options.head);
+  const commits: PerCommitResult[] = [];
+  for (const sha of shas) commits.push(await classifyCommit(cwd, sha));
+  return { verdict: aggregate(commits), commits };
+}
+
+/** Highest-severity verdict present: REQUEST_CHANGES > COMMENT > APPROVE > ABSTAIN (§17.2). */
+export function aggregate(commits: readonly PerCommitResult[]): Verdict {
+  const hasInvalid = commits.some((c) => c.class === 'invalid');
+  const hasStamped = commits.some((c) => c.class === 'stamped');
+  const hasUnwaivered = commits.some((c) => c.class === 'unwaivered');
+  if (hasInvalid) return 'REQUEST_CHANGES';
+  if (hasStamped && hasUnwaivered) return 'COMMENT';
+  if (hasStamped) return 'APPROVE';
+  return 'ABSTAIN';
 }

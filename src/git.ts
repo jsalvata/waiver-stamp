@@ -9,6 +9,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { CommitResolutionError } from './errors.js';
 
 const exec = promisify(execFile);
 
@@ -16,6 +17,15 @@ const exec = promisify(execFile);
 export async function runGit(repo: string, args: string[]): Promise<string> {
   const { stdout } = await exec('git', args, { cwd: repo, maxBuffer: 64 * 1024 * 1024 });
   return stdout.replace(/\n$/, '');
+}
+
+/** Resolve a commit-ish to a full SHA; throws CommitResolutionError if it is not a commit. */
+export async function resolveCommit(repo: string, ref: string): Promise<string> {
+  try {
+    return await runGit(repo, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+  } catch {
+    throw new CommitResolutionError(ref);
+  }
 }
 
 /** SHAs in `base..head`, oldest first (excludes base, includes head). */
