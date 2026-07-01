@@ -114,10 +114,6 @@ export const OpSchema = z.discriminatedUnion('op', [
 export const WaiverSchema = z
   .object({
     schema: z.literal(SCHEMA_VERSION).describe('Vocabulary/validation version.'),
-    tool: z
-      .string()
-      .regex(/^waiver-stamp@.+$/)
-      .describe('Pins op semantics + bundled ts-morph; stamp refuses on mismatch.'),
     ops: z
       .array(OpSchema)
       .describe('Ordered list; transform ops apply in order, exclusion ops are order-free.'),

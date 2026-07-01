@@ -44,7 +44,7 @@ committed 514bb5d0
 refactor: rename calculateTotal to computeOrderTotal
 
 ```json
-{ "schema": "waiver-stamp/v0", "tool": "waiver-stamp@0.1.0",
+{ "schema": "waiver-stamp/v0",
   "ops": [ { "op": "rename",
              "target": { "file": "src/orders.ts", "symbol": "calculateTotal" },
              "to": "computeOrderTotal" } ] }
@@ -140,7 +140,7 @@ waiver mcp                                              # run the stdio MCP serv
 ```
 
 Exit codes: `0` stamped / approve · `1` stamping failure / REQUEST_CHANGES · `2`
-malformed waiver or tool-version mismatch · `3` internal error.
+malformed waiver · `3` internal error.
 
 ## Scope (v0)
 
@@ -159,7 +159,6 @@ coverage. See [`docs/spec.md` §13/§21](docs/spec.md) for the roadmap.
 ```jsonc
 {
   "schema": "waiver-stamp/v0",
-  "tool":   "waiver-stamp@0.0.0",
   "ops": [
     { "op": "rename", "target": { "file": "src/foo.ts", "symbol": "oldName" }, "to": "newName" },
     { "op": "change-docs", "files": ["README.md"] }

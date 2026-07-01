@@ -5,7 +5,6 @@ import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from './test-
 import type { Waiver } from './types.js';
 import { aggregate, verify } from './verify.js';
 
-const TOOL = 'waiver-stamp@0.1.0';
 const ORDERS_BASE = 'export function calculateTotal(n: number): number {\n  return n * 2;\n}\n';
 const USAGE_BASE =
   "import { calculateTotal } from './orders';\nexport const t = calculateTotal(21);\n";
@@ -13,10 +12,9 @@ const ORDERS_RENAMED = 'export function computeTotal(n: number): number {\n  ret
 const USAGE_RENAMED =
   "import { computeTotal } from './orders';\nexport const t = computeTotal(21);\n";
 
-function renameWaiver(tool = TOOL): Waiver {
+function renameWaiver(): Waiver {
   return {
     schema: 'waiver-stamp/v0',
-    tool,
     ops: [
       {
         op: 'rename',
@@ -53,7 +51,7 @@ describe('verify aggregation (the verdict matrix, §17.2)', () => {
       { 'src/orders.ts': ORDERS_RENAMED, 'src/usage.ts': USAGE_RENAMED },
       embedWaiver('refactor: rename calculateTotal', renameWaiver()),
     );
-    const report = await verify({ base: b, head, cwd: g.repo, tool: TOOL });
+    const report = await verify({ base: b, head, cwd: g.repo });
     expect(report.verdict).toBe('APPROVE');
   });
 
@@ -68,7 +66,7 @@ describe('verify aggregation (the verdict matrix, §17.2)', () => {
       { 'src/usage.ts': `${USAGE_RENAMED}export const extra = 1;\n` },
       'chore: add an unwaivered line',
     );
-    const report = await verify({ base: b, head, cwd: g.repo, tool: TOOL });
+    const report = await verify({ base: b, head, cwd: g.repo });
     expect(report.verdict).toBe('COMMENT');
   });
 
@@ -82,20 +80,8 @@ describe('verify aggregation (the verdict matrix, §17.2)', () => {
       },
       embedWaiver('refactor: rename', renameWaiver()),
     );
-    const report = await verify({ base: b, head, cwd: g.repo, tool: TOOL });
+    const report = await verify({ base: b, head, cwd: g.repo });
     expect(report.verdict).toBe('REQUEST_CHANGES');
-  });
-
-  it('REQUESTS CHANGES on a tool-version mismatch', async () => {
-    g = await makeGitRepo();
-    const b = await base();
-    const head = await g.commit(
-      { 'src/orders.ts': ORDERS_RENAMED, 'src/usage.ts': USAGE_RENAMED },
-      embedWaiver('refactor: rename', renameWaiver('waiver-stamp@9.9.9')),
-    );
-    const report = await verify({ base: b, head, cwd: g.repo, tool: TOOL });
-    expect(report.verdict).toBe('REQUEST_CHANGES');
-    expect(report.commits[0]?.reasons).toContain('tool-mismatch');
   });
 
   it('ABSTAINS when no commit carries a waiver', async () => {
@@ -105,7 +91,7 @@ describe('verify aggregation (the verdict matrix, §17.2)', () => {
       { 'src/usage.ts': `${USAGE_BASE}export const extra = 1;\n` },
       'chore: a normal edit',
     );
-    const report = await verify({ base: b, head, cwd: g.repo, tool: TOOL });
+    const report = await verify({ base: b, head, cwd: g.repo });
     expect(report.verdict).toBe('ABSTAIN');
   });
 });

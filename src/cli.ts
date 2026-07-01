@@ -7,7 +7,6 @@ import { commitWaiver } from './commit.js';
 import {
   DirtyTreeError,
   NotImplementedError,
-  ToolMismatchError,
   WaiverParseError,
   WaiverValidationError,
 } from './errors.js';
@@ -17,7 +16,6 @@ import { stamp } from './stamp.js';
 import { verify } from './verify.js';
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
-const TOOL = `waiver-stamp@${version}`;
 
 /** Run a command body, mapping its outcome to the §10 / §17.2 exit-code contract. */
 async function run(body: () => Promise<void>): Promise<void> {
@@ -31,9 +29,6 @@ async function run(body: () => Promise<void>): Promise<void> {
     } else if (err instanceof WaiverValidationError) {
       console.error('error: waiver failed schema validation');
       for (const e of err.errors) console.error(`  - ${e}`);
-      setExit(EXIT.MALFORMED);
-    } else if (err instanceof ToolMismatchError) {
-      console.error(`error: waiver pins ${err.waiverTool} but this tool is ${err.runningTool}`);
       setExit(EXIT.MALFORMED);
     } else if (err instanceof DirtyTreeError) {
       console.error('error: working tree has tracked changes; commit or stash them first');
@@ -84,7 +79,6 @@ program
         base: opts.base,
         head: opts.head,
         cwd: process.cwd(),
-        tool: TOOL,
       });
       if (opts.json) console.log(JSON.stringify(report, null, 2));
       else console.log(report.stamped ? 'STAMPED' : `FAILED: ${report.failures.join('; ')}`);
@@ -104,7 +98,6 @@ program
         base: opts.base,
         head: opts.head,
         cwd: process.cwd(),
-        tool: TOOL,
       });
       if (opts.json) {
         console.log(JSON.stringify(report, null, 2));
@@ -150,7 +143,7 @@ program
   .command('mcp')
   .description('run the stdio MCP server exposing the engine as tools (§18.1)')
   .action(async () => {
-    await startMcpServer(TOOL);
+    await startMcpServer(version);
   });
 
 await program.parseAsync(process.argv);

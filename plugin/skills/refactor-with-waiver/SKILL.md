@@ -56,7 +56,6 @@ across the project. The waiver:
 ```json
 {
   "schema": "waiver-stamp/v0",
-  "tool": "waiver-stamp@0.0.0",
   "ops": [
     { "op": "rename", "target": { "symbol": "computeTotal" }, "to": "computeOrderTotal" }
   ]

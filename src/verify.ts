@@ -14,8 +14,6 @@ export interface VerifyOptions {
   head: string;
   /** Repo path where `base`/`head` live. Defaults to `process.cwd()`. */
   cwd?: string;
-  /** The running tool id (`waiver-stamp@x.y.z`); a commit pinned to another is invalid. */
-  tool: string;
 }
 
 export async function verify(options: VerifyOptions): Promise<VerifyReport> {
@@ -24,13 +22,13 @@ export async function verify(options: VerifyOptions): Promise<VerifyReport> {
 
   const commits: PerCommitResult[] = [];
   for (const sha of shas) {
-    commits.push(await classifyCommit(cwd, sha, options.tool));
+    commits.push(await classifyCommit(cwd, sha));
   }
 
   return { verdict: aggregate(commits), commits };
 }
 
-async function classifyCommit(cwd: string, sha: string, tool: string): Promise<PerCommitResult> {
+async function classifyCommit(cwd: string, sha: string): Promise<PerCommitResult> {
   const subject = await commitSubject(cwd, sha);
   const base = { sha, subject, perOpFindings: [], uncoveredFiles: [] };
 
@@ -47,11 +45,7 @@ async function classifyCommit(cwd: string, sha: string, tool: string): Promise<P
   if (block.kind === 'none') return { ...base, class: 'unwaivered', reasons: [] };
   if (block.kind === 'invalid') return { ...base, class: 'invalid', reasons: [block.reason] };
 
-  if (block.waiver.tool !== tool) {
-    return { ...base, class: 'invalid', reasons: ['tool-mismatch'] };
-  }
-
-  const report = await stampWaiver(block.waiver, { base: ps[0], head: sha, cwd, tool });
+  const report = await stampWaiver(block.waiver, { base: ps[0], head: sha, cwd });
   return {
     ...base,
     class: report.stamped ? 'stamped' : 'invalid',

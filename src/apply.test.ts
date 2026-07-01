@@ -26,7 +26,6 @@ describe('apply', () => {
     });
     const waiverPath = await writeWaiver(fix.cwd, {
       schema: 'waiver-stamp/v0',
-      tool: 'waiver-stamp@0.1.0',
       ops: [
         {
           op: 'rename',
@@ -48,11 +47,10 @@ describe('apply', () => {
 
   it('rejects an invalid waiver before reaching the engine', async () => {
     fix = await scaffoldProject({ 'src/orders.ts': 'export const x = 1;\n' });
-    // tool 'x' fails the `waiver-stamp@…` pattern → validation error, never the engine.
+    // An unknown op kind fails schema validation → validation error, never the engine.
     const waiverPath = await writeWaiver(fix.cwd, {
       schema: 'waiver-stamp/v0',
-      tool: 'x',
-      ops: [],
+      ops: [{ op: 'nope' }],
     });
     await expect(apply(waiverPath, { cwd: fix.cwd })).rejects.toBeInstanceOf(WaiverValidationError);
   });

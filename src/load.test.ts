@@ -19,7 +19,6 @@ describe('loadWaiver', () => {
   it('accepts a schema-valid waiver and returns it parsed', async () => {
     const waiver = await loadWaiver(validExample);
     expect(waiver.schema).toBe('waiver-stamp/v0');
-    expect(waiver.tool).toMatch(/^waiver-stamp@/);
     expect(waiver.ops.map((o) => o.op)).toEqual([
       'rename',
       'extract-function',
@@ -38,7 +37,6 @@ describe('loadWaiver', () => {
       'invalid.json',
       JSON.stringify({
         schema: 'waiver-stamp/v0',
-        tool: 'waiver-stamp@0.0.0',
         ops: [{ op: 'frobnicate' }],
       }),
     );
@@ -56,15 +54,14 @@ describe('loadWaiverFromObject', () => {
   it('validates an already-parsed object and returns it typed', () => {
     const waiver = loadWaiverFromObject({
       schema: 'waiver-stamp/v0',
-      tool: 'waiver-stamp@0.1.0',
       ops: [{ op: 'rename', target: { file: 'src/a.ts', symbol: 'foo' }, to: 'bar' }],
     });
     expect(waiver.ops[0]?.op).toBe('rename');
   });
 
   it('throws WaiverValidationError on a non-conforming object', () => {
-    expect(() => loadWaiverFromObject({ schema: 'waiver-stamp/v0', tool: 'x', ops: [] })).toThrow(
-      WaiverValidationError,
-    );
+    expect(() =>
+      loadWaiverFromObject({ schema: 'waiver-stamp/v0', ops: [{ op: 'nope' }] }),
+    ).toThrow(WaiverValidationError);
   });
 });

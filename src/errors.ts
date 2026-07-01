@@ -56,14 +56,3 @@ export class DirtyTreeError extends Error {
     super('Working tree has tracked changes; commit or stash them first');
   }
 }
-
-/** The waiver's pinned `tool@version` does not match the running tool (spec §5, §9). */
-export class ToolMismatchError extends Error {
-  override readonly name = 'ToolMismatchError';
-  constructor(
-    readonly waiverTool: string,
-    readonly runningTool: string,
-  ) {
-    super('Waiver tool version does not match the running tool');
-  }
-}

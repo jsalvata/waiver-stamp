@@ -19,7 +19,6 @@ const USAGE_RENAMED =
 
 const RENAME_WAIVER = {
   schema: 'waiver-stamp/v0',
-  tool: 'waiver-stamp@0.1.0',
   ops: [
     {
       op: 'rename',
@@ -140,7 +139,6 @@ describe('stamp', () => {
     );
     const waiver = {
       schema: 'waiver-stamp/v0',
-      tool: 'waiver-stamp@0.1.0',
       ops: [
         {
           op: 'rename',
@@ -163,7 +161,6 @@ describe('stamp', () => {
     );
     const waiver = {
       schema: 'waiver-stamp/v0',
-      tool: 'waiver-stamp@0.1.0',
       ops: [{ op: 'change-test', files: ['src/usage.ts'] }],
     };
     const report = await stamp(await writeWaiver(g.repo, waiver), { base, head, cwd: g.repo });

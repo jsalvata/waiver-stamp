@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createServer } from './mcp.js';
 
 async function connectClient(): Promise<Client> {
-  const server = createServer('waiver-stamp@0.1.0');
+  const server = createServer('0.1.0');
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: 'test', version: '0' });
@@ -14,7 +14,6 @@ async function connectClient(): Promise<Client> {
 
 const VALID = {
   schema: 'waiver-stamp/v0',
-  tool: 'waiver-stamp@0.1.0',
   ops: [{ op: 'rename', target: { file: 'a.ts', symbol: 'x' }, to: 'y' }],
 };
 
@@ -49,7 +48,7 @@ describe('mcp server', () => {
     const client = await connectClient();
     const res = await client.callTool({
       name: 'waiver_check',
-      arguments: { waiver: { schema: 'waiver-stamp/v0', tool: 'bad', ops: [] } },
+      arguments: { waiver: { schema: 'waiver-stamp/v0', ops: [{ op: 'nope' }] } },
     });
     expect(res.isError).toBe(true);
   });

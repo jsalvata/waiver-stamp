@@ -4,7 +4,6 @@ import type { Waiver } from './types.js';
 
 const WAIVER: Waiver = {
   schema: 'waiver-stamp/v0',
-  tool: 'waiver-stamp@0.1.0',
   ops: [{ op: 'rename', target: { file: 'src/a.ts', symbol: 'foo' }, to: 'bar' }],
 };
 
@@ -26,8 +25,7 @@ describe('extractWaiverBlock', () => {
   });
 
   it('returns none for a non-v0 schema (a future waiver this tool ignores)', () => {
-    const msg =
-      'x\n\n```json\n{"schema":"waiver-stamp/v9","tool":"waiver-stamp@9.0.0","ops":[]}\n```\n';
+    const msg = 'x\n\n```json\n{"schema":"waiver-stamp/v9","ops":[]}\n```\n';
     expect(extractWaiverBlock(msg).kind).toBe('none');
   });
 
@@ -38,7 +36,7 @@ describe('extractWaiverBlock', () => {
   });
 
   it('is invalid when the waiver block has the schema key but fails validation', () => {
-    const msg = 'x\n\n```json\n{"schema":"waiver-stamp/v0","tool":"nope","ops":[]}\n```\n';
+    const msg = 'x\n\n```json\n{"schema":"waiver-stamp/v0","ops":[{"op":"nope"}]}\n```\n';
     const block = extractWaiverBlock(msg);
     expect(block.kind).toBe('invalid');
   });

@@ -5,7 +5,7 @@ import type { OpKind } from './types.js';
 export interface StampReport {
   /** True iff the PR is fully accounted for by the waiver and every guard holds. */
   stamped: boolean;
-  waiver: { schema: string; tool: string };
+  waiver: { schema: string };
   /** Per-op outcome, in waiver order. */
   ops: OpFinding[];
   /** Per-file outcome over the compared set. */
@@ -42,7 +42,7 @@ export interface PerCommitResult {
   sha: string;
   subject: string;
   class: CommitClass;
-  /** Why this class (e.g. 'merge-commit', 'tool-mismatch', emit-mismatch reasons). */
+  /** Why this class (e.g. 'merge-commit', emit-mismatch reasons). */
   reasons: string[];
   /** Per-op stamping outcome when the commit carried a waiver. */
   perOpFindings: OpFinding[];
@@ -62,7 +62,7 @@ export const EXIT = {
   STAMPED: 0,
   /** Stamping / guard / coverage failure. */
   FAILURE: 1,
-  /** Malformed waiver / header mismatch. */
+  /** Malformed waiver. */
   MALFORMED: 2,
   /** Internal error (includes not-yet-implemented in the v0 scaffold). */
   INTERNAL: 3,

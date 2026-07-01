@@ -185,7 +185,6 @@ JSON, governed by a published JSON Schema.
 ```jsonc
 {
   "schema": "waiver-stamp/v0",        // vocabulary/validation version
-  "tool":   "waiver-stamp@<x.y.z>",   // pins op semantics + bundled ts-morph; stamp refuses on mismatch
   "ops": [ /* ordered list; transform ops apply in order, exclusion ops are order-free */ ]
 }
 ```
@@ -194,8 +193,7 @@ The header carries **only** what isn't already in the repo. TypeScript version, 
 manager, and compiler options are **not** restated here — they live in the repo's
 `package.json` / lockfile / `tsconfig` (a version-controlled, reviewed single source of
 truth) and are read from the checked-out base/head. Restating them would risk a second,
-divergent source. `ts-morph` is implied by `tool`. See §9 for how this grounds
-determinism.
+divergent source. See §9 for how this grounds determinism.
 
 ### 5.1 Operation vocabulary (v0)
 
@@ -400,10 +398,8 @@ Guards close the gaps the loaded program can't see (apply to **reproductive** op
 
 ## 9. Determinism
 
-`stamp`'s re-fold/re-resolution must be bit-reproducible. Determinism rests on two pins,
-not on values copied into the waiver:
-- **The tool** — `tool@x.y.z` in the header fixes the op implementations and the bundled
-  `ts-morph`; `stamp` refuses if run under a different version.
+`stamp`'s re-fold/re-resolution must be bit-reproducible. Determinism rests on the repo's
+committed toolchain, not on values copied into the waiver:
 - **The repo's committed toolchain** — TypeScript version (lockfile), `tsconfig`
   compiler options, and package manager are read from the checked-out base/head. Both
   `apply` and `stamp` see the same committed config, so they stay consistent with no
@@ -428,8 +424,8 @@ waiver stamp <waiver> --base <ref> --head <ref> [--json]
 waiver check <waiver>                                    # schema + static guards only (fast lint)
 ```
 
-Exit: `0` stamped · `1` stamping/guard/coverage failure · `2` malformed waiver /
-header mismatch · `3` internal error. `--json` emits a machine report (`stamped`,
+Exit: `0` stamped · `1` stamping/guard/coverage failure · `2` malformed waiver
+· `3` internal error. `--json` emits a machine report (`stamped`,
 per-op + per-file findings, uncovered-diff list, failure reasons) — the seam for the
 CI/automation layer.
 
@@ -486,9 +482,9 @@ module-extraction cases plus test-only / docs-only / bump / mixed (§11).
 
 ## 14. Decisions
 
-1. **Runner distribution — own repo.** `waiver-stamp` lives in its own repo,
-   version-pinned in the waiver header. Its own trustworthiness is accepted per §1.1
-   (trusted, not verified) — we don't over-engineer vouching for the tool itself.
+1. **Runner distribution — own repo.** `waiver-stamp` lives in its own repo. Its own
+   trustworthiness is accepted per §1.1 (trusted, not verified) — we don't over-engineer
+   vouching for the tool itself.
 2. **`bump` allowlist — central, baked into the pinned runner.** A central config
    shipped with the pinned tool version lists allowed packages by scope/name **and
    required source registry**. Registry pinning is mandatory: "`@myorg/*` is vetted"
@@ -560,13 +556,13 @@ and the alternatives we rejected, so the rationale isn't lost.
   validator dependency). A drift-guard test asserts the committed JSON Schema equals the
   generated output. LLMs still consume the generated **JSON Schema** (never Zod), so the
   authoring/constraint story is unchanged. Uses `zod@3.25` via the `zod/v4` bridge.
-- **Header carries only `schema` + `tool`; the toolchain comes from the repo.**
+- **Header carries only `schema`; the toolchain comes from the repo.**
   *Rejected restating TypeScript/package-manager/compiler-options in the waiver:* they're
   already pinned by the base commit's `package.json`/lockfile/`tsconfig`, so a waiver copy
   would be redundant and could drift — and emit must use the *repo's* TypeScript +
   `tsconfig` to match its build semantics, so a disagreeing waiver value would be a bug.
   The stamper reads the toolchain from the checked-out base/head (§9); `ts-morph` is the
-  tool's own dependency, pinned by `tool@x.y.z`.
+  tool's own dependency.
 - **Symbol selectors = TSDoc declaration references** (full, from v0).
   - *Rejected `line:col`:* LLMs count lines/columns badly, and offsets drift across
     sequential ops in a file.
@@ -683,7 +679,6 @@ Pure rename across the orders module; no behaviour change.
 ```json
 {
   "schema": "waiver-stamp/v0",
-  "tool": "waiver-stamp@0.1.0",
   "ops": [
     { "op": "rename",
       "target": { "file": "src/orders.ts", "symbol": "calculateTotal" },
@@ -710,10 +705,6 @@ Pure rename across the orders module; no behaviour change.
   the embedded JSON **may not itself contain a ` ``` ` fence** (the §5 schema forbids
   triple-backticks in string values, so the fence is always unambiguous). An embedded
   waiver larger than **64 KiB** is **invalid** (DoS guard; real waivers are a few ops).
-- **Tool-version handling.** The embedded waiver pins `tool@x.y.z` (§5). At `verify` time,
-  if that version differs from the running binary, the commit is **invalid** with reason
-  `tool-mismatch` — op semantics may have changed, so re-stamping under a different tool is
-  refused (fail-closed), never replayed silently.
 - **The commit *is* the base/head pair.** Stamping a waivered commit `C` runs the §3.1
   principle with `base = C^1` (git **first parent**) and `head = C`. The waiver must fully
   account for `C`'s entire diff (§3.1.5 coverage) — a waivered commit may **not** smuggle an

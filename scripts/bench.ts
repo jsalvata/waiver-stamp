@@ -72,7 +72,6 @@ let childEnv: NodeJS.ProcessEnv = process.env;
 /** The known-correct scoped rename, used to build the emit oracle (ground truth). */
 const REF_WAIVER = {
   schema: 'waiver-stamp/v0',
-  tool: 'waiver-stamp@0.0.0',
   ops: [{ op: 'rename', target: { file: 'src/orders.ts', symbol: OLD }, to: NEW }],
 } as const;
 
@@ -120,7 +119,7 @@ function withPrompt(): string {
     'This is a TypeScript project and you are in its root directory.',
     `Make a behaviour-preserving rename of the function \`${OLD}\` (and all references) to \`${NEW}\`.`,
     'Do it by writing a waiver-stamp v0 waiver and applying it with the `waiver_apply` tool (from the waiver-stamp MCP server), which performs the rename deterministically. The waiver is exactly:',
-    `{ "schema": "waiver-stamp/v0", "tool": "waiver-stamp@0.0.0", "ops": [ { "op": "rename", "target": { "file": "<file that declares ${OLD}>", "symbol": "${OLD}" }, "to": "${NEW}" } ] }`,
+    `{ "schema": "waiver-stamp/v0", "ops": [ { "op": "rename", "target": { "file": "<file that declares ${OLD}>", "symbol": "${OLD}" }, "to": "${NEW}" } ] }`,
     'Call waiver_apply with that waiver object. Do not use Skill, planning, brainstorming, or sub-agent tools. When it is applied, stop.',
   ].join(' ');
 }

@@ -5,7 +5,6 @@ import { predicateOk } from './engine/exclude.js';
 import { applyTransformOp } from './engine/fold.js';
 import { emitDivergenceGuard, runReproductiveGuards } from './engine/guards.js';
 import { loadProject } from './engine/project.js';
-import { ToolMismatchError } from './errors.js';
 import { changedFiles, worktreeAt } from './git.js';
 import { loadWaiver } from './load.js';
 import type { FileFinding, OpFinding, StampReport } from './report.js';
@@ -18,8 +17,6 @@ export interface StampOptions {
   head: string;
   /** Repo path where `base`/`head` live. Defaults to `process.cwd()`. */
   cwd?: string;
-  /** When set, FAIL-closed if it differs from the waiver's `tool` (spec §5, §9). */
-  tool?: string;
 }
 
 type Project = ReturnType<typeof loadProject>;
@@ -43,9 +40,6 @@ export async function stamp(path: string, options: StampOptions): Promise<StampR
 /** Stamp an already-loaded waiver (the seam the commit-embedded path reuses, §17). */
 export async function stampWaiver(waiver: Waiver, options: StampOptions): Promise<StampReport> {
   const cwd = options.cwd ?? process.cwd();
-  if (options.tool && options.tool !== waiver.tool) {
-    throw new ToolMismatchError(waiver.tool, options.tool);
-  }
 
   const oWt = await worktreeAt(cwd, options.base);
   const headWt = await worktreeAt(cwd, options.head);
@@ -90,7 +84,7 @@ export async function stampWaiver(waiver: Waiver, options: StampOptions): Promis
     const uncovered = fileFindings.filter((f) => f.status === 'mismatch').map((f) => f.file);
     return {
       stamped: failures.length === 0,
-      waiver: { schema: waiver.schema, tool: waiver.tool },
+      waiver: { schema: waiver.schema },
       ops: opFindings,
       files: fileFindings,
       uncovered,

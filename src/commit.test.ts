@@ -11,7 +11,6 @@ const ORDERS = 'export function calculateTotal(n: number): number {\n  return n 
 const USAGE = "import { calculateTotal } from './orders';\nexport const t = calculateTotal(21);\n";
 const WAIVER = {
   schema: 'waiver-stamp/v0',
-  tool: 'waiver-stamp@0.1.0',
   ops: [
     {
       op: 'rename',

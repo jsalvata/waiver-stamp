@@ -16,7 +16,6 @@ describe('WaiverSchema', () => {
   it('rejects an unknown op kind', () => {
     const result = WaiverSchema.safeParse({
       schema: 'waiver-stamp/v0',
-      tool: 'waiver-stamp@0.0.0',
       ops: [{ op: 'nope' }],
     });
     expect(result.success).toBe(false);
@@ -25,7 +24,6 @@ describe('WaiverSchema', () => {
   it('rejects additional top-level properties (strict)', () => {
     const result = WaiverSchema.safeParse({
       schema: 'waiver-stamp/v0',
-      tool: 'waiver-stamp@0.0.0',
       ops: [],
       extra: 1,
     });
@@ -35,7 +33,6 @@ describe('WaiverSchema', () => {
   it('accepts an empty ops list (formatting/type-only changes stamp with no ops)', () => {
     const result = WaiverSchema.safeParse({
       schema: 'waiver-stamp/v0',
-      tool: 'waiver-stamp@0.0.0',
       ops: [],
     });
     expect(result.success).toBe(true);

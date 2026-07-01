@@ -9,11 +9,6 @@
       "type": "string",
       "const": "waiver-stamp/v0"
     },
-    "tool": {
-      "description": "Pins op semantics + bundled ts-morph; stamp refuses on mismatch.",
-      "type": "string",
-      "pattern": "^waiver-stamp@.+$"
-    },
     "ops": {
       "description": "Ordered list; transform ops apply in order, exclusion ops are order-free.",
       "type": "array",
@@ -249,7 +244,6 @@
   },
   "required": [
     "schema",
-    "tool",
     "ops"
   ],
   "additionalProperties": false

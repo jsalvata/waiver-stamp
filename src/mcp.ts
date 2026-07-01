@@ -27,9 +27,8 @@ const fail = (err: unknown): ToolResult => ({
   isError: true,
 });
 
-/** Build the MCP server. `tool` is the running `waiver-stamp@x.y.z` id (for the pin check). */
-export function createServer(tool: string): McpServer {
-  const version = tool.split('@')[1] ?? '0.0.0';
+/** Build the MCP server. `version` is the running `waiver-stamp` package version. */
+export function createServer(version: string): McpServer {
   const server = new McpServer({ name: 'waiver-stamp', version });
 
   server.registerTool(
@@ -41,7 +40,7 @@ export function createServer(tool: string): McpServer {
     async ({ waiver }) => {
       try {
         const w = loadWaiverFromObject(waiver);
-        return ok({ ok: true, waiver: { schema: w.schema, tool: w.tool } });
+        return ok({ ok: true, waiver: { schema: w.schema } });
       } catch (err) {
         return fail(err);
       }
@@ -80,7 +79,6 @@ export function createServer(tool: string): McpServer {
           base,
           head,
           cwd: cwd ?? process.cwd(),
-          tool,
         });
         return ok(report);
       } catch (err) {
@@ -98,7 +96,7 @@ export function createServer(tool: string): McpServer {
     },
     async ({ base, head, cwd }) => {
       try {
-        return ok(await verify({ base, head, cwd: cwd ?? process.cwd(), tool }));
+        return ok(await verify({ base, head, cwd: cwd ?? process.cwd() }));
       } catch (err) {
         return fail(err);
       }
@@ -109,7 +107,7 @@ export function createServer(tool: string): McpServer {
 }
 
 /** Start the MCP server on stdio (the `waiver mcp` subcommand). */
-export async function startMcpServer(tool: string): Promise<void> {
-  const server = createServer(tool);
+export async function startMcpServer(version: string): Promise<void> {
+  const server = createServer(version);
   await server.connect(new StdioServerTransport());
 }
