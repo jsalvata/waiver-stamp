@@ -1,6 +1,6 @@
 ---
 name: refactor-with-waiver
-description: Use when writing a refactor with a waiver, making a PR stampable, or landing a waivered refactor commit — translating a behaviour-preserving refactor or test/doc-only change into the v0 op vocabulary, committing it with the waiver embedded, and validating with `waiver check` / `waiver verify`. Trigger on "write a refactor with a waiver", "make this PR stampable", "land a waivered refactor commit", "generate a waiver".
+description: Use when planning or writing a behaviour-preserving (pure/mechanical) refactor — renaming a symbol across the codebase, moving a declaration to its own file, extracting a helper, reformatting code, adding or removing comments, or a test-/doc-only change. If the closed op vocabulary can express the change, it can be auto-approved without human review, so reach for this any time a refactor is the goal. Invoke it early, during planning, to split a mixed change into a waiverable mechanical commit and a separate behavioural one. Trigger on "rename X everywhere", "extract this into a function", "move X to its own file", "pure/mechanical refactor", "behaviour-preserving change", "make this PR stampable", "write/generate a waiver", "land a waivered commit".
 ---
 
 # Refactoring with a waiver
@@ -10,6 +10,18 @@ auto-approve without a human review. Your job: translate a refactor into the
 closed op vocabulary, then commit it with the waiver embedded so CI can stamp it.
 A waiver only ever *removes* review when a proof holds — when in doubt, **leave
 the change out** and let it fall to human review (fail-closed, downside-bounded).
+
+## Plan the split first
+
+Before authoring anything, separate the change into its **behaviour-preserving**
+part (waiverable) and its **behavioural** part (not). Only the mechanical part can
+be stamped. If a task mixes the two — e.g. a rename *plus* a logic tweak — prefer
+landing them as **separate PRs**: the mechanical PR carries waivers and auto-approves,
+the behavioural PR gets normal review. When separate PRs aren't practical, fall back
+to **separate commits** within one PR — each mechanical commit still stamps on its
+own. Either way, a mechanical change entangled with a logic change in a single commit
+stamps as *invalid*, so doing this at planning time is what makes the stamp available
+at all.
 
 ## The guaranteed-stamp authoring loop
 
@@ -114,15 +126,6 @@ an empty `ops` array stamps clean.
   app-internal).
 - Symbols reached by dynamic references (`obj["name"]`, string-keyed DI, refs in
   JSON/SQL/templates) → dynamic-reference guard FAILs.
-
-## Header
-
-```jsonc
-{ "schema": "waiver-stamp/v0", "tool": "waiver-stamp@<x.y.z>", "ops": [ ... ] }
-```
-
-The header carries **only** `schema` + `tool`. TypeScript version, package manager,
-and `tsconfig` come from the repo — never restate them.
 
 ## MCP tools
 

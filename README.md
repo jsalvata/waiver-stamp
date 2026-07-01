@@ -23,9 +23,11 @@ same runner later **re-derives and checks** that the PR's diff is exactly that
 expansion and nothing more. The mechanical part is never hand-written, so it can't be
 subtly wrong, and never hand-reviewed, because it's mechanically vouched.
 
-**Downside-bounded.** waiver-stamp only ever *removes* review when it holds a proof.
-No stamp → the PR gets today's normal human review. It never blocks, weakens, or
-auto-rejects anything. Worst case = status quo.
+**Downside-bounded.** The only automated *approval* comes from a held proof — no stamp,
+and the PR falls to today's normal human review, unchanged. The only automated *negative*
+signal is a REQUEST_CHANGES on a commit whose embedded waiver *fails* to stamp — a
+provably-false claim worth flagging, not a veto on an ordinary PR. It never weakens or
+bypasses review; for any change it can't prove, worst case = status quo.
 
 ## How it works, in one glance
 
@@ -38,7 +40,7 @@ $ waiver commit rename.json -m "refactor: rename calculateTotal to computeOrderT
 committed 514bb5d0
 ```
 
-```
+````text
 refactor: rename calculateTotal to computeOrderTotal
 
 ```json
@@ -47,7 +49,7 @@ refactor: rename calculateTotal to computeOrderTotal
              "target": { "file": "src/orders.ts", "symbol": "calculateTotal" },
              "to": "computeOrderTotal" } ] }
 ```
-```
+````
 
 CI then verifies every commit in the PR and emits a single verdict:
 
