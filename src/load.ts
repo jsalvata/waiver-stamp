@@ -3,20 +3,30 @@ import { WaiverParseError, WaiverValidationError } from './errors.js';
 import { WaiverSchema } from './schema.js';
 import type { Waiver } from './types.js';
 
+/** Read all of stdin as UTF-8 (the `-` waiver source). */
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 /**
- * Read a waiver file and validate it against the v0 schema (schema.ts).
+ * Read a waiver from a file (or from stdin when `path` is `-`) and validate it
+ * against the v0 schema (schema.ts).
  *
- * Throws {@link WaiverParseError} if the file is not valid JSON and
- * {@link WaiverValidationError} if it does not conform to the schema.
+ * Throws {@link WaiverParseError} if the source is not valid JSON and
+ * {@link WaiverValidationError} if it does not conform to the schema. Callers
+ * must read the waiver at most once per invocation — stdin is consumable.
  */
 export async function loadWaiver(path: string): Promise<Waiver> {
-  const raw = await readFile(path, 'utf8');
+  const source = path === '-' ? '<stdin>' : path;
+  const raw = path === '-' ? await readStdin() : await readFile(path, 'utf8');
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (cause) {
-    throw new WaiverParseError(path, { cause });
+    throw new WaiverParseError(source, { cause });
   }
 
   return loadWaiverFromObject(parsed);

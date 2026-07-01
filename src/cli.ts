@@ -56,7 +56,7 @@ program
 
 program
   .command('apply')
-  .argument('<waiver>', 'path to the waiver JSON file')
+  .argument('<waiver>', 'path to the waiver JSON file, or `-` for stdin')
   .description("apply a waiver's transform ops to the working tree")
   .action(async (waiver: string) => {
     await run(async () => {
@@ -68,7 +68,7 @@ program
 
 program
   .command('stamp')
-  .argument('<waiver>', 'path to the waiver JSON file')
+  .argument('<waiver>', 'path to the waiver JSON file, or `-` for stdin')
   .requiredOption('--base <ref>', 'base git ref')
   .requiredOption('--head <ref>', 'head git ref')
   .option('--json', 'emit a machine-readable JSON report')
@@ -113,7 +113,7 @@ program
 
 program
   .command('commit')
-  .argument('<waiver>', 'path to the waiver JSON file')
+  .argument('<waiver>', 'path to the waiver JSON file, or `-` for stdin')
   .option('-m, --message <subject>', 'commit subject line')
   .description('apply a waiver and commit it with the waiver embedded (§17.4)')
   .action(async (waiver: string, opts: { message?: string }) => {
@@ -125,17 +125,19 @@ program
 
 program
   .command('check')
-  .argument('<waiver>', 'path to the waiver JSON file')
+  .argument('<waiver>', 'path to the waiver JSON file, or `-` for stdin')
   .option('--json', 'emit machine-readable output')
   .description('schema + static-guard validation only (fast lint)')
   .action(async (waiver: string, opts: { json?: boolean }) => {
     await run(async () => {
       const result = await check(waiver);
       if (opts.json) console.log(JSON.stringify(result, null, 2));
-      else
+      else {
+        const label = waiver === '-' ? 'stdin' : waiver;
         console.log(
-          `ok: ${waiver} is a valid waiver-stamp/${result.waiver.schema.split('/')[1]} waiver`,
+          `ok: ${label} is a valid waiver-stamp/${result.waiver.schema.split('/')[1]} waiver`,
         );
+      }
     });
   });
 

@@ -4,8 +4,7 @@
  * and the author never hits a malformed-embedding `invalid` at verify time.
  */
 
-import { apply } from './apply.js';
-import { check } from './check.js';
+import { applyWaiver } from './apply.js';
 import { embedWaiver } from './commit-waiver.js';
 import { DirtyTreeError, OpApplicationError } from './errors.js';
 import { runGit } from './git.js';
@@ -28,10 +27,11 @@ export async function commitWaiver(
   const status = await runGit(cwd, ['status', '--porcelain', '--untracked-files=no']);
   if (status.trim() !== '') throw new DirtyTreeError(cwd);
 
+  // Load once — `loadWaiver` validates the schema, and the source may be stdin
+  // (a `-` path), which is consumable, so we reuse the parsed waiver below.
   const waiver = await loadWaiver(path);
-  await check(path); // schema + guards; throws on failure (not stamp — no base/head yet)
 
-  const { files } = await apply(path, { cwd });
+  const { files } = await applyWaiver(waiver, { cwd });
   if (files.length === 0) throw new OpApplicationError('commit', 'waiver produced no changes');
 
   await runGit(cwd, ['add', '--', ...files]);
