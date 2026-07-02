@@ -53,7 +53,7 @@ export async function stampWaiver(waiver: Waiver, options: StampOptions): Promis
     }
 
     // Reproductive guards over the base program (public-API, dynamic-reference, §8).
-    for (const finding of runReproductiveGuards(oProject, waiver.ops, excluded)) {
+    for (const finding of runReproductiveGuards(oProject, oWt.dir, waiver.ops, excluded)) {
       failures.push(`guard ${finding.guard}: ${finding.detail}`);
     }
 
