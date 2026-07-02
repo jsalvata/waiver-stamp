@@ -35,6 +35,28 @@ describe('runReproductiveGuards', () => {
     expect(runReproductiveGuards(loadProject(fix.cwd), [renameOp])).toEqual([]);
   });
 
+  it('does not FAIL on a string literal confined to a change-test-excluded file', async () => {
+    fix = await scaffoldProject({
+      'src/a.ts': 'export function calculateTotal(): number {\n  return 1;\n}\n',
+      'src/a.test.ts':
+        "import { calculateTotal } from './a';\ndescribe('calculateTotal (integration)', () => {\n  it('works', () => {\n    calculateTotal();\n  });\n});\n",
+    });
+    const ops = [renameOp, { op: 'change-test' as const, files: ['src/a.test.ts'] }];
+    expect(runReproductiveGuards(loadProject(fix.cwd), ops)).toEqual([]);
+  });
+
+  it('still FAILs on a string literal in a file not covered by any exclusion op', async () => {
+    fix = await scaffoldProject({
+      'src/a.ts': 'export function calculateTotal(): number {\n  return 1;\n}\n',
+      'src/a.test.ts':
+        "import { calculateTotal } from './a';\ndescribe('calculateTotal (integration)', () => {\n  it('works', () => {\n    calculateTotal();\n  });\n});\n",
+      'src/other.test.ts': "export const key = 'calculateTotal';\n",
+    });
+    const ops = [renameOp, { op: 'change-test' as const, files: ['src/a.test.ts'] }];
+    const findings = runReproductiveGuards(loadProject(fix.cwd), ops);
+    expect(findings.map((f) => f.guard)).toContain('dynamic-reference');
+  });
+
   it('FAILs a rename targeting a published surface', async () => {
     fix = await scaffoldProject({
       'libs/foo-sdk/src/index.ts': 'export function calculateTotal(): number {\n  return 1;\n}\n',
