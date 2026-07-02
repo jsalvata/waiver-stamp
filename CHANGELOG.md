@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/jsalvata/waiver-stamp/compare/v1.0.0...v1.0.1) (2026-07-02)
+
+
+### Bug Fixes
+
+* drop leading ./ from waiver bin path ([5561609](https://github.com/jsalvata/waiver-stamp/commit/55616091df2936f5b93a9eab545bbf8052fdec3f))
+
 # 1.0.0 (2026-07-02)
 
 
