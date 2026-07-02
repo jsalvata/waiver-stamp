@@ -23,7 +23,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # semantic-release v25 requires Node >= 22.14 (the published package
+          # still supports Node >= 20 — see ci.yml, which tests on 20).
+          node-version: 22
           cache: pnpm
 
       # OIDC trusted publishing (semantic-release v25 / @semantic-release/npm v13)
