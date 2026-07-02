@@ -12,7 +12,6 @@
 
 import { type Project, type SourceFile, SyntaxKind } from 'ts-morph';
 import type { Op } from '../types.js';
-import { predicateOk } from './exclude.js';
 
 export interface GuardFinding {
   guard: string;
@@ -33,13 +32,17 @@ function symbolLeaf(symbol: string): string {
 /**
  * Guards that depend only on the targeted symbols (run over the base program).
  *
- * Files confined by a `change-test`/`change-docs` op are excluded from the
- * dynamic-reference scan: they're already removed from the comparison (spec
+ * `excluded` is the set of files already confined by a `change-test`/`change-docs`
+ * op (the caller computes this — see `stampWaiver`). Those files are skipped by
+ * the dynamic-reference scan: they're already removed from the comparison (spec
  * §6.2), so a string literal mentioning the renamed symbol there (e.g. a test
  * `describe(...)` title) can't smuggle an unaccounted production change.
  */
-export function runReproductiveGuards(project: Project, ops: readonly Op[]): GuardFinding[] {
-  const excluded = confinedFiles(ops);
+export function runReproductiveGuards(
+  project: Project,
+  ops: readonly Op[],
+  excluded: ReadonlySet<string>,
+): GuardFinding[] {
   const findings: GuardFinding[] = [];
   for (const op of ops) {
     if (op.op !== 'rename') continue;
@@ -54,20 +57,8 @@ export function runReproductiveGuards(project: Project, ops: readonly Op[]): Gua
   return findings;
 }
 
-/** The set of files removed from comparison by a confined `change-test`/`change-docs` op. */
-function confinedFiles(ops: readonly Op[]): Set<string> {
-  const excluded = new Set<string>();
-  for (const op of ops) {
-    if (op.op !== 'change-test' && op.op !== 'change-docs') continue;
-    for (const file of op.files) {
-      if (predicateOk(op.op, file)) excluded.add(file);
-    }
-  }
-  return excluded;
-}
-
 /** Whether `sf`'s path ends in one of the repo-relative `excluded` paths. */
-function isConfined(sf: SourceFile, excluded: Set<string>): boolean {
+function isConfined(sf: SourceFile, excluded: ReadonlySet<string>): boolean {
   const path = sf.getFilePath();
   for (const file of excluded) {
     if (path === file || path.endsWith(`/${file}`)) return true;
@@ -83,7 +74,7 @@ function isConfined(sf: SourceFile, excluded: Set<string>): boolean {
 function dynamicReferenceScan(
   project: Project,
   symbol: string,
-  excluded: Set<string>,
+  excluded: ReadonlySet<string>,
 ): GuardFinding[] {
   const name = symbolLeaf(symbol);
   const word = new RegExp(`\\b${escapeRegExp(name)}\\b`);

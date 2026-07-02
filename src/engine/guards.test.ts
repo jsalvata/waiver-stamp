@@ -23,7 +23,7 @@ describe('runReproductiveGuards', () => {
       'src/registry.ts':
         'export const handlers: Record<string, unknown> = { calculateTotal: 1 };\nexport const key = "calculateTotal";\n',
     });
-    const findings = runReproductiveGuards(loadProject(fix.cwd), [renameOp]);
+    const findings = runReproductiveGuards(loadProject(fix.cwd), [renameOp], new Set());
     expect(findings.map((f) => f.guard)).toContain('dynamic-reference');
   });
 
@@ -32,17 +32,17 @@ describe('runReproductiveGuards', () => {
       'src/a.ts': 'export function calculateTotal(): number {\n  return 1;\n}\n',
       'src/b.ts': "import { calculateTotal } from './a';\nexport const x = calculateTotal();\n",
     });
-    expect(runReproductiveGuards(loadProject(fix.cwd), [renameOp])).toEqual([]);
+    expect(runReproductiveGuards(loadProject(fix.cwd), [renameOp], new Set())).toEqual([]);
   });
 
-  it('does not FAIL on a string literal confined to a change-test-excluded file', async () => {
+  it('does not FAIL on a string literal confined to an excluded file', async () => {
     fix = await scaffoldProject({
       'src/a.ts': 'export function calculateTotal(): number {\n  return 1;\n}\n',
       'src/a.test.ts':
         "import { calculateTotal } from './a';\ndescribe('calculateTotal (integration)', () => {\n  it('works', () => {\n    calculateTotal();\n  });\n});\n",
     });
-    const ops = [renameOp, { op: 'change-test' as const, files: ['src/a.test.ts'] }];
-    expect(runReproductiveGuards(loadProject(fix.cwd), ops)).toEqual([]);
+    const excluded = new Set(['src/a.test.ts']);
+    expect(runReproductiveGuards(loadProject(fix.cwd), [renameOp], excluded)).toEqual([]);
   });
 
   it('still FAILs on a string literal in a file not covered by any exclusion op', async () => {
@@ -52,8 +52,8 @@ describe('runReproductiveGuards', () => {
         "import { calculateTotal } from './a';\ndescribe('calculateTotal (integration)', () => {\n  it('works', () => {\n    calculateTotal();\n  });\n});\n",
       'src/other.test.ts': "export const key = 'calculateTotal';\n",
     });
-    const ops = [renameOp, { op: 'change-test' as const, files: ['src/a.test.ts'] }];
-    const findings = runReproductiveGuards(loadProject(fix.cwd), ops);
+    const excluded = new Set(['src/a.test.ts']);
+    const findings = runReproductiveGuards(loadProject(fix.cwd), [renameOp], excluded);
     expect(findings.map((f) => f.guard)).toContain('dynamic-reference');
   });
 
@@ -65,9 +65,9 @@ describe('runReproductiveGuards', () => {
       ...renameOp,
       target: { file: 'libs/foo-sdk/src/index.ts', symbol: 'calculateTotal' },
     };
-    expect(runReproductiveGuards(loadProject(fix.cwd), [op]).map((f) => f.guard)).toContain(
-      'public-api',
-    );
+    expect(
+      runReproductiveGuards(loadProject(fix.cwd), [op], new Set()).map((f) => f.guard),
+    ).toContain('public-api');
   });
 });
 
