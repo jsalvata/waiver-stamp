@@ -26,6 +26,11 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      # OIDC trusted publishing (semantic-release v25 / @semantic-release/npm v13)
+      # requires npm >= 11.5.1; Node 20 ships npm 10.x.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
       - run: pnpm install --frozen-lockfile
 
       - name: Build
@@ -35,4 +40,3 @@ jobs:
         run: pnpm exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -2,13 +2,7 @@
   "name": "waiver-stamp",
   "version": "1.0.0",
   "description": "Auto-approve PRs whose safety can be proven mechanically. A waiver is a JSON recipe describing a change; stamping validates a PR's diff against its waiver.",
-  "keywords": [
-    "refactor",
-    "ts-morph",
-    "pull-request",
-    "code-review",
-    "typescript"
-  ],
+  "keywords": ["refactor", "ts-morph", "pull-request", "code-review", "typescript"],
   "license": "MIT",
   "author": "Jordi Salvat",
   "repository": {
@@ -31,12 +25,7 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist",
-    "schema",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "schema", "README.md", "LICENSE"],
   "engines": {
     "node": ">=20"
   },
@@ -67,7 +56,7 @@
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^22.7.0",
     "husky": "^9.1.6",
-    "semantic-release": "^24.1.2",
+    "semantic-release": "^25.0.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",
     "vitest": "^2.1.2"
