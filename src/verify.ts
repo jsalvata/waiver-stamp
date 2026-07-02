@@ -23,7 +23,11 @@ export async function classifyCommit(cwd: string, sha: string): Promise<PerCommi
 
   const ps = await parents(cwd, sha);
   if (ps.length !== 1 || !ps[0]) {
-    return { ...base, class: 'skipped', reasons: [ps.length >= 2 ? 'merge-commit' : 'root-commit'] };
+    return {
+      ...base,
+      class: 'skipped',
+      reasons: [ps.length >= 2 ? 'merge-commit' : 'root-commit'],
+    };
   }
 
   const block = extractWaiverBlock(await commitMessage(cwd, sha));

@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { CommitResolutionError } from './errors.js';
 import type { PerCommitResult } from './report.js';
+import { aggregate, stamp } from './stamp.js';
 import {
   FIXTURE_TSCONFIG_JSON,
   type GitRepoFixture,
   makeGitRepo,
   waiverCommitMessage,
 } from './test-helpers.js';
-import { aggregate, stamp } from './stamp.js';
 import type { Waiver } from './types.js';
 
 const ORDERS_BASE = 'export function calculateTotal(n: number): number {\n  return n * 2;\n}\n';

@@ -24,13 +24,19 @@ const ORDERS_RENAMED = 'export function computeTotal(n: number): number {\n  ret
 const renameWaiver = (): Waiver => ({
   schema: 'waiver-stamp/v0',
   ops: [
-    { op: 'rename', target: { file: 'src/orders.ts', symbol: 'calculateTotal' }, to: 'computeTotal' },
+    {
+      op: 'rename',
+      target: { file: 'src/orders.ts', symbol: 'calculateTotal' },
+      to: 'computeTotal',
+    },
   ],
 });
 
 function parseResult(res: Awaited<ReturnType<Client['callTool']>>): unknown {
   const content = res.content as { type: string; text: string }[];
-  return JSON.parse(content[0]!.text);
+  const first = content[0];
+  if (!first) throw new Error('tool result has no content');
+  return JSON.parse(first.text);
 }
 
 let g: GitRepoFixture | undefined;
@@ -43,7 +49,11 @@ describe('mcp server', () => {
   it('exposes the three waiver tools', async () => {
     const client = await connectClient();
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['waiver_apply', 'waiver_stamp', 'waiver_verify']);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'waiver_apply',
+      'waiver_stamp',
+      'waiver_verify',
+    ]);
   });
 
   it('waiver_apply rejects an invalid inline waiver', async () => {
@@ -64,14 +74,17 @@ describe('mcp server', () => {
       arguments: { commit: 'not-a-real-ref', cwd: g.repo },
     });
     expect(res.isError).toBe(true);
-    const text = (res.content as { type: string; text: string }[])[0]!.text;
+    const text = (res.content as { type: string; text: string }[])[0]?.text;
     expect(text).toContain('not-a-real-ref');
   });
 
   it('waiver_verify stamps HEAD when the embedded waiver covers the diff', async () => {
     const client = await connectClient();
     g = await makeGitRepo();
-    await g.commit({ 'tsconfig.json': FIXTURE_TSCONFIG_JSON, 'src/orders.ts': ORDERS_BASE }, 'base');
+    await g.commit(
+      { 'tsconfig.json': FIXTURE_TSCONFIG_JSON, 'src/orders.ts': ORDERS_BASE },
+      'base',
+    );
     await g.commit(
       { 'src/orders.ts': ORDERS_RENAMED },
       waiverCommitMessage('refactor: rename', renameWaiver()),
@@ -84,7 +97,10 @@ describe('mcp server', () => {
   it('waiver_verify reports unwaivered when HEAD carries no waiver', async () => {
     const client = await connectClient();
     g = await makeGitRepo();
-    await g.commit({ 'tsconfig.json': FIXTURE_TSCONFIG_JSON, 'src/orders.ts': ORDERS_BASE }, 'base');
+    await g.commit(
+      { 'tsconfig.json': FIXTURE_TSCONFIG_JSON, 'src/orders.ts': ORDERS_BASE },
+      'base',
+    );
     await g.commit({ 'src/orders.ts': `${ORDERS_BASE}// note\n` }, 'chore: touch');
     const res = await client.callTool({ name: 'waiver_verify', arguments: { cwd: g.repo } });
     expect(res.isError).toBeFalsy();

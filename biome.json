@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": ["dist", "docs/spec.md", "schema/waiver-stamp.v0.schema.json"]
+    "ignore": ["dist", ".claude", "docs/spec.md", "schema/waiver-stamp.v0.schema.json"]
   },
   "formatter": {
     "enabled": true,

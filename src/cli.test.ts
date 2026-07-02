@@ -33,7 +33,7 @@ function commandNames(helpText: string): string[] {
   return lines
     .slice(start + 1)
     .filter((l) => /^ {2}\S/.test(l))
-    .map((l) => l.trim().split(/\s+/)[0]!.replace(/\[.*$/, ''));
+    .map((l) => (l.trim().split(/\s+/)[0] ?? '').replace(/\[.*$/, ''));
 }
 
 let g: GitRepoFixture | undefined;

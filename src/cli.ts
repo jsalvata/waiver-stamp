@@ -102,7 +102,8 @@ program
       if (opts.json) console.log(JSON.stringify(report, null, 2));
       else {
         console.log(`verdict: ${report.verdict}`);
-        for (const c of report.commits) console.log(`  ${c.sha.slice(0, 8)} ${c.class.padEnd(10)} ${c.subject}`);
+        for (const c of report.commits)
+          console.log(`  ${c.sha.slice(0, 8)} ${c.class.padEnd(10)} ${c.subject}`);
       }
       if (report.verdict === 'REQUEST_CHANGES') setExit(EXIT.FAILURE);
     });
