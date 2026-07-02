@@ -5,6 +5,14 @@
   "keywords": ["refactor", "ts-morph", "pull-request", "code-review", "typescript"],
   "license": "MIT",
   "author": "Jordi Salvat",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jsalvata/waiver-stamp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jsalvata/waiver-stamp/issues"
+  },
+  "homepage": "https://github.com/jsalvata/waiver-stamp#readme",
   "type": "module",
   "bin": {
     "waiver": "./dist/cli.js"
