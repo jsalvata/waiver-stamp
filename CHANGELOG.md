@@ -1,3 +1,11 @@
+## [1.0.2](https://github.com/jsalvata/waiver-stamp/compare/v1.0.1...v1.0.2) (2026-07-02)
+
+
+### Bug Fixes
+
+* anchor excluded-file matching to the checkout root ([12f030f](https://github.com/jsalvata/waiver-stamp/commit/12f030f310873a11f100f126037cbae9f9c2133e))
+* exclude confined files from dynamic-reference guard ([d6ade56](https://github.com/jsalvata/waiver-stamp/commit/d6ade563841038ba8830e32e1896444534c3ec47))
+
 ## [1.0.1](https://github.com/jsalvata/waiver-stamp/compare/v1.0.0...v1.0.1) (2026-07-02)
 
 
