@@ -44,15 +44,21 @@ export async function stampWaiver(waiver: Waiver, options: StampOptions): Promis
 
     const oProject = loadProject(oWt.dir);
 
+    // Exclusion ops first: the guards and the transform pass both need the
+    // confined file set they produce (spec §6.2).
+    for (const op of waiver.ops) {
+      if (op.op === 'change-test' || op.op === 'change-docs') {
+        applyExclusionOp(op, excluded, fileFindings, failures, opFindings);
+      }
+    }
+
     // Reproductive guards over the base program (public-API, dynamic-reference, §8).
-    for (const finding of runReproductiveGuards(oProject, waiver.ops)) {
+    for (const finding of runReproductiveGuards(oProject, oWt.dir, waiver.ops, excluded)) {
       failures.push(`guard ${finding.guard}: ${finding.detail}`);
     }
 
     for (const op of waiver.ops) {
-      if (op.op === 'change-test' || op.op === 'change-docs') {
-        applyExclusionOp(op, excluded, fileFindings, failures, opFindings);
-      } else {
+      if (op.op !== 'change-test' && op.op !== 'change-docs') {
         applyTransform(oProject, oWt.dir, op, opFindings, failures);
       }
     }

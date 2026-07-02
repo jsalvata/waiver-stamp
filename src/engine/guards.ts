@@ -10,6 +10,7 @@
  * v0 limitation in the README.
  */
 
+import { relative } from 'node:path';
 import { type Project, type SourceFile, SyntaxKind } from 'ts-morph';
 import type { Op } from '../types.js';
 
@@ -31,8 +32,21 @@ function symbolLeaf(symbol: string): string {
 
 /**
  * Guards that depend only on the targeted symbols (run over the base program).
+ *
+ * `cwd` is the checkout root the excluded paths are relative to (the same
+ * root `stampWaiver`'s `buildCompareSet` resolves against). `excluded` is the
+ * set of files already confined by a `change-test`/`change-docs` op (the
+ * caller computes this — see `stampWaiver`). Those files are skipped by the
+ * dynamic-reference scan: they're already removed from the comparison (spec
+ * §6.2), so a string literal mentioning the renamed symbol there (e.g. a test
+ * `describe(...)` title) can't smuggle an unaccounted production change.
  */
-export function runReproductiveGuards(project: Project, ops: readonly Op[]): GuardFinding[] {
+export function runReproductiveGuards(
+  project: Project,
+  cwd: string,
+  ops: readonly Op[],
+  excluded: ReadonlySet<string>,
+): GuardFinding[] {
   const findings: GuardFinding[] = [];
   for (const op of ops) {
     if (op.op !== 'rename') continue;
@@ -42,7 +56,7 @@ export function runReproductiveGuards(project: Project, ops: readonly Op[]): Gua
         detail: `${op.target.file} is a published surface; cross-repo consumers are invisible`,
       });
     }
-    findings.push(...dynamicReferenceScan(project, op.target.symbol));
+    findings.push(...dynamicReferenceScan(project, cwd, op.target.symbol, excluded));
   }
   return findings;
 }
@@ -52,10 +66,16 @@ export function runReproductiveGuards(project: Project, ops: readonly Op[]): Gua
  * literal containing the symbol name (string-keyed DI/registry, `obj["name"]`).
  * Conservative and FAIL-closed — a false positive only sends the PR to review.
  */
-function dynamicReferenceScan(project: Project, symbol: string): GuardFinding[] {
+function dynamicReferenceScan(
+  project: Project,
+  cwd: string,
+  symbol: string,
+  excluded: ReadonlySet<string>,
+): GuardFinding[] {
   const name = symbolLeaf(symbol);
   const word = new RegExp(`\\b${escapeRegExp(name)}\\b`);
   for (const sf of project.getSourceFiles()) {
+    if (excluded.has(relative(cwd, sf.getFilePath()))) continue;
     const literals = [
       ...sf.getDescendantsOfKind(SyntaxKind.StringLiteral),
       ...sf.getDescendantsOfKind(SyntaxKind.NoSubstitutionTemplateLiteral),

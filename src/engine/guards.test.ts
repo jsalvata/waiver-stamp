@@ -23,7 +23,7 @@ describe('runReproductiveGuards', () => {
       'src/registry.ts':
         'export const handlers: Record<string, unknown> = { calculateTotal: 1 };\nexport const key = "calculateTotal";\n',
     });
-    const findings = runReproductiveGuards(loadProject(fix.cwd), [renameOp]);
+    const findings = runReproductiveGuards(loadProject(fix.cwd), fix.cwd, [renameOp], new Set());
     expect(findings.map((f) => f.guard)).toContain('dynamic-reference');
   });
 
@@ -32,7 +32,44 @@ describe('runReproductiveGuards', () => {
       'src/a.ts': 'export function calculateTotal(): number {\n  return 1;\n}\n',
       'src/b.ts': "import { calculateTotal } from './a';\nexport const x = calculateTotal();\n",
     });
-    expect(runReproductiveGuards(loadProject(fix.cwd), [renameOp])).toEqual([]);
+    expect(runReproductiveGuards(loadProject(fix.cwd), fix.cwd, [renameOp], new Set())).toEqual([]);
+  });
+
+  it('does not FAIL on a string literal confined to an excluded file', async () => {
+    fix = await scaffoldProject({
+      'src/a.ts': 'export function calculateTotal(): number {\n  return 1;\n}\n',
+      'src/a.test.ts':
+        "import { calculateTotal } from './a';\ndescribe('calculateTotal (integration)', () => {\n  it('works', () => {\n    calculateTotal();\n  });\n});\n",
+    });
+    const excluded = new Set(['src/a.test.ts']);
+    expect(runReproductiveGuards(loadProject(fix.cwd), fix.cwd, [renameOp], excluded)).toEqual([]);
+  });
+
+  it('still FAILs on a string literal in a file not covered by any exclusion op', async () => {
+    fix = await scaffoldProject({
+      'src/a.ts': 'export function calculateTotal(): number {\n  return 1;\n}\n',
+      'src/a.test.ts':
+        "import { calculateTotal } from './a';\ndescribe('calculateTotal (integration)', () => {\n  it('works', () => {\n    calculateTotal();\n  });\n});\n",
+      'src/other.test.ts': "export const key = 'calculateTotal';\n",
+    });
+    const excluded = new Set(['src/a.test.ts']);
+    const findings = runReproductiveGuards(loadProject(fix.cwd), fix.cwd, [renameOp], excluded);
+    expect(findings.map((f) => f.guard)).toContain('dynamic-reference');
+  });
+
+  it('does not treat a same-named file in another directory as excluded', async () => {
+    fix = await scaffoldProject({
+      'src/a.ts': 'export function calculateTotal(): number {\n  return 1;\n}\n',
+      'src/a.test.ts':
+        "import { calculateTotal } from './a';\ndescribe('calculateTotal (integration)', () => {\n  it('works', () => {\n    calculateTotal();\n  });\n});\n",
+      'other/src/a.test.ts': "export const key = 'calculateTotal';\n",
+    });
+    // Only 'src/a.test.ts' is confined — the same-named file nested under
+    // 'other/' must still be scanned (regression: suffix matching would have
+    // wrongly excluded it too).
+    const excluded = new Set(['src/a.test.ts']);
+    const findings = runReproductiveGuards(loadProject(fix.cwd), fix.cwd, [renameOp], excluded);
+    expect(findings.map((f) => f.guard)).toContain('dynamic-reference');
   });
 
   it('FAILs a rename targeting a published surface', async () => {
@@ -43,9 +80,9 @@ describe('runReproductiveGuards', () => {
       ...renameOp,
       target: { file: 'libs/foo-sdk/src/index.ts', symbol: 'calculateTotal' },
     };
-    expect(runReproductiveGuards(loadProject(fix.cwd), [op]).map((f) => f.guard)).toContain(
-      'public-api',
-    );
+    expect(
+      runReproductiveGuards(loadProject(fix.cwd), fix.cwd, [op], new Set()).map((f) => f.guard),
+    ).toContain('public-api');
   });
 });
 
