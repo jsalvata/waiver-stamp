@@ -6,7 +6,7 @@ import { applyTransformOp } from './engine/fold.js';
 import { baseChecks, emitDivergenceGuard, headChecks } from './engine/guards.js';
 import { loadProject } from './engine/project.js';
 import { changedFiles, worktreeAt } from './git.js';
-import type { FileFinding, OpFinding, StampReport } from './report.js';
+import type { FileFinding, OpFinding, ValidationReport } from './report.js';
 import type { Op, Waiver } from './types.js';
 
 export interface StampOptions {
@@ -31,7 +31,7 @@ const DECLARATION = /\.d\.ts$/;
  *
  * Does NOT run tsc or tests — the §3.1.6 backstop is the host CI's job (spec §4).
  */
-export async function stampWaiver(waiver: Waiver, options: StampOptions): Promise<StampReport> {
+export async function validateCommit(waiver: Waiver, options: StampOptions): Promise<ValidationReport> {
   const cwd = options.cwd ?? process.cwd();
 
   const oWt = await worktreeAt(cwd, options.base);

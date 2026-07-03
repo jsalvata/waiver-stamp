@@ -1,14 +1,14 @@
 /**
- * Integration tests for the §3.1 stamping engine (`stampWaiver`) over real git
+ * Integration tests for the §3.1 stamping engine (`validateCommit`) over real git
  * repos — restored from the pre-split stamp.test.ts (see 85b75ad), which covered
  * these behaviors before `stamp` became the §17.2 range aggregator.
  */
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { stampWaiver } from './stamp-core.js';
 import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from './test-helpers.js';
 import type { Waiver } from './types.js';
+import { validateCommit } from './validate-commit.js';
 
 let g: GitRepoFixture | undefined;
 afterEach(async () => {
@@ -47,7 +47,7 @@ async function baseCommit(extra: Record<string, string> = {}): Promise<string> {
   );
 }
 
-describe('stampWaiver (engine integration, §3.1)', () => {
+describe('validateCommit (engine integration, §3.1)', () => {
   it('STAMPS even when head reformats the reproduced files (emit is modulo formatting)', async () => {
     g = await makeGitRepo();
     const base = await baseCommit();
@@ -59,7 +59,7 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       },
       'rename + reformat',
     );
-    const report = await stampWaiver(RENAME_WAIVER, { base, head, cwd: g.repo });
+    const report = await validateCommit(RENAME_WAIVER, { base, head, cwd: g.repo });
     expect(report.stamped).toBe(true);
   });
 
@@ -74,7 +74,7 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       },
       'rename + sneak',
     );
-    const report = await stampWaiver(RENAME_WAIVER, { base, head, cwd: g.repo });
+    const report = await validateCommit(RENAME_WAIVER, { base, head, cwd: g.repo });
     expect(report.stamped).toBe(false);
     expect(report.uncovered).toContain('src/sneaky.ts');
   });
@@ -105,7 +105,7 @@ describe('stampWaiver (engine integration, §3.1)', () => {
         { op: 'change-test', files: ['src/orders.test.ts'] },
       ],
     };
-    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    const report = await validateCommit(waiver, { base, head, cwd: g.repo });
     expect(report.stamped).toBe(true);
   });
 
@@ -125,7 +125,7 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       schema: 'waiver-stamp/v0',
       ops: [{ op: 'move-file', from: 'src/orders.ts', to: 'src/billing/orders.ts' }],
     };
-    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    const report = await validateCommit(waiver, { base, head, cwd: g.repo });
     expect(report.failures).toEqual([]);
     expect(report.stamped).toBe(true);
   });
@@ -142,7 +142,7 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       schema: 'waiver-stamp/v0',
       ops: [{ op: 'move-file', from: 'src/orders.ts', to: 'src/billing/orders.ts' }],
     };
-    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    const report = await validateCommit(waiver, { base, head, cwd: g.repo });
     expect(report.stamped).toBe(false);
     expect(report.uncovered).toContain('src/usage.ts');
   });
@@ -158,7 +158,7 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       schema: 'waiver-stamp/v0',
       ops: [{ op: 'change-test', files: ['src/usage.ts'] }],
     };
-    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    const report = await validateCommit(waiver, { base, head, cwd: g.repo });
     expect(report.stamped).toBe(false);
     expect(report.failures.some((f) => f.includes('src/usage.ts'))).toBe(true);
   });
