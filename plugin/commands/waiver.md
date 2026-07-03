@@ -23,8 +23,7 @@ Invoke the `refactor-with-waiver` skill and follow it to:
      named by `change-test` / `change-docs`.
    - **Commit normally** — through the repo's usual commit path — with the
      waiver embedded as a fenced ` ```waiver ` block in the message body,
-     placed before any trailer paragraph. There is no dedicated commit
-     command — the tool is a verifier, not a commit wrapper.
+     placed before any trailer paragraph.
    - `waiver verify --json` — confirm the just-written commit (`HEAD`) stamps.
      If it fails, fix the waiver, re-`apply`, and amend the commit.
    - `waiver stamp --base $1 --head $2 --json` — preview the aggregate PR

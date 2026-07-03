@@ -839,12 +839,10 @@ APPROVE.
 
 ### 17.4 Authoring a waivered commit
 
-There is **no dedicated authoring command** — a waivered commit is an ordinary commit
-whose message body carries the ` ```waiver ` block (§17.1). The tool is a **verifier**,
-not a commit wrapper, so authoring goes through the repo's normal commit path (the
-`git-commit` skill + the `commit-msg` hook): the message carries a full
-subject/body/footer and is linted like any other commit. The flow, driven by the §18.2
-skill:
+A waivered commit is an ordinary commit whose message body carries the ` ```waiver `
+block (§17.1). Authoring goes through the repo's normal commit path (subject to the
+`commit-msg` hook): the message carries a full subject/body/footer and is linted like
+any other commit. The flow, driven by the §18.2 skill:
 
 1. **`waiver apply <waiver>`** — expand the transform ops into the working tree
    (production code; hand-edit only test/doc files, §3.3).

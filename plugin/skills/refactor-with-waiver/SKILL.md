@@ -36,8 +36,7 @@ The intended loop (spec §3.3, §17.4) makes a stamp predictable:
    commit path — with the waiver embedded as a fenced ` ```waiver ` block in the
    body, placed **before any trailer paragraph** (`Refs:`, `BREAKING CHANGE:`) so
    `semantic-release` and other trailer consumers still read the footer as the
-   terminal paragraph. There is no dedicated authoring command — the tool is a
-   verifier, not a commit wrapper.
+   terminal paragraph.
 4. **`waiver verify`** (or the `waiver_verify` MCP tool) — folds the just-written
    commit (default `HEAD`) through the stamping principle and confirms it stamps,
    one command after committing. If it fails, fix the waiver, re-`apply`, and
