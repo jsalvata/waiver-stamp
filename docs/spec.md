@@ -63,13 +63,16 @@ yield three operation **families**, processed in two **phases**:
 
 | Family | Phase | Safety argument | How it's checked |
 |---|---|---|---|
-| **Reproductive** (`rename`, `extract-function`, `move-to-new-file`) | transform | provably cannot alter runtime behaviour | re-run on base; output matches head |
-| **Transitive** (`bump`) | transform | only pulls in code held to the same review bar | re-resolve lockfile + allowlist |
-| **Confinement** (`change-test`, `change-docs`) | exclusion | provably cannot reach production | named files proven non-shipping; dropped from the comparison |
+| **Reproductive ops** (`rename`, `move-file`, `extract-function`, `move-to-new-file`) | transform | provably cannot alter runtime behaviour | re-run on base; output matches head |
+| **Confinement ops** (`change-test`, `change-docs`) | exclusion | provably cannot reach production | named files proven non-shipping; dropped from the comparison |
+| **Dependency bumps** (standing policy — *no op*, §6.3) | compare | only pulls in code held to the same review bar | change fits the configured envelope; lockfile honestly re-resolves |
 
 These are *different strengths of claim*. A reproductive op asserts "no behaviour
-change." A `bump` explicitly **does** change behaviour — its safety rests on the
-*upstream* review, not on preservation. Keep that distinction explicit.
+change." A **dependency bump explicitly *does* change behaviour** — its safety rests on
+the *upstream* review of the bumped package, not on preservation — and, unlike the ops,
+it is not written into the waiver at all: an allowlisted, up-moving bump is covered by a
+standing per-repo policy (§6.3), the way formatting is covered by emit-invisibility (§7).
+Keep that distinction explicit.
 
 ### Two phases
 
@@ -96,14 +99,15 @@ A PR stamps iff **all** hold:
 1. **Vocabulary gate** — every op is in the schema; else **FAIL closed**.
 2. **Static guards** — per-op guards pass (§8).
 3. **Fold** — apply the transform ops over a clean `base` checkout, in order → tree
-   `O`. (Reproductive ops regenerate via the engine; `bump` applies the manifest edit
-   and re-resolves the lockfile.)
+   `O`. (Reproductive ops regenerate via the engine; there is no dependency op — bumps
+   are handled by the standing policy at compare time, §6.3.)
 4. **Exclusion** — for every exclusion op, predicate-check each named file (§6.2);
    any failure → **FAIL**. The union is the *excluded set*.
 5. **Compare** — over every file **not** in the excluded set, the **compiler emit** of
-   `O` must equal that of head (§7). Any file whose emit differs between base and head
-   but is neither reproduced by `O` nor excluded → **FAIL**. (Coverage is thus
-   automatic — nothing extra can slip through.)
+   `O` must equal that of head (§7); non-TS assets compare by bytes, except
+   `package.json` + lockfile, which are **covered** when the dependency-bump policy
+   holds (§6.3). Any changed file neither reproduced by `O`, covered by the policy, nor
+   excluded → **FAIL**. (Coverage is thus automatic — nothing extra can slip through.)
 6. **Backstop (precondition)** — `tsc` clean and affected tests green on head. **Hard
    gate, always**, but **satisfied by the host CI's existing gate, not re-run by
    `waiver stamp`** — the automation layer confirms CI is green on the exact head SHA
@@ -167,7 +171,8 @@ The tool is **waiver-stamp**; its CLI binary is `waiver`.
   these per-commit verdicts over a PR range (§17.2). No separate trusted code — the
   verifier *is* the runner's verification mode. It does **not** run `tsc` or tests: the
   backstop (§3.1.6) is the host CI's existing gate, confirmed by the automation layer. So
-  the tool's only deps are ts-morph, the package manager (for `bump`), and git.
+  the tool's only deps are ts-morph, the package manager (for the dependency-bump policy,
+  §6.3), and git.
 
 The **op vocabulary** has a single source of truth: the **Zod schema**
 (`src/schema.ts`). The TypeScript types are inferred from it and the **JSON Schema**
@@ -205,9 +210,6 @@ divergent source. See §9 for how this grounds determinism.
 { "op": "move-to-new-file", "symbols": ["A","B"], "from": "path", "to": "path" }
 { "op": "move-file", "from": "path", "to": "path" }
 
-// ── Transform · transitive ──────────────────────────────────────────
-{ "op": "bump", "packages": ["@myorg/foo", ...] }       // manifest+lockfile only; allowlisted
-
 // ── Transform · tool-reproducible ───────────────────────────────────
 { "op": "lint-fix", "files": ["path", ...] }            // repo's own linter, safe fixes only
 
@@ -223,6 +225,10 @@ covers only doc *files* (e.g. `*.md`); comment-only edits to source files requir
 op at all. **`lint-fix` exists because not every lint fix is formatting**: fixes like
 import sorting reorder emitted *statements*, which the token-exact comparison (§7)
 rightly refuses to absorb — those need reproduction, not forgiveness.
+
+**Dependency bumps likewise need no op:** an allowlisted, up-moving dependency change is
+covered by a standing per-repo policy (§6.3), so it too stamps under an empty waiver —
+the packages and versions are read straight from the `package.json` diff, not declared.
 
 Optional same-family v0 add-ons (near-zero cost): `extract-constant`, `move-to-file`
 (move *symbols* to an existing file — not to be confused with `move-file`, which
@@ -305,13 +311,6 @@ against the **same pinned base**, every form is deterministic; the choice of
   already exists at the destination. Path references the LS can't rewrite
   (`require('./x')`, `jest.mock('./x')`, paths in config strings) are caught by the
   dynamic-reference guard (§8) — FAIL-closed.
-- **`bump`** → claimed files ⊆ {manifest(s), lockfile}; only dependency **version**
-  fields change; every bumped package is on the **central allowlist** (§14.2), matched
-  by scope/name **and required source registry** (registry pinning is mandatory — a
-  same-named scope on public npm is a typosquat vector). Apply: set the new versions,
-  then **re-resolve** the lockfile with the repo's package manager; `O`'s
-  manifest+lockfile must equal head's, and re-resolution must confirm each package came
-  from its required registry. Trusts upstream review; **not** behaviour-preservation.
 - **`lint-fix`** → run the **repo's own committed lint toolchain** (the linter named in
   the checked-out manifest, at the lockfile-pinned version, with the committed config —
   e.g. `biome check --write`) over exactly the named files, applying **safe fixes
@@ -322,7 +321,8 @@ against the **same pinned base**, every form is deterministic; the choice of
   claim: `O`'s post-fix emit must equal head's, so a hand edit smuggled in alongside
   the lint fix still mismatches — which also means the op is safe on *any* file, not
   just ones other ops touched (a standalone repo-wide lint-fix commit is a legitimate
-  waiver). Like `bump`, this is **tool-reproducible, not engine-performed**: the
+  waiver). Like the dependency-bump policy (§6.3), this is **tool-reproducible, not
+  engine-performed**: the
   transform is delegated to an external binary resolved from the commit's own
   dependency tree (§9). And it is **not strictly behaviour-preserving**:
   `organizeImports`-class fixes reorder **module evaluation order**. This is accepted
@@ -353,6 +353,73 @@ then covers behaviour.
 
 A file named by an exclusion op that **fails** its predicate → FAIL (it is not
 removed from the compare; a hand-edited production file then mismatches `O`).
+
+### 6.3 Standing dependency-bump policy (no op)
+
+Bumping an allowlisted dependency is a safe change, but — like formatting (§5.1) — it is
+**not a waiver op**. There is nothing for an author to declare that the diff doesn't
+already state: which packages moved, and to what, is read directly from the
+`package.json` diff. So a dependency bump is covered by a **standing per-repo policy**,
+evaluated during the compare (§3.1.5), the way emit-invisibility covers a reformat.
+
+**Configuration — `waiver-stamp.json` at the repo root, read from `base`.** A repo opts
+in by committing:
+
+```json
+{ "allowBumping": ["@myorg/*", "lodash"] }
+```
+
+Entries ending in `/*` are **scope prefixes**; all others are **exact names**. The file
+is read from the **base** checkout, so a PR cannot widen its own allowlist — the edit is
+an un-covered file (→ review), and widening it requires a separately reviewed PR. **No
+config (or an empty `allowBumping`) → the feature is off**: every `package.json`/lockfile
+change falls to review. Nothing is auto-enabled.
+
+**Coverage rule.** Within a stamped commit — one carrying a waiver, where an empty
+`{ "ops": [] }` is enough — `package.json` + the lockfile are **covered** iff *all* hold;
+otherwise they stay un-covered → the commit fails to stamp → review:
+
+1. **Confined manifest diff** — base and head `package.json` are identical except
+   **version-string** values in the dependency blocks (`dependencies`, `devDependencies`,
+   `optionalDependencies`, `peerDependencies`). Any added or removed dependency, or any
+   change to any other field (`scripts`, `pnpm`, `overrides`, `packageManager`, …) → not
+   covered.
+2. **Allowlisted** — every dependency whose version changed is on `allowBumping` and was
+   already a dependency in base.
+3. **Plain-semver shape** — each changed version string is a plain semver version or
+   range. Anything else (`npm:` aliases, `git:`/`file:`/`link:`/`catalog:`/`workspace:`
+   protocols, tarball URLs) → not covered. This is an **allowlist of the good form**, not
+   a blocklist of bad ones: the specifier grammar is package-manager-defined and
+   open-ended, so only "is it plain semver?" is safe to decide.
+4. **Up-moving only** — the head range must admit **no version below base's floor** (an
+   exact pin, or a narrowing/superseding of base's range). A widening that re-admits
+   lower or arbitrary versions (`^2.0.0 → ^2.0.0 || >=0.0.0`) is the smuggle vector → not
+   covered.
+5. **Honest lockfile** — adopt head's `package.json`, **re-resolve** the lockfile with
+   the repo's package manager under **base's committed config**
+   (`pnpm install --lockfile-only --ignore-scripts --prefer-frozen-lockfile`), and
+   require the re-derived lockfile to **byte-match head's**.
+
+Steps 1–4 are offline and deterministic; step 5 is the load-bearing one.
+
+**Why re-resolve — and why CI can't stand in for it.** The lockfile is where a bump can
+smuggle code: a hand-edited entry can point a dependency at an attacker-controlled
+tarball (with a matching forged integrity) or inject a phantom transitive dependency. A
+CI `pnpm install --frozen-lockfile` *trusts* the committed lockfile — it installs exactly
+what the lockfile says and passes if the downloaded bytes match the lockfile's own
+hashes, so a forged lockfile installs cleanly and green-tests. The backstop (§3.1.6)
+offloads "does it build and pass tests" to CI precisely because CI establishes that;
+lockfile **provenance** is a different question CI never asks. Re-resolving from the
+manifest under base's config re-derives the *real* registry resolutions and integrity, so
+a forged lockfile byte-differs → not covered. This is what keeps an auto-approved bump at
+least as safe as the review it replaces (a human doesn't audit lockfile URLs either) —
+the downside-bounded invariant (§1).
+
+**Registry pinning is structural.** Re-resolution runs under base's committed
+`.npmrc`/config, which the PR cannot alter (an `.npmrc` edit is an un-covered file → review;
+a `pnpm`/`overrides` manifest edit trips step 1). So `@myorg/*` resolves through whatever
+registry base pins — a same-named public scope cannot be substituted. Determinism and the
+registry-drift residual are covered in §9.
 
 ---
 
@@ -409,7 +476,8 @@ Guards close the gaps the loaded program can't see (apply to **reproductive** op
 - **Single-project (v0).** Reproductive symbol ops operate within one Nx project's
   `tsconfig` program. Guard: every reference of every targeted symbol lies inside the
   loaded program; a consumer in another Nx project → **FAIL** (→ later). Not a
-  whole-engine limit — `change-test`/`change-docs`/`bump` aren't project-scoped.
+  whole-engine limit — `change-test`/`change-docs` and the dependency-bump policy (§6.3)
+  aren't project-scoped.
 - **Public-API guard.** **FAIL** if a reproductive op targets a symbol exported from a
   published surface — `libs/*-sdk` / `libs/*-api-contract` public `index.ts`
   (cross-repo consumers invisible to the program). With single-project, v0 refactors
@@ -471,12 +539,22 @@ Given those, the rest is mechanical:
 - `getApplicableRefactors` action selection uses a documented deterministic rule.
 - Comparison is by **compiler emit** (§7), canonically formatted and deterministic given
   the repo's options, so formatter drift is irrelevant.
-- Lockfile re-resolution is deterministic (frozen, repo's package manager).
+- Dependency-bump coverage (§6.3) re-resolves the lockfile with the repo's package
+  manager (`pnpm install --lockfile-only --ignore-scripts --prefer-frozen-lockfile`) from
+  base's manifest, lockfile, and committed config. Re-resolution keeps every
+  already-locked dependency pinned and re-derives only the bumped subtree, so it is
+  deterministic given registry state. The residual is **registry drift**: a
+  newly-introduced transitive edge whose range floats can resolve to a later version at
+  stamp time than at author time — so a commit that stamps today can fail to re-stamp
+  later. This is narrow (new edges only), **fail-closed** (drift → byte mismatch →
+  review, never a false stamp), and the same bounded acceptance §1.1 makes elsewhere;
+  `--prefer-frozen-lockfile` shrinks it to its minimum.
 - `lint-fix` adds a **new assumption class**: that the external lint binary is
   deterministic given its pinned version (lockfile) and committed config. True in
   practice for Biome/ESLint safe fixes, but unlike the AST ops the engine performs
   itself, this determinism is *assumed of a third-party tool*, not owned by the
-  engine. The assumption is bounded the same way `bump` bounds registry trust: the
+  engine. The assumption is bounded the same way the dependency-bump policy (§6.3) bounds
+  registry trust: the
   tool identity and version come from the commit's own dependency tree, so a stamp
   never depends on anything the reviewer of the lockfile didn't already admit. If the
   tool proves non-deterministic, `O` ≠ head → mismatch → review: non-determinism
@@ -524,7 +602,7 @@ aggregate verdict — the seam for the CI/automation layer.
 | change a string constant's value | — | Out of scope: string-value change, not behaviour-preserving; nothing reproduces it → mismatch → review. |
 | refactor + hand-edited tests | `[rename, change-test]` | Stamps: `rename` reproduces source; test files excluded + predicate-passed; suite green. |
 | relocate a file into a subdirectory | `[move-file]` | Stamps: the move rewrites every static import/export and dynamic `import()` specifier; a `require('./x')` or `jest.mock` path → dynamic-reference guard → review. |
-| internal lib bump | `[bump]` | Stamps: manifest/lockfile-only, allowlisted, lockfile re-resolves to head. |
+| internal lib bump | `[]` (empty waiver) | Stamps: the dependency-bump policy (§6.3) covers manifest+lockfile — allowlisted, up-moving, lockfile re-resolves to head. No op. |
 | README typo / reformat | `[]` or `[change-docs]` | Reformat/comment-only → empty waiver. `*.md` edit → `change-docs`. |
 
 ---
@@ -545,11 +623,11 @@ aggregate verdict — the seam for the CI/automation layer.
 ## 13. Roadmap
 
 **v0 — single-project; transform + exclusion ops.**
-Ops: `rename`, `extract-function`, `move-to-new-file`, `move-file` (reproductive); `bump`
-(transitive, configurable allowlist); `change-test`, `change-docs` (confinement).
-Reproductive ops single-project + app-internal (§8). Stamping principle, fold +
-emit compare (§7) + exclusions, static guards, JSON report. Covers the extract / share /
-module-extraction cases plus test-only / docs-only / bump / mixed (§11).
+Ops: `rename`, `extract-function`, `move-to-new-file`, `move-file` (reproductive);
+`change-test`, `change-docs` (confinement). Plus the standing **dependency-bump policy**
+(§6.3, no op). Reproductive ops single-project + app-internal (§8). Stamping principle,
+fold + emit compare (§7) + exclusions, static guards, JSON report. Covers the extract /
+share / module-extraction cases plus test-only / docs-only / bump / mixed (§11).
 
 **Later.**
 - Multi-project reproductive ops: Nx project-graph-aware program set covering all
@@ -566,7 +644,10 @@ module-extraction cases plus test-only / docs-only / bump / mixed (§11).
 - An additive `add-export` op, if widening export visibility on its own proves common
   (other additive type/JSDoc edits already pass for free under emit comparison, §7).
 - Custom non-LS ops with mandatory tsc+tests gating.
-- Cross-repo bump verification (released-artifact check).
+- Dependency-bump policy breadth (§6.3): npm/yarn support, workspaces/multi-manifest, a
+  per-package version ceiling (`maxBump`), and an explicit per-package required-registry
+  cross-check (natural on npm's JSON lockfile, which records `resolved` URLs). Plus
+  cross-repo released-artifact verification.
 - Extend the token-economy benchmark (§19) with a `move-file` task (relocate a
   widely-imported file and rewire its importers) and regenerate the README table
   from a real `pnpm bench` run.
@@ -578,15 +659,18 @@ module-extraction cases plus test-only / docs-only / bump / mixed (§11).
 1. **Runner distribution — own repo.** `waiver-stamp` lives in its own repo. Its own
    trustworthiness is accepted per §1.1 (trusted, not verified) — we don't over-engineer
    vouching for the tool itself.
-2. **`bump` allowlist — central, baked into the pinned runner.** A central config
-   shipped with the pinned tool version lists allowed packages by scope/name **and
-   required source registry**. Registry pinning is mandatory: "`@myorg/*` is vetted"
-   only holds if it resolves from the *internal* registry (a same-named public-npm scope
-   is a typosquat vector), so re-resolution confirms the source registry, not just the
-   name. Optional per-package version policy (`maxBump`); default = any version of an
-   allowlisted internal package (the trust is upstream review, not a version bound). The
-   allowlist is trust-critical, so changes to it require human review — you cannot `bump`
-   to widen it.
+2. **Dependency bumps — a standing per-repo policy, not an op (§6.3).** A committed
+   `waiver-stamp.json` lists allowed packages under `allowBumping` (`@myorg/*` scope
+   prefixes or exact names), read from **base** so a PR can't widen it for itself; absent
+   → the feature is off. A covered bump must be confined to dependency version strings,
+   allowlisted, plain-semver-shaped, **up-moving** (head admits no version below base's
+   floor), and its lockfile must **honestly re-resolve** to head's bytes — the check CI's
+   frozen install does *not* perform. Registry pinning is structural (re-resolution under
+   base's committed config, which the PR can't alter). A per-package version ceiling
+   (`maxBump`) is roadmap; v0's trust is upstream review, not a version bound.
+   (Supersedes the earlier "central allowlist baked into the runner" design: per-repo
+   config keeps the tool repo-agnostic and the review boundary local, and making it a
+   standing policy rather than an op removes ceremony the diff already carried.)
 3. **Shipping classification from the production tsconfig.** A TS file is non-shipping
    (eligible for `change-test`) iff it is **not in the production build's program** —
    authoritative and self-maintaining (it *is* the project's build config), and it
@@ -690,7 +774,8 @@ and the alternatives we rejected, so the rationale isn't lost.
 ### Scope & policy
 - **v0 = single Nx project, app-internal** (reproductive ops); multi-project → later.
 - **General tool, not project-specific:** project surfaces (production/test tsconfig,
-  published-package paths, bump allowlist, reference transpiler) are **configuration**;
+  published-package paths, dependency-bump allowlist (`allowBumping`, §6.3), reference
+  transpiler) are **configuration**;
   the §11 worked examples are generic scenarios, not tied to any repo.
 - **Accept test-weakening and type-weakening** — runtime-safe; future-safety erosion is
   noted, not gated (mirrors each other).
