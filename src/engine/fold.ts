@@ -24,7 +24,6 @@ export function applyTransformOp(project: Project, cwd: string, op: Op): void {
       return; // exclusion ops are comparison directives, not tree mutations (§2)
     case 'extract-function':
     case 'move-to-new-file':
-    case 'bump':
       throw new OpApplicationError(op.op, 'not yet implemented in v0');
   }
 }

@@ -207,30 +207,6 @@
             "additionalProperties": false
           },
           {
-            "description": "Bump allowlisted dependency versions (manifest + lockfile only).",
-            "type": "object",
-            "properties": {
-              "op": {
-                "type": "string",
-                "const": "bump"
-              },
-              "packages": {
-                "minItems": 1,
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "minLength": 1,
-                  "pattern": "^(?:(?!```)[\\s\\S])*$"
-                }
-              }
-            },
-            "required": [
-              "op",
-              "packages"
-            ],
-            "additionalProperties": false
-          },
-          {
             "description": "Arbitrary edits to verified non-shipping test files.",
             "type": "object",
             "properties": {
