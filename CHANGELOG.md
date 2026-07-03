@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/jsalvata/waiver-stamp/compare/v1.1.0...v1.1.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* keep .js extension when move-file renames ([3475c9f](https://github.com/jsalvata/waiver-stamp/commit/3475c9f0ccca3ebace6191a988f01348921e401b)), closes [SourceFile#move](https://github.com/SourceFile/issues/move)
+
 # [1.1.0](https://github.com/jsalvata/waiver-stamp/compare/v1.0.3...v1.1.0) (2026-07-03)
 
 
