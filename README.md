@@ -188,6 +188,13 @@ and type-only changes are invisible to the emit comparison, so they need no op).
 dynamic-reference, published-API, emit-divergence (fail-closed). Single Nx project,
 app-internal.
 
+Known shortcoming: the emit-divergence guard deliberately does **not** flag constructor
+parameter properties — mainstream transpilers all compile them the way tsc does, and
+flagging them rejected any file with error-class-style constructors. The sound fix,
+planned as a future improvement, is running the emit comparison under the repository's
+own CI/CD transpiler instead of tsc, which dissolves the whole tsc-vs-deploy
+enumeration. See [`docs/spec.md` §8](docs/spec.md) for the reasoning.
+
 Planned next (the vocabulary already lists them; authoring them errors today):
 `extract-function`, `move-to-new-file`, `bump`, and multi-project reproductive
 coverage. See [`docs/spec.md` §13/§21](docs/spec.md) for the roadmap.
