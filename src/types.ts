@@ -10,6 +10,7 @@ import type {
   ChangeDocsOpSchema,
   ChangeTestOpSchema,
   ExtractFunctionOpSchema,
+  MoveFileOpSchema,
   MoveToNewFileOpSchema,
   NodeAnchorSchema,
   NodeLocatorSchema,
@@ -26,6 +27,7 @@ export type OpKind = Op['op'];
 export type RenameOp = z.infer<typeof RenameOpSchema>;
 export type ExtractFunctionOp = z.infer<typeof ExtractFunctionOpSchema>;
 export type MoveToNewFileOp = z.infer<typeof MoveToNewFileOpSchema>;
+export type MoveFileOp = z.infer<typeof MoveFileOpSchema>;
 export type BumpOp = z.infer<typeof BumpOpSchema>;
 export type ChangeTestOp = z.infer<typeof ChangeTestOpSchema>;
 export type ChangeDocsOp = z.infer<typeof ChangeDocsOpSchema>;
@@ -42,6 +44,7 @@ export const TRANSFORM_OP_KINDS = [
   'rename',
   'extract-function',
   'move-to-new-file',
+  'move-file',
   'bump',
 ] as const satisfies readonly OpKind[];
 

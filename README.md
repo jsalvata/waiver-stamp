@@ -182,9 +182,9 @@ waivered commits.
 
 ## Scope (v0)
 
-Implemented: the **`rename`** reproductive op; **`change-test`** / **`change-docs`**
-exclusion ops; and the empty/minimal waiver (formatting-, comment-, and type-only
-changes are invisible to the emit comparison, so they need no op). Guards:
+Implemented: the **`rename`** and **`move-file`** reproductive ops; **`change-test`** /
+**`change-docs`** exclusion ops; and the empty/minimal waiver (formatting-, comment-,
+and type-only changes are invisible to the emit comparison, so they need no op). Guards:
 dynamic-reference, published-API, emit-divergence (fail-closed). Single Nx project,
 app-internal.
 
@@ -199,6 +199,7 @@ coverage. See [`docs/spec.md` §13/§21](docs/spec.md) for the roadmap.
   "schema": "waiver-stamp/v0",
   "ops": [
     { "op": "rename", "target": { "file": "src/foo.ts", "symbol": "oldName" }, "to": "newName" },
+    { "op": "move-file", "from": "src/foo.ts", "to": "src/util/foo.ts" },
     { "op": "change-docs", "files": ["README.md"] }
   ]
 }

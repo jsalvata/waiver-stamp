@@ -10,8 +10,8 @@
  * v0 limitation in the README.
  */
 
-import { relative } from 'node:path';
-import { type Project, type SourceFile, SyntaxKind } from 'ts-morph';
+import { dirname, isAbsolute, join, relative } from 'node:path';
+import { Node, type Project, type SourceFile, SyntaxKind } from 'ts-morph';
 import type { Op } from '../types.js';
 
 export interface GuardFinding {
@@ -37,13 +37,13 @@ function symbolLeaf(symbol: string): string {
 }
 
 /**
- * Reproductive checks over `base`, run BEFORE the transform folds the rename in:
+ * Reproductive checks over `base`, run BEFORE the transform folds the op in:
  *
- * - **public-API guard** — a symbol exported from a published surface has
- *   cross-repo consumers the program can't see.
- * - **capture scan** — the *new* name already appears in a string literal in
- *   base, so the freshly-introduced symbol would silently absorb a pre-existing
- *   dynamic reference.
+ * - **public-API guard** — a symbol exported from (or a file on) a published
+ *   surface has cross-repo consumers the program can't see.
+ * - **capture scan** — the *new* name (or, for `move-file`, the *destination*
+ *   path) already appears in a string literal in base, so the freshly-introduced
+ *   symbol/file would silently absorb a pre-existing dynamic reference.
  *
  * `excluded` is the set of files confined by a `change-test`/`change-docs` op
  * (the caller computes it — see `stampWaiver`); they're skipped, already out of
@@ -56,25 +56,35 @@ export function baseChecks(
 ): GuardFinding[] {
   const findings: GuardFinding[] = [];
   for (const op of ops) {
-    if (op.op !== 'rename') continue;
-    if (PUBLISHED_SURFACE.test(op.target.file)) {
-      findings.push({
-        guard: 'public-api',
-        detail: `${op.target.file} is a published surface; cross-repo consumers are invisible`,
-      });
+    if (op.op === 'rename') {
+      if (PUBLISHED_SURFACE.test(op.target.file)) {
+        findings.push({
+          guard: 'public-api',
+          detail: `${op.target.file} is a published surface; cross-repo consumers are invisible`,
+        });
+      }
+      findings.push(...dynamicReferenceScan(base, symbolLeaf(op.to), excluded, 'captured'));
+    } else if (op.op === 'move-file') {
+      if (PUBLISHED_SURFACE.test(op.from)) {
+        findings.push({
+          guard: 'public-api',
+          detail: `${op.from} is a published surface; cross-repo consumers are invisible`,
+        });
+      }
+      findings.push(...dynamicPathReferenceScan(base, op.to, excluded, 'captured'));
     }
-    findings.push(...dynamicReferenceScan(base, symbolLeaf(op.to), excluded, 'captured'));
   }
   return findings;
 }
 
 /**
- * Reproductive check over `head`, run AFTER the rename has landed: the **stale
- * scan** — the *old* name still appears in a string literal in head, so it can
- * no longer resolve to the (now renamed) symbol. Reads head, not the folded
- * base, so a commit that also edits the string away — e.g. a descriptive test
- * title the human updated — clears the guard. Excluded files are skipped as in
- * `baseChecks`; `head.root` resolves the relative paths.
+ * Reproductive check over `head`, run AFTER the transform has landed: the
+ * **stale scan** — the *old* name (or, for `move-file`, the *old* path) still
+ * appears in a string literal in head, so it can no longer resolve to the
+ * renamed symbol / moved file. Reads head, not the folded base, so a commit
+ * that also edits the string away — e.g. a descriptive test title the human
+ * updated — clears the guard. Excluded files are skipped as in `baseChecks`;
+ * `head.root` resolves the relative paths.
  */
 export function headChecks(
   head: Checkout,
@@ -83,13 +93,16 @@ export function headChecks(
 ): GuardFinding[] {
   const findings: GuardFinding[] = [];
   for (const op of ops) {
-    if (op.op !== 'rename') continue;
-    findings.push(...dynamicReferenceScan(head, symbolLeaf(op.target.symbol), excluded, 'stale'));
+    if (op.op === 'rename') {
+      findings.push(...dynamicReferenceScan(head, symbolLeaf(op.target.symbol), excluded, 'stale'));
+    } else if (op.op === 'move-file') {
+      findings.push(...dynamicPathReferenceScan(head, op.from, excluded, 'stale'));
+    }
   }
   return findings;
 }
 
-/** Which side of the rename a dynamic-reference hit sits on, for the finding detail. */
+/** Which side of the transform a dynamic-reference hit sits on, for the finding detail. */
 type Direction = 'stale' | 'captured';
 
 /**
@@ -125,6 +138,68 @@ function detailFor(direction: Direction, name: string, file: string): string {
   return direction === 'stale'
     ? `old name '${name}' still appears in a string literal in ${file} after the rename; it can no longer resolve to the renamed symbol`
     : `new name '${name}' already appears in a string literal in ${file} before the rename; the renamed symbol may silently capture it`;
+}
+
+/**
+ * The `move-file` analogue of {@link dynamicReferenceScan}: a string literal
+ * that resolves to `path` but is not a static import/export specifier or a
+ * dynamic `import()` argument (both of which ts-morph's `move` rewrites) —
+ * e.g. `require('./x')`, `jest.mock('./x')`, or a path in config data.
+ * Direction mirrors the rename scans: 'captured' checks the destination path
+ * over base, 'stale' checks the old path over head. Conservative, FAIL-closed.
+ */
+function dynamicPathReferenceScan(
+  checkout: Checkout,
+  path: string,
+  excluded: ReadonlySet<string>,
+  direction: Direction,
+): GuardFinding[] {
+  const targetAbs = isAbsolute(path) ? path : join(checkout.root, path);
+  const targetNoExt = stripTsExtension(targetAbs);
+  for (const sf of checkout.project.getSourceFiles()) {
+    if (excluded.has(relative(checkout.root, sf.getFilePath()))) continue;
+    const literals = [
+      ...sf.getDescendantsOfKind(SyntaxKind.StringLiteral),
+      ...sf.getDescendantsOfKind(SyntaxKind.NoSubstitutionTemplateLiteral),
+    ];
+    for (const lit of literals) {
+      if (isRewrittenSpecifier(lit)) continue;
+      const text = lit.getLiteralText();
+      const candidates = [text, stripTsExtension(text)].flatMap((t) =>
+        t.startsWith('./') || t.startsWith('../')
+          ? [join(dirname(sf.getFilePath()), t)]
+          : [join(checkout.root, t)],
+      );
+      if (candidates.some((c) => c === targetAbs || c === targetNoExt)) {
+        return [
+          { guard: 'dynamic-reference', detail: pathDetailFor(direction, text, sf.getBaseName()) },
+        ];
+      }
+    }
+  }
+  return [];
+}
+
+function pathDetailFor(direction: Direction, text: string, file: string): string {
+  return direction === 'stale'
+    ? `'${text}' in ${file} still references the old path outside an import after the move; it can no longer resolve to the moved file`
+    : `'${text}' in ${file} already references the destination path outside an import before the move; the moved file may silently capture it`;
+}
+
+function stripTsExtension(path: string): string {
+  return path.replace(/\.(ts|tsx|mts|cts)$/, '');
+}
+
+/** A module specifier ts-morph's `move` rewrites: static import/export, or dynamic `import()`. */
+function isRewrittenSpecifier(lit: Node): boolean {
+  const parent = lit.getParent();
+  if (!parent) return false;
+  if (Node.isImportDeclaration(parent) || Node.isExportDeclaration(parent)) return true;
+  return (
+    Node.isCallExpression(parent) &&
+    parent.getExpression().getKind() === SyntaxKind.ImportKeyword &&
+    parent.getArguments()[0] === lit
+  );
 }
 
 /**

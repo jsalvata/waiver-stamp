@@ -25,6 +25,8 @@ const renameOp = {
 
 const DEFINES_OLD = 'export function calculateTotal(): number {\n  return 1;\n}\n';
 
+const moveFileOp = { op: 'move-file' as const, from: 'src/orders.ts', to: 'src/b/orders.ts' };
+
 describe('baseChecks (over base)', () => {
   it('FAILs when the new name already appears in a string literal (capture)', async () => {
     const base = await checkout({
@@ -74,6 +76,36 @@ describe('baseChecks (over base)', () => {
     };
     expect(baseChecks(base, [op], new Set()).map((f) => f.guard)).toContain('public-api');
   });
+
+  it('FAILs a move-file whose destination path is already referenced outside an import (capture)', async () => {
+    const base = await checkout({
+      'src/orders.ts': 'export const a = 1;\n',
+      'src/legacy.ts':
+        "declare const require: (p: string) => unknown;\nexport const m = require('./b/orders');\n",
+    });
+    const findings = baseChecks(base, [moveFileOp], new Set());
+    expect(findings.map((f) => f.guard)).toContain('dynamic-reference');
+  });
+
+  it('passes a move-file whose source is only referenced by static imports', async () => {
+    const base = await checkout({
+      'src/orders.ts': 'export const a = 1;\n',
+      'src/b.ts': "import { a } from './orders';\nexport const x = a;\n",
+    });
+    expect(baseChecks(base, [moveFileOp], new Set())).toEqual([]);
+  });
+
+  it('FAILs a move-file whose source is a published surface', async () => {
+    const base = await checkout({
+      'libs/foo-sdk/src/index.ts': 'export const a = 1;\n',
+    });
+    const op = {
+      op: 'move-file' as const,
+      from: 'libs/foo-sdk/src/index.ts',
+      to: 'libs/foo-sdk/src/main.ts',
+    };
+    expect(baseChecks(base, [op], new Set()).map((f) => f.guard)).toContain('public-api');
+  });
 });
 
 describe('headChecks (over head)', () => {
@@ -112,6 +144,33 @@ describe('headChecks (over head)', () => {
     });
     const findings = headChecks(head, [renameOp], new Set(['src/a.test.ts']));
     expect(findings.map((f) => f.guard)).toContain('dynamic-reference');
+  });
+
+  it('FAILs a move-file when the old path is still referenced outside an import in head (stale)', async () => {
+    const head = await checkout({
+      'src/b/orders.ts': 'export const a = 1;\n',
+      'src/legacy.ts':
+        "declare const require: (p: string) => unknown;\nexport const m = require('./orders');\n",
+    });
+    const findings = headChecks(head, [moveFileOp], new Set());
+    expect(findings.map((f) => f.guard)).toContain('dynamic-reference');
+  });
+
+  it('passes a move-file when head references only the new path (static and dynamic import)', async () => {
+    const head = await checkout({
+      'src/b/orders.ts': 'export const a = 1;\n',
+      'src/c.ts': "import { a } from './b/orders';\nexport const x = a;\n",
+      'src/dyn.ts': "export const m = import('./b/orders');\n",
+    });
+    expect(headChecks(head, [moveFileOp], new Set())).toEqual([]);
+  });
+
+  it('does not FAIL on an old-path string confined to an excluded file', async () => {
+    const head = await checkout({
+      'src/b/orders.ts': 'export const a = 1;\n',
+      'src/orders.test.ts': "export const p = './orders';\n",
+    });
+    expect(headChecks(head, [moveFileOp], new Set(['src/orders.test.ts']))).toEqual([]);
   });
 });
 

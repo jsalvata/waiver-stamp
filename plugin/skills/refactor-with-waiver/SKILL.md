@@ -27,7 +27,8 @@ at all.
 
 The intended loop (spec §3.3, §17.4) makes a stamp predictable:
 
-1. Express the **production-code** change as transform ops — in v0, `rename`.
+1. Express the **production-code** change as transform ops — in v0, `rename`
+   and `move-file`.
    Prefer `waiver_apply` (MCP) or `waiver apply <waiver>` (CLI) to expand it into
    the working tree — don't hand-edit production code.
 2. Hand-edit only the **test/doc** files; name them with `change-test` /
@@ -96,6 +97,9 @@ Validate against it — never invent ops.
 
 **Transform · reproductive** (behaviour-preserving; folded over base, in order):
 - `{ "op": "rename", "target": { "symbol" }, "to": "newName" }`
+- `{ "op": "move-file", "from": "path", "to": "path" }` — move/rename a whole
+  file; static imports/exports and dynamic `import()` specifiers are rewritten
+  for you. Refuses if a file already exists at `to`.
 
 **Exclusion · confinement** (removed from the comparison; order-free):
 - `{ "op": "change-test", "files": [...] }` — verified non-shipping test files.
@@ -104,8 +108,8 @@ Validate against it — never invent ops.
 > **Not yet implemented in this build:** `extract-function`, `move-to-new-file`,
 > and `bump`. The schema still lists them, but `apply` / `stamp` will FAIL with
 > "not yet implemented in v0" if a waiver uses them. They are planned next — do
-> **not** author waivers using them yet. For v0, stick to `rename`, the
-> `change-test` / `change-docs` exclusions, and empty/minimal waivers.
+> **not** author waivers using them yet. For v0, stick to `rename` / `move-file`,
+> the `change-test` / `change-docs` exclusions, and empty/minimal waivers.
 
 ## Selector cookbook for `rename` (§5.2)
 
@@ -133,11 +137,13 @@ an empty `ops` array stamps clean.
 
 - Any change to a **production** file not reproduced by a transform op (e.g. a
   string-literal *value* change) → it will mismatch → review.
-- `rename` on **published surfaces** (`libs/*-sdk`, `*-api-contract` `index.ts`)
-  or across Nx project boundaries → guard FAILs (v0 is single-project,
-  app-internal).
+- `rename` / `move-file` on **published surfaces** (`libs/*-sdk`,
+  `*-api-contract` `index.ts`) or across Nx project boundaries → guard FAILs
+  (v0 is single-project, app-internal).
 - Symbols reached by dynamic references (`obj["name"]`, string-keyed DI, refs in
-  JSON/SQL/templates) → dynamic-reference guard FAILs.
+  JSON/SQL/templates) → dynamic-reference guard FAILs. Same for a moved file's
+  path reached outside an import (`require('./x')`, `jest.mock('./x')`, config
+  strings).
 
 ## MCP tools
 

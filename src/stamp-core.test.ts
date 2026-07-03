@@ -3,6 +3,8 @@
  * repos — restored from the pre-split stamp.test.ts (see 85b75ad), which covered
  * these behaviors before `stamp` became the §17.2 range aggregator.
  */
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { stampWaiver } from './stamp-core.js';
 import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from './test-helpers.js';
@@ -105,6 +107,44 @@ describe('stampWaiver (engine integration, §3.1)', () => {
     };
     const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
     expect(report.stamped).toBe(true);
+  });
+
+  it('STAMPS a move-file whose head relocates the file and rewires the importer', async () => {
+    g = await makeGitRepo();
+    const base = await baseCommit();
+    await rm(join(g.repo, 'src/orders.ts'));
+    const head = await g.commit(
+      {
+        'src/billing/orders.ts': ORDERS_BASE,
+        'src/usage.ts':
+          "import { calculateTotal } from './billing/orders';\nexport const t = calculateTotal(21);\n",
+      },
+      'move orders under billing/',
+    );
+    const waiver: Waiver = {
+      schema: 'waiver-stamp/v0',
+      ops: [{ op: 'move-file', from: 'src/orders.ts', to: 'src/billing/orders.ts' }],
+    };
+    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    expect(report.failures).toEqual([]);
+    expect(report.stamped).toBe(true);
+  });
+
+  it('FAILS a move-file when head forgets to rewire the importer', async () => {
+    g = await makeGitRepo();
+    const base = await baseCommit();
+    await rm(join(g.repo, 'src/orders.ts'));
+    const head = await g.commit(
+      { 'src/billing/orders.ts': ORDERS_BASE },
+      'move orders, stale importer',
+    );
+    const waiver: Waiver = {
+      schema: 'waiver-stamp/v0',
+      ops: [{ op: 'move-file', from: 'src/orders.ts', to: 'src/billing/orders.ts' }],
+    };
+    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    expect(report.stamped).toBe(false);
+    expect(report.uncovered).toContain('src/usage.ts');
   });
 
   it('FAILS when a change-test names a non-test (production) file', async () => {

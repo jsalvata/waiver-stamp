@@ -81,6 +81,15 @@ export const MoveToNewFileOpSchema = z
   .strict()
   .describe('Move named top-level declarations to a new file, rewiring imports/exports.');
 
+export const MoveFileOpSchema = z
+  .object({
+    op: z.literal('move-file'),
+    from: nonEmpty,
+    to: nonEmpty,
+  })
+  .strict()
+  .describe('Move/rename a source file, rewriting module specifiers that reference it.');
+
 // ── Transform · transitive ───────────────────────────────────────────────────
 
 export const BumpOpSchema = z
@@ -113,6 +122,7 @@ export const OpSchema = z.discriminatedUnion('op', [
   RenameOpSchema,
   ExtractFunctionOpSchema,
   MoveToNewFileOpSchema,
+  MoveFileOpSchema,
   BumpOpSchema,
   ChangeTestOpSchema,
   ChangeDocsOpSchema,
