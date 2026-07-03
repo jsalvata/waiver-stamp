@@ -411,6 +411,21 @@ Guards close the gaps the loaded program can't see (apply to **reproductive** op
   between `O` and head touches one of these, **FAIL** (→ review). (This is the
   enumerated-edge-case trade from §1.1: a short, stable list, fail-closed.)
 
+  **Accepted shortcoming — parameter properties.** Constructor parameter properties
+  (`constructor(readonly x: number)`) are synthesis rather than erasure, so in
+  principle they belong on the list: tsc's emit collapses a parameter property and a
+  hand-written field-plus-assignment into the same tokens, so the stamp relies on the
+  deploy transpiler treating both spellings identically. In practice every mainstream
+  transpiler (esbuild, swc, Babel's TS transform) compiles them exactly as tsc does —
+  an assignment after `super()`, set semantics — and flagging them rejects any change
+  to a file with error-class-style constructors, which is far too noisy for the
+  marginal risk. The guard therefore does **not** flag them; this is a known,
+  deliberate gap in the enumeration. The sound future fix is not re-adding the check
+  but running the §7 emit comparison under the **repository's own CI/CD transpiler**
+  (the configurability §7 already anticipates): when the reference emitter is the
+  tool that builds the shipped artifact, equal emit directly means an unchanged
+  artifact, and the whole tsc-vs-deploy enumeration — this gap included — dissolves.
+
 > The v0 reproductive path targets **app-internal, single-project, non-lib** refactors —
 > the common case for everyday refactor PRs.
 

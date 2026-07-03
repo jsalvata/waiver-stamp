@@ -181,12 +181,11 @@ describe('emitDivergenceGuard', () => {
     expect(findings.map((f) => f.guard)).toContain('emit-divergence');
   });
 
-  it('FAILs a file with a parameter property', async () => {
+  it('passes a file with a parameter property (accepted shortcoming, spec §8)', async () => {
     const co = await checkout({
       'src/a.ts': 'export class C {\n  constructor(public readonly n: number) {}\n}\n',
     });
-    const findings = emitDivergenceGuard(co.project, [join(co.root, 'src/a.ts')]);
-    expect(findings.map((f) => f.guard)).toContain('emit-divergence');
+    expect(emitDivergenceGuard(co.project, [join(co.root, 'src/a.ts')])).toEqual([]);
   });
 
   it('passes a plain file', async () => {

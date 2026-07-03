@@ -11,7 +11,7 @@
  */
 
 import { dirname, isAbsolute, join, relative } from 'node:path';
-import { Node, type Project, type SourceFile, SyntaxKind } from 'ts-morph';
+import { Node, type Project, SyntaxKind } from 'ts-morph';
 import type { Op } from '../types.js';
 
 export interface GuardFinding {
@@ -205,7 +205,13 @@ function isRewrittenSpecifier(lit: Node): boolean {
 /**
  * The tsc-vs-deploy emit gap (spec §8): a changed file touching a construct
  * transpilers erase differently — `const enum`, `namespace`, `import =`,
- * parameter properties, or decorators under `emitDecoratorMetadata` — FAILs.
+ * or decorators under `emitDecoratorMetadata` — FAILs.
+ *
+ * Parameter properties are deliberately NOT flagged: they are synthesis rather
+ * than erasure, but every mainstream transpiler compiles them the same way tsc
+ * does (assignment after `super()`, set semantics), and flagging them rejects
+ * any file with error-class-style constructors. Accepted shortcoming (§8);
+ * the sound fix is comparing emit under the deploy transpiler.
  */
 export function emitDivergenceGuard(project: Project, absFiles: readonly string[]): GuardFinding[] {
   const findings: GuardFinding[] = [];
@@ -230,18 +236,6 @@ export function emitDivergenceGuard(project: Project, absFiles: readonly string[
     if (decoratorMetadata && sf.getDescendantsOfKind(SyntaxKind.Decorator).length > 0) {
       findings.push({ guard: 'emit-divergence', detail: `decorator metadata in ${name}` });
     }
-    if (hasParameterProperty(sf)) {
-      findings.push({ guard: 'emit-divergence', detail: `parameter property in ${name}` });
-    }
   }
   return findings;
-}
-
-/** A constructor parameter with an accessibility/readonly modifier emits a field. */
-function hasParameterProperty(sf: SourceFile): boolean {
-  return sf
-    .getDescendantsOfKind(SyntaxKind.Parameter)
-    .some(
-      (p) => p.getModifiers().length > 0 && p.getParentIfKind(SyntaxKind.Constructor) !== undefined,
-    );
 }
