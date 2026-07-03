@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/jsalvata/waiver-stamp/compare/v1.1.2...v1.2.0) (2026-07-03)
+
+
+### Features
+
+* drop parameter properties from emit guard ([6fda113](https://github.com/jsalvata/waiver-stamp/commit/6fda1139f366e71743b7ef5d8aa67118c247c71f))
+
 ## [1.1.2](https://github.com/jsalvata/waiver-stamp/compare/v1.1.1...v1.1.2) (2026-07-03)
 
 
