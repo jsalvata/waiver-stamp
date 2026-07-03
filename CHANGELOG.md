@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/jsalvata/waiver-stamp/compare/v1.3.0...v1.4.0) (2026-07-03)
+
+
+### Features
+
+* use .ts extensions in relative imports ([784b5eb](https://github.com/jsalvata/waiver-stamp/commit/784b5ebf252cb2ed99d4efad78beded089039040))
+
 # [1.3.0](https://github.com/jsalvata/waiver-stamp/compare/v1.2.0...v1.3.0) (2026-07-03)
 
 
