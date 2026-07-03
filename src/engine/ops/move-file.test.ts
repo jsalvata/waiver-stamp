@@ -10,6 +10,19 @@ afterEach(async () => {
   fix = undefined;
 });
 
+/** NodeNext requires explicit `.js` endings on relative specifiers (unlike the Bundler default). */
+const NODENEXT_TSCONFIG = {
+  compilerOptions: {
+    target: 'ES2022',
+    module: 'NodeNext',
+    moduleResolution: 'NodeNext',
+    strict: true,
+    declaration: false,
+    skipLibCheck: true,
+  },
+  include: ['**/*.ts'],
+};
+
 describe('applyMoveFile', () => {
   it('moves a file and rewrites module specifiers in referencing files', async () => {
     fix = await scaffoldProject({
@@ -46,6 +59,47 @@ describe('applyMoveFile', () => {
 
     const moved = project.getSourceFileOrThrow(`${fix.cwd}/src/billing/orders.ts`).getFullText();
     expect(moved).toContain("from '../rates'");
+  });
+
+  it('preserves the .js extension when rewriting a referencing specifier under NodeNext', async () => {
+    fix = await scaffoldProject(
+      {
+        'src/orders.ts':
+          'export function calculateTotal(n: number): number {\n  return n * 2;\n}\n',
+        'src/usage.ts':
+          "import { calculateTotal } from './orders.js';\nexport const t = calculateTotal(21);\n",
+      },
+      NODENEXT_TSCONFIG,
+    );
+    const project = loadProject(fix.cwd);
+    applyMoveFile(project, fix.cwd, {
+      op: 'move-file',
+      from: 'src/orders.ts',
+      to: 'src/billing/orders.ts',
+    });
+
+    const usage = project.getSourceFileOrThrow(`${fix.cwd}/src/usage.ts`).getFullText();
+    expect(usage).toContain("from './billing/orders.js'");
+  });
+
+  it("preserves the .js extension in the moved file's own imports under NodeNext", async () => {
+    fix = await scaffoldProject(
+      {
+        'src/orders.ts':
+          "import { rate } from './rates.js';\nexport function calculateTotal(n: number): number {\n  return n * rate;\n}\n",
+        'src/rates.ts': 'export const rate = 2;\n',
+      },
+      NODENEXT_TSCONFIG,
+    );
+    const project = loadProject(fix.cwd);
+    applyMoveFile(project, fix.cwd, {
+      op: 'move-file',
+      from: 'src/orders.ts',
+      to: 'src/billing/orders.ts',
+    });
+
+    const moved = project.getSourceFileOrThrow(`${fix.cwd}/src/billing/orders.ts`).getFullText();
+    expect(moved).toContain("from '../rates.js'");
   });
 
   it('refuses when a source file already exists at the destination', async () => {
