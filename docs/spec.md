@@ -516,6 +516,14 @@ module-extraction cases plus test-only / docs-only / bump / mixed (§11).
 - Extend the token-economy benchmark (§19) with a `move-file` task (relocate a
   widely-imported file and rewire its importers) and regenerate the README table
   from a real `pnpm bench` run.
+- Improve the identification of "published surface": the public-API guard (§8) is a
+  hardcoded path pattern (`libs/*-sdk` / `libs/*-api-contract` `index.ts`) — derive it
+  from the repo instead (e.g. package.json `exports`/`main` entries, Nx project tags,
+  or a configurable pattern).
+- Support `~/...` path-alias specifiers in the `move-file` dynamic path-reference
+  scan: resolve string literals through the tsconfig `paths` mapping before matching,
+  so an aliased reference to the moved file is caught (today only relative and
+  root-relative literals resolve; an alias hit is silently missed).
 
 ---
 
