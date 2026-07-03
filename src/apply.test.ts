@@ -1,9 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { apply } from './apply.js';
-import { WaiverValidationError } from './errors.js';
-import { type Fixture, scaffoldProject } from './test-helpers.js';
+import { apply } from './apply.ts';
+import { WaiverValidationError } from './errors.ts';
+import { type Fixture, scaffoldProject } from './test-helpers.ts';
 
 let fix: Fixture | undefined;
 afterEach(async () => {

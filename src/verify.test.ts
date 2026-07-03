@@ -4,9 +4,9 @@ import {
   type GitRepoFixture,
   makeGitRepo,
   waiverCommitMessage,
-} from './test-helpers.js';
-import type { Waiver } from './types.js';
-import { verify } from './verify.js';
+} from './test-helpers.ts';
+import type { Waiver } from './types.ts';
+import { verify } from './verify.ts';
 
 const ORDERS_BASE = 'export function calculateTotal(n: number): number {\n  return n * 2;\n}\n';
 const ORDERS_RENAMED = 'export function computeTotal(n: number): number {\n  return n * 2;\n}\n';

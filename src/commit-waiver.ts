@@ -6,10 +6,10 @@
  * as `invalid`, never silently dropped to `none`.
  */
 
-import { WaiverValidationError } from './errors.js';
-import { loadWaiverFromObject } from './load.js';
-import { SCHEMA_VERSION } from './schema.js';
-import type { Waiver } from './types.js';
+import { WaiverValidationError } from './errors.ts';
+import { loadWaiverFromObject } from './load.ts';
+import { SCHEMA_VERSION } from './schema.ts';
+import type { Waiver } from './types.ts';
 
 export type WaiverBlock =
   | { kind: 'none' }

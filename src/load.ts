@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { WaiverParseError, WaiverValidationError } from './errors.js';
-import { WaiverSchema } from './schema.js';
-import type { Waiver } from './types.js';
+import { WaiverParseError, WaiverValidationError } from './errors.ts';
+import { WaiverSchema } from './schema.ts';
+import type { Waiver } from './types.ts';
 
 /** Read all of stdin as UTF-8 (the `-` waiver source). */
 async function readStdin(): Promise<string> {

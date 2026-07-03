@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type Fixture, scaffoldProject } from '../test-helpers.js';
-import { type Checkout, baseChecks, emitDivergenceGuard, headChecks } from './guards.js';
-import { loadProject } from './project.js';
+import { type Fixture, scaffoldProject } from '../test-helpers.ts';
+import { type Checkout, baseChecks, emitDivergenceGuard, headChecks } from './guards.ts';
+import { loadProject } from './project.ts';
 
 const fixtures: Fixture[] = [];
 afterEach(async () => {

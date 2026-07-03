@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { changedFiles, commitMessage, commitsInRange, parents, runGit, worktreeAt } from './git.js';
+import { changedFiles, commitMessage, commitsInRange, parents, runGit, worktreeAt } from './git.ts';
 
 let repo: string;
 
