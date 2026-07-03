@@ -44,6 +44,22 @@ describe('WaiverSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts a move-file op', () => {
+    const result = WaiverSchema.safeParse({
+      schema: 'waiver-stamp/v0',
+      ops: [{ op: 'move-file', from: 'src/orders.ts', to: 'src/billing/orders.ts' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a move-file op with extra properties (strict)', () => {
+    const result = WaiverSchema.safeParse({
+      schema: 'waiver-stamp/v0',
+      ops: [{ op: 'move-file', from: 'a.ts', to: 'b.ts', overwrite: true }],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('accepts an empty ops list (formatting/type-only changes stamp with no ops)', () => {
     const result = WaiverSchema.safeParse({
       schema: 'waiver-stamp/v0',

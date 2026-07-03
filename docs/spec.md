@@ -203,6 +203,7 @@ divergent source. See §9 for how this grounds determinism.
 { "op": "rename", "target": {Selector}, "to": "newName" }
 { "op": "extract-function", "target": {NodeLocator}, "name": "fnName" }
 { "op": "move-to-new-file", "symbols": ["A","B"], "from": "path", "to": "path" }
+{ "op": "move-file", "from": "path", "to": "path" }
 
 // ── Transform · transitive ──────────────────────────────────────────
 { "op": "bump", "packages": ["@myorg/foo", ...] }       // manifest+lockfile only; allowlisted
@@ -219,7 +220,8 @@ covers only doc *files* (e.g. `*.md`); comment-only edits to source files requir
 op at all.
 
 Optional same-family v0 add-ons (near-zero cost): `extract-constant`, `move-to-file`
-(existing file).
+(move *symbols* to an existing file — not to be confused with `move-file`, which
+relocates a whole file).
 
 ### 5.2 Selectors
 
@@ -292,6 +294,12 @@ against the **same pinned base**, every form is deterministic; the choice of
   hatch; narrowest enclosing scope; ambiguity → fail).
 - **`move-to-new-file`** → `Move to a new file`; moves named top-level decls, rewires
   imports/exports; the LS adds `export` where cross-file refs require it.
+- **`move-file`** → native `SourceFile#move`. Moves/renames a whole file and rewrites
+  the module specifiers referencing it — static import/export declarations and dynamic
+  `import()` arguments — *within the loaded program* (§8). Refuses when a source file
+  already exists at the destination. Path references the LS can't rewrite
+  (`require('./x')`, `jest.mock('./x')`, paths in config strings) are caught by the
+  dynamic-reference guard (§8) — FAIL-closed.
 - **`bump`** → claimed files ⊆ {manifest(s), lockfile}; only dependency **version**
   fields change; every bumped package is on the **central allowlist** (§14.2), matched
   by scope/name **and required source registry** (registry pinning is mandatory — a
@@ -391,7 +399,11 @@ Guards close the gaps the loaded program can't see (apply to **reproductive** op
   freshly-introduced symbol would silently capture). Either hit → **FAIL** (the "modulo
   introspection" caveat, operationalised). Files confined by `change-test`/`change-docs`
   are skipped on both sides — already out of the comparison, they can't smuggle a
-  production change.
+  production change. For `move-file`, the path analogue, same two directions: a string
+  literal resolving to the **old** path in **head** (stale) or to the **destination**
+  path in **base** (captured), counting only forms the LS won't rewrite — not static
+  import/export specifiers or dynamic `import()` arguments, but `require('./x')`,
+  `jest.mock('./x')`, paths in config strings. Either hit → **FAIL**.
 - **Emit-divergence guard.** The emit comparison (§7) uses tsc; tsc-equivalence implies
   deploy-equivalence except for constructs transpilers erase differently —
   **decorator metadata (`emitDecoratorMetadata`), `const enum`, class fields
@@ -462,6 +474,7 @@ aggregate verdict — the seam for the CI/automation layer.
 | extract a shared module to a new file | `move-to-new-file` + `extract-function` ×2 | Stamps: a hand-added named return interface is type-only → erased from emit → invisible to the compare (§7). |
 | change a string constant's value | — | Out of scope: string-value change, not behaviour-preserving; nothing reproduces it → mismatch → review. |
 | refactor + hand-edited tests | `[rename, change-test]` | Stamps: `rename` reproduces source; test files excluded + predicate-passed; suite green. |
+| relocate a file into a subdirectory | `[move-file]` | Stamps: the move rewrites every static import/export and dynamic `import()` specifier; a `require('./x')` or `jest.mock` path → dynamic-reference guard → review. |
 | internal lib bump | `[bump]` | Stamps: manifest/lockfile-only, allowlisted, lockfile re-resolves to head. |
 | README typo / reformat | `[]` or `[change-docs]` | Reformat/comment-only → empty waiver. `*.md` edit → `change-docs`. |
 
@@ -483,7 +496,7 @@ aggregate verdict — the seam for the CI/automation layer.
 ## 13. Roadmap
 
 **v0 — single-project; transform + exclusion ops.**
-Ops: `rename`, `extract-function`, `move-to-new-file` (reproductive); `bump`
+Ops: `rename`, `extract-function`, `move-to-new-file`, `move-file` (reproductive); `bump`
 (transitive, configurable allowlist); `change-test`, `change-docs` (confinement).
 Reproductive ops single-project + app-internal (§8). Stamping principle, fold +
 emit compare (§7) + exclusions, static guards, JSON report. Covers the extract / share /
@@ -500,6 +513,9 @@ module-extraction cases plus test-only / docs-only / bump / mixed (§11).
   (other additive type/JSDoc edits already pass for free under emit comparison, §7).
 - Custom non-LS ops with mandatory tsc+tests gating.
 - Cross-repo bump verification (released-artifact check).
+- Extend the token-economy benchmark (§19) with a `move-file` task (relocate a
+  widely-imported file and rewire its importers) and regenerate the README table
+  from a real `pnpm bench` run.
 
 ---
 

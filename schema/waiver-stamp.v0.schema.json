@@ -181,6 +181,32 @@
             "additionalProperties": false
           },
           {
+            "description": "Move/rename a source file, rewriting module specifiers that reference it.",
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "move-file"
+              },
+              "from": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?:(?!```)[\\s\\S])*$"
+              },
+              "to": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?:(?!```)[\\s\\S])*$"
+              }
+            },
+            "required": [
+              "op",
+              "from",
+              "to"
+            ],
+            "additionalProperties": false
+          },
+          {
             "description": "Bump allowlisted dependency versions (manifest + lockfile only).",
             "type": "object",
             "properties": {
