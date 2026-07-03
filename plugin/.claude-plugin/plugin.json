@@ -1,6 +1,5 @@
 {
   "name": "waiver-stamp",
-  "version": "0.0.0",
   "description": "Author waiver-stamp waivers from a code change and validate them with the `waiver` CLI.",
   "author": {
     "name": "Jordi Salvat"
