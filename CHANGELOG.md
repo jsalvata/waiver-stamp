@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/jsalvata/waiver-stamp/compare/v1.2.0...v1.3.0) (2026-07-03)
+
+
+### Features
+
+* enable rewriteRelativeImportExtensions ([628c90a](https://github.com/jsalvata/waiver-stamp/commit/628c90a084b340d2873a6578b0fc36cfd14653ee))
+
 # [1.2.0](https://github.com/jsalvata/waiver-stamp/compare/v1.1.2...v1.2.0) (2026-07-03)
 
 
