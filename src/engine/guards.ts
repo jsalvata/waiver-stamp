@@ -19,6 +19,12 @@ export interface GuardFinding {
   detail: string;
 }
 
+/** A loaded program paired with the checkout root its excluded paths are relative to. */
+export interface Checkout {
+  project: Project;
+  root: string;
+}
+
 const PUBLISHED_SURFACE = /(^|\/)libs\/[^/]*-(sdk|api-contract)\/.*index\.ts$/;
 
 function escapeRegExp(s: string): string {
@@ -31,19 +37,20 @@ function symbolLeaf(symbol: string): string {
 }
 
 /**
- * Guards that depend only on the targeted symbols (run over the base program).
+ * Reproductive checks over `base`, run BEFORE the transform folds the rename in:
  *
- * `cwd` is the checkout root the excluded paths are relative to (the same
- * root `stampWaiver`'s `buildCompareSet` resolves against). `excluded` is the
- * set of files already confined by a `change-test`/`change-docs` op (the
- * caller computes this — see `stampWaiver`). Those files are skipped by the
- * dynamic-reference scan: they're already removed from the comparison (spec
- * §6.2), so a string literal mentioning the renamed symbol there (e.g. a test
- * `describe(...)` title) can't smuggle an unaccounted production change.
+ * - **public-API guard** — a symbol exported from a published surface has
+ *   cross-repo consumers the program can't see.
+ * - **capture scan** — the *new* name already appears in a string literal in
+ *   base, so the freshly-introduced symbol would silently absorb a pre-existing
+ *   dynamic reference.
+ *
+ * `excluded` is the set of files confined by a `change-test`/`change-docs` op
+ * (the caller computes it — see `stampWaiver`); they're skipped, already out of
+ * the comparison (spec §6.2). `base.root` resolves those relative paths.
  */
-export function runReproductiveGuards(
-  project: Project,
-  cwd: string,
+export function baseChecks(
+  base: Checkout,
   ops: readonly Op[],
   excluded: ReadonlySet<string>,
 ): GuardFinding[] {
@@ -56,10 +63,34 @@ export function runReproductiveGuards(
         detail: `${op.target.file} is a published surface; cross-repo consumers are invisible`,
       });
     }
-    findings.push(...dynamicReferenceScan(project, cwd, op.target.symbol, excluded));
+    findings.push(...dynamicReferenceScan(base, symbolLeaf(op.to), excluded, 'captured'));
   }
   return findings;
 }
+
+/**
+ * Reproductive check over `head`, run AFTER the rename has landed: the **stale
+ * scan** — the *old* name still appears in a string literal in head, so it can
+ * no longer resolve to the (now renamed) symbol. Reads head, not the folded
+ * base, so a commit that also edits the string away — e.g. a descriptive test
+ * title the human updated — clears the guard. Excluded files are skipped as in
+ * `baseChecks`; `head.root` resolves the relative paths.
+ */
+export function headChecks(
+  head: Checkout,
+  ops: readonly Op[],
+  excluded: ReadonlySet<string>,
+): GuardFinding[] {
+  const findings: GuardFinding[] = [];
+  for (const op of ops) {
+    if (op.op !== 'rename') continue;
+    findings.push(...dynamicReferenceScan(head, symbolLeaf(op.target.symbol), excluded, 'stale'));
+  }
+  return findings;
+}
+
+/** Which side of the rename a dynamic-reference hit sits on, for the finding detail. */
+type Direction = 'stale' | 'captured';
 
 /**
  * Heuristic scan for references the language service can't track: a string
@@ -67,15 +98,14 @@ export function runReproductiveGuards(
  * Conservative and FAIL-closed — a false positive only sends the PR to review.
  */
 function dynamicReferenceScan(
-  project: Project,
-  cwd: string,
-  symbol: string,
+  checkout: Checkout,
+  name: string,
   excluded: ReadonlySet<string>,
+  direction: Direction,
 ): GuardFinding[] {
-  const name = symbolLeaf(symbol);
   const word = new RegExp(`\\b${escapeRegExp(name)}\\b`);
-  for (const sf of project.getSourceFiles()) {
-    if (excluded.has(relative(cwd, sf.getFilePath()))) continue;
+  for (const sf of checkout.project.getSourceFiles()) {
+    if (excluded.has(relative(checkout.root, sf.getFilePath()))) continue;
     const literals = [
       ...sf.getDescendantsOfKind(SyntaxKind.StringLiteral),
       ...sf.getDescendantsOfKind(SyntaxKind.NoSubstitutionTemplateLiteral),
@@ -83,15 +113,18 @@ function dynamicReferenceScan(
     for (const lit of literals) {
       if (word.test(lit.getLiteralText())) {
         return [
-          {
-            guard: 'dynamic-reference',
-            detail: `'${name}' appears in a string literal in ${sf.getBaseName()}; the rename cannot reach it`,
-          },
+          { guard: 'dynamic-reference', detail: detailFor(direction, name, sf.getBaseName()) },
         ];
       }
     }
   }
   return [];
+}
+
+function detailFor(direction: Direction, name: string, file: string): string {
+  return direction === 'stale'
+    ? `old name '${name}' still appears in a string literal in ${file} after the rename; it can no longer resolve to the renamed symbol`
+    : `new name '${name}' already appears in a string literal in ${file} before the rename; the renamed symbol may silently capture it`;
 }
 
 /**

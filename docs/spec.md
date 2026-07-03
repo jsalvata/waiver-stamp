@@ -383,8 +383,15 @@ Guards close the gaps the loaded program can't see (apply to **reproductive** op
   are **app-internal only**.
 - **Dynamic-reference scan.** Heuristic scan of targeted symbols for forms the LS
   can't track: `obj["name"]`, string-keyed DI/registry tokens, references in non-TS
-  sibling files (JSON/SQL/templates). Hit → **FAIL** (the "modulo introspection"
-  caveat, operationalised).
+  sibling files (JSON/SQL/templates). A rename can slip past structural retargeting in
+  **two directions**, so the scan runs on both sides of the commit: the **old** name in
+  **head** (a `'oldName'` string that survives the rename now resolves to nothing —
+  scanning head, not base, lets a commit that also edits the string away clear the
+  guard), and the **new** name in **base** (a pre-existing `'newName'` string the
+  freshly-introduced symbol would silently capture). Either hit → **FAIL** (the "modulo
+  introspection" caveat, operationalised). Files confined by `change-test`/`change-docs`
+  are skipped on both sides — already out of the comparison, they can't smuggle a
+  production change.
 - **Emit-divergence guard.** The emit comparison (§7) uses tsc; tsc-equivalence implies
   deploy-equivalence except for constructs transpilers erase differently —
   **decorator metadata (`emitDecoratorMetadata`), `const enum`, class fields

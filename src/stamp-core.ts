@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { emitForFile } from './engine/emit-compare.js';
 import { predicateOk } from './engine/exclude.js';
 import { applyTransformOp } from './engine/fold.js';
-import { emitDivergenceGuard, runReproductiveGuards } from './engine/guards.js';
+import { baseChecks, emitDivergenceGuard, headChecks } from './engine/guards.js';
 import { loadProject } from './engine/project.js';
 import { changedFiles, worktreeAt } from './git.js';
 import type { FileFinding, OpFinding, StampReport } from './report.js';
@@ -43,6 +43,7 @@ export async function stampWaiver(waiver: Waiver, options: StampOptions): Promis
     const excluded = new Set<string>();
 
     const oProject = loadProject(oWt.dir);
+    const headProject = loadProject(headWt.dir);
 
     // Exclusion ops first: the guards and the transform pass both need the
     // confined file set they produce (spec §6.2).
@@ -52,8 +53,9 @@ export async function stampWaiver(waiver: Waiver, options: StampOptions): Promis
       }
     }
 
-    // Reproductive guards over the base program (public-API, dynamic-reference, §8).
-    for (const finding of runReproductiveGuards(oProject, oWt.dir, waiver.ops, excluded)) {
+    // Guards over the base program, before the transform folds the rename in:
+    // public-API + the new-name capture scan (§8).
+    for (const finding of baseChecks({ project: oProject, root: oWt.dir }, waiver.ops, excluded)) {
       failures.push(`guard ${finding.guard}: ${finding.detail}`);
     }
 
@@ -63,7 +65,15 @@ export async function stampWaiver(waiver: Waiver, options: StampOptions): Promis
       }
     }
 
-    const headProject = loadProject(headWt.dir);
+    // Guards over head, after the rename has landed: the old-name stale scan (§8).
+    for (const finding of headChecks(
+      { project: headProject, root: headWt.dir },
+      waiver.ops,
+      excluded,
+    )) {
+      failures.push(`guard ${finding.guard}: ${finding.detail}`);
+    }
+
     const compareSet = await buildCompareSet(cwd, options, oProject, oWt.dir, excluded);
 
     // Emit-divergence guard over the changed files on head (the tsc-vs-deploy gap, §8).
