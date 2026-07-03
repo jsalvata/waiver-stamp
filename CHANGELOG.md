@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/jsalvata/waiver-stamp/compare/v1.0.3...v1.1.0) (2026-07-03)
+
+
+### Features
+
+* add move-file reproductive op ([c4e9899](https://github.com/jsalvata/waiver-stamp/commit/c4e9899e55f1d54f4a42ef8e69abc36e35ef8ab4)), closes [SourceFile#move](https://github.com/SourceFile/issues/move)
+
 ## [1.0.3](https://github.com/jsalvata/waiver-stamp/compare/v1.0.2...v1.0.3) (2026-07-03)
 
 
