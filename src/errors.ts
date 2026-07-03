@@ -56,3 +56,11 @@ export class CommitResolutionError extends Error {
     super('Argument did not resolve to a commit');
   }
 }
+
+/** A commit has no parent to diff against — a root commit cannot be validated (§17.1). */
+export class CommitParentError extends Error {
+  override readonly name = 'CommitParentError';
+  constructor(readonly sha: string) {
+    super('Commit has no parent to validate against');
+  }
+}

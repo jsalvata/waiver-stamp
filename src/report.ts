@@ -2,7 +2,7 @@
 
 import type { OpKind } from './types.js';
 
-export interface StampReport {
+export interface ValidationReport {
   /** True iff the PR is fully accounted for by the waiver and every guard holds. */
   stamped: boolean;
   waiver: { schema: string };

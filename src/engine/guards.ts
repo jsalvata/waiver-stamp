@@ -46,7 +46,7 @@ function symbolLeaf(symbol: string): string {
  *   symbol/file would silently absorb a pre-existing dynamic reference.
  *
  * `excluded` is the set of files confined by a `change-test`/`change-docs` op
- * (the caller computes it — see `stampWaiver`); they're skipped, already out of
+ * (the caller computes it — see `validateCommit`); they're skipped, already out of
  * the comparison (spec §6.2). `base.root` resolves those relative paths.
  */
 export function baseChecks(

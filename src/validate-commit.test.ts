@@ -1,14 +1,14 @@
 /**
- * Integration tests for the §3.1 stamping engine (`stampWaiver`) over real git
+ * Integration tests for the §3.1 stamping engine (`validateCommit`) over real git
  * repos — restored from the pre-split stamp.test.ts (see 85b75ad), which covered
  * these behaviors before `stamp` became the §17.2 range aggregator.
  */
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { stampWaiver } from './stamp-core.js';
 import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from './test-helpers.js';
 import type { Waiver } from './types.js';
+import { validateCommit } from './validate-commit.js';
 
 let g: GitRepoFixture | undefined;
 afterEach(async () => {
@@ -47,10 +47,10 @@ async function baseCommit(extra: Record<string, string> = {}): Promise<string> {
   );
 }
 
-describe('stampWaiver (engine integration, §3.1)', () => {
+describe('validateCommit (engine integration, §3.1)', () => {
   it('STAMPS even when head reformats the reproduced files (emit is modulo formatting)', async () => {
     g = await makeGitRepo();
-    const base = await baseCommit();
+    await baseCommit();
     const head = await g.commit(
       {
         'src/orders.ts':
@@ -59,13 +59,13 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       },
       'rename + reformat',
     );
-    const report = await stampWaiver(RENAME_WAIVER, { base, head, cwd: g.repo });
+    const report = await validateCommit(RENAME_WAIVER, { commit: head, cwd: g.repo });
     expect(report.stamped).toBe(true);
   });
 
   it('FAILS when head adds an un-accounted new production file', async () => {
     g = await makeGitRepo();
-    const base = await baseCommit();
+    await baseCommit();
     const head = await g.commit(
       {
         'src/orders.ts': ORDERS_RENAMED,
@@ -74,14 +74,14 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       },
       'rename + sneak',
     );
-    const report = await stampWaiver(RENAME_WAIVER, { base, head, cwd: g.repo });
+    const report = await validateCommit(RENAME_WAIVER, { commit: head, cwd: g.repo });
     expect(report.stamped).toBe(false);
     expect(report.uncovered).toContain('src/sneaky.ts');
   });
 
   it('STAMPS a mixed rename + hand-edited test via change-test exclusion', async () => {
     g = await makeGitRepo();
-    const base = await baseCommit({
+    await baseCommit({
       'src/orders.test.ts':
         "import { calculateTotal } from './orders';\nexport const ok = calculateTotal(1) === 2;\n",
     });
@@ -105,13 +105,13 @@ describe('stampWaiver (engine integration, §3.1)', () => {
         { op: 'change-test', files: ['src/orders.test.ts'] },
       ],
     };
-    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    const report = await validateCommit(waiver, { commit: head, cwd: g.repo });
     expect(report.stamped).toBe(true);
   });
 
   it('STAMPS a move-file whose head relocates the file and rewires the importer', async () => {
     g = await makeGitRepo();
-    const base = await baseCommit();
+    await baseCommit();
     await rm(join(g.repo, 'src/orders.ts'));
     const head = await g.commit(
       {
@@ -125,14 +125,14 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       schema: 'waiver-stamp/v0',
       ops: [{ op: 'move-file', from: 'src/orders.ts', to: 'src/billing/orders.ts' }],
     };
-    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    const report = await validateCommit(waiver, { commit: head, cwd: g.repo });
     expect(report.failures).toEqual([]);
     expect(report.stamped).toBe(true);
   });
 
   it('FAILS a move-file when head forgets to rewire the importer', async () => {
     g = await makeGitRepo();
-    const base = await baseCommit();
+    await baseCommit();
     await rm(join(g.repo, 'src/orders.ts'));
     const head = await g.commit(
       { 'src/billing/orders.ts': ORDERS_BASE },
@@ -142,14 +142,14 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       schema: 'waiver-stamp/v0',
       ops: [{ op: 'move-file', from: 'src/orders.ts', to: 'src/billing/orders.ts' }],
     };
-    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    const report = await validateCommit(waiver, { commit: head, cwd: g.repo });
     expect(report.stamped).toBe(false);
     expect(report.uncovered).toContain('src/usage.ts');
   });
 
   it('FAILS when a change-test names a non-test (production) file', async () => {
     g = await makeGitRepo();
-    const base = await baseCommit();
+    await baseCommit();
     const head = await g.commit(
       { 'src/orders.ts': ORDERS_RENAMED, 'src/usage.ts': USAGE_RENAMED },
       'rename',
@@ -158,7 +158,7 @@ describe('stampWaiver (engine integration, §3.1)', () => {
       schema: 'waiver-stamp/v0',
       ops: [{ op: 'change-test', files: ['src/usage.ts'] }],
     };
-    const report = await stampWaiver(waiver, { base, head, cwd: g.repo });
+    const report = await validateCommit(waiver, { commit: head, cwd: g.repo });
     expect(report.stamped).toBe(false);
     expect(report.failures.some((f) => f.includes('src/usage.ts'))).toBe(true);
   });

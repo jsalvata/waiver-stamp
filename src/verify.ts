@@ -2,7 +2,7 @@
 import { extractWaiverBlock } from './commit-waiver.js';
 import { commitMessage, commitSubject, parents, resolveCommit } from './git.js';
 import type { PerCommitResult } from './report.js';
-import { stampWaiver } from './stamp-core.js';
+import { validateCommit } from './validate-commit.js';
 
 export interface VerifyOptions {
   /** Commit-ish to verify. Defaults to HEAD. */
@@ -34,7 +34,7 @@ export async function classifyCommit(cwd: string, sha: string): Promise<PerCommi
   if (block.kind === 'none') return { ...base, class: 'unwaivered', reasons: [] };
   if (block.kind === 'invalid') return { ...base, class: 'invalid', reasons: [block.reason] };
 
-  const report = await stampWaiver(block.waiver, { base: ps[0], head: sha, cwd });
+  const report = await validateCommit(block.waiver, { commit: sha, cwd });
   return {
     ...base,
     class: report.stamped ? 'stamped' : 'invalid',

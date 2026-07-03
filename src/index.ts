@@ -7,7 +7,7 @@ export { WaiverSchema, OpSchema, jsonSchema, SCHEMA_VERSION, SCHEMA_ID } from '.
 export { loadWaiver, loadWaiverFromObject } from './load.js';
 export { apply, applyWaiver, type ApplyOptions, type ApplyResult } from './apply.js';
 export { createServer, startMcpServer } from './mcp.js';
-export { stampWaiver, type StampOptions } from './stamp-core.js';
+export { validateCommit, type ValidateOptions } from './validate-commit.js';
 export { stamp, aggregate, type StampRangeOptions } from './stamp.js';
 export { verify, classifyCommit, type VerifyOptions } from './verify.js';
 export { extractWaiverBlock, type WaiverBlock } from './commit-waiver.js';
