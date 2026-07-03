@@ -208,6 +208,9 @@ divergent source. See §9 for how this grounds determinism.
 // ── Transform · transitive ──────────────────────────────────────────
 { "op": "bump", "packages": ["@myorg/foo", ...] }       // manifest+lockfile only; allowlisted
 
+// ── Transform · tool-reproducible ───────────────────────────────────
+{ "op": "lint-fix", "files": ["path", ...] }            // repo's own linter, safe fixes only
+
 // ── Exclusion · confinement ─────────────────────────────────────────
 { "op": "change-test", "files": ["path", ...] }         // arbitrary edits; verified test files only
 { "op": "change-docs", "files": ["path", ...] }         // verified doc files only
@@ -217,7 +220,9 @@ There is **no `format` op and no comment op** — formatting-only and comment-on
 changes are absorbed by the modulo-formatting-and-comments comparison (§7), so they
 need no operation (an otherwise-empty waiver stamps them). `change-docs` therefore
 covers only doc *files* (e.g. `*.md`); comment-only edits to source files require no
-op at all.
+op at all. **`lint-fix` exists because not every lint fix is formatting**: fixes like
+import sorting reorder emitted *statements*, which the token-exact comparison (§7)
+rightly refuses to absorb — those need reproduction, not forgiveness.
 
 Optional same-family v0 add-ons (near-zero cost): `extract-constant`, `move-to-file`
 (move *symbols* to an existing file — not to be confused with `move-file`, which
@@ -307,8 +312,28 @@ against the **same pinned base**, every form is deterministic; the choice of
   then **re-resolve** the lockfile with the repo's package manager; `O`'s
   manifest+lockfile must equal head's, and re-resolution must confirm each package came
   from its required registry. Trusts upstream review; **not** behaviour-preservation.
-
-### 6.2 Exclusion ops (predicate-checked, removed from the compare)
+- **`lint-fix`** → run the **repo's own committed lint toolchain** (the linter named in
+  the checked-out manifest, at the lockfile-pinned version, with the committed config —
+  e.g. `biome check --write`) over exactly the named files, applying **safe fixes
+  only**. Folds **in order** like any other transform op; in practice it belongs
+  **last**, after the ops whose output it cleans up (a `move-file` rewrites import
+  specifiers, *then* the linter sorts them) — a misplaced `lint-fix` isn't unsafe,
+  it just yields an `O` that doesn't match head and FAILs. Reproduction is the whole
+  claim: `O`'s post-fix emit must equal head's, so a hand edit smuggled in alongside
+  the lint fix still mismatches — which also means the op is safe on *any* file, not
+  just ones other ops touched (a standalone repo-wide lint-fix commit is a legitimate
+  waiver). Like `bump`, this is **tool-reproducible, not engine-performed**: the
+  transform is delegated to an external binary resolved from the commit's own
+  dependency tree (§9). And it is **not strictly behaviour-preserving**:
+  `organizeImports`-class fixes reorder **module evaluation order**. This is accepted
+  by policy, not guarded — reordering is a property of the whole import sequence, so
+  no per-import check can isolate a "dangerous" subset (a bare `import './x.js'`
+  whose index is unchanged still has a different set of modules evaluated before it),
+  and binding-only imports execute their modules too, carrying the same class of
+  risk. In modern practice linters sort imports universally, so modules are written
+  to be load-order-robust; the residual initialization-order edge (import cycles,
+  module-scope registration racing another module's read) is documented here in the
+  §1.1 spirit: a named, bounded acceptance rather than a silent one.
 
 No reproduction. Each named file must pass its predicate; the global backstop (§3.1.6)
 then covers behaviour.
@@ -432,6 +457,15 @@ Given those, the rest is mechanical:
 - Comparison is by **compiler emit** (§7), canonically formatted and deterministic given
   the repo's options, so formatter drift is irrelevant.
 - Lockfile re-resolution is deterministic (frozen, repo's package manager).
+- `lint-fix` adds a **new assumption class**: that the external lint binary is
+  deterministic given its pinned version (lockfile) and committed config. True in
+  practice for Biome/ESLint safe fixes, but unlike the AST ops the engine performs
+  itself, this determinism is *assumed of a third-party tool*, not owned by the
+  engine. The assumption is bounded the same way `bump` bounds registry trust: the
+  tool identity and version come from the commit's own dependency tree, so a stamp
+  never depends on anything the reviewer of the lockfile didn't already admit. If the
+  tool proves non-deterministic, `O` ≠ head → mismatch → review: non-determinism
+  degrades to a false FAIL, never a false stamp.
 - No wall-clock / randomness anywhere.
 
 ---
@@ -509,6 +543,11 @@ module-extraction cases plus test-only / docs-only / bump / mixed (§11).
   *impact report* where downstream repos are inspectable).
 - More reproductive ops: `inline-variable`, `extract-type`, convert-family, `revert`,
   codegen-regeneration.
+- `lint-fix` (tool-reproducible, §5.1/§6.1): fold the repo's own pinned linter's safe
+  fixes over the transformed base; import reordering accepted by policy (§6.1). Spec'd,
+  not yet implemented; motivated by dogfooding — a `move-file` sweep leaves rewritten
+  import specifiers unsorted, and the follow-up `organizeImports` fix is not
+  emit-neutral, so today it needs a separate reviewed commit.
 - An additive `add-export` op, if widening export visibility on its own proves common
   (other additive type/JSDoc edits already pass for free under emit comparison, §7).
 - Custom non-LS ops with mandatory tsc+tests gating.
