@@ -11,8 +11,8 @@ hard-coded, so a waivered commit cannot carry:
 - a commit **body** (the "why", which §17.1's own example shows),
 - a Conventional-Commits **footer/trailer** (`Refs:`, `BREAKING CHANGE:`),
 
-and it bypasses the repo's `git-commit` skill and the commitlint `commit-msg` hook
-entirely — the commit message is assembled by string concatenation, never linted.
+and it bypasses the repo's commitlint `commit-msg` hook entirely — the commit message
+is assembled by string concatenation, never linted.
 
 ## Current behaviour
 
@@ -61,7 +61,7 @@ The recommended flow becomes:
 
 ```
 waiver apply <waiver>      # mechanical edits to the tree
-<author commits normally>  # full subject/body/footer via git-commit skill + commitlint
+<author commits normally>  # full subject/body/footer, linted by commitlint
 waiver embed <waiver>      # amend HEAD, inserting the waiver block body-before-footer
 ```
 
