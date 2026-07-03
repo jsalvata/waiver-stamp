@@ -9,7 +9,6 @@
       "name": "waiver-stamp",
       "source": "./plugin",
       "description": "Author and verify waiver-stamp waivers: a stdio MCP server plus the refactor-with-waiver skill and /waiver command.",
-      "version": "0.0.0",
       "keywords": ["waiver-stamp", "refactor", "code-review", "pull-request"]
     }
   ]
