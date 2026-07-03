@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/jsalvata/waiver-stamp/compare/v1.0.2...v1.0.3) (2026-07-03)
+
+
+### Bug Fixes
+
+* scan dynamic references before/after rename ([2120152](https://github.com/jsalvata/waiver-stamp/commit/2120152d81a1c0d137663b2f81a027fce564e119))
+
 ## [1.0.2](https://github.com/jsalvata/waiver-stamp/compare/v1.0.1...v1.0.2) (2026-07-02)
 
 
