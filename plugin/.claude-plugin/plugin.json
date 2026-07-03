@@ -7,6 +7,12 @@
   "homepage": "https://github.com/jsalvata/waiver-stamp",
   "keywords": ["waiver-stamp", "refactor", "code-review", "pull-request"],
   "mcpServers": {
-    "waiver-stamp": { "command": "npx", "args": ["-y", "waiver-stamp", "mcp"] }
+    "waiver-stamp": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "if [ -f package.json ] && grep -q '\"name\": \"waiver-stamp\"' package.json && pnpm build 1>&2; then exec node dist/cli.js mcp; else exec npx -y waiver-stamp@latest mcp; fi"
+      ]
+    }
   }
 }
