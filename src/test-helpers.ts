@@ -7,8 +7,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { runGit } from './git.js';
-import type { Waiver } from './types.js';
+import { runGit } from './git.ts';
+import type { Waiver } from './types.ts';
 
 export interface Fixture {
   /** Absolute path to the temp project root (holds tsconfig.json). */

@@ -18,7 +18,7 @@ import type {
   RenameOpSchema,
   SelectorSchema,
   WaiverSchema,
-} from './schema.js';
+} from './schema.ts';
 
 export type Waiver = z.infer<typeof WaiverSchema>;
 export type Op = z.infer<typeof OpSchema>;

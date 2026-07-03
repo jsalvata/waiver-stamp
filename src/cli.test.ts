@@ -11,7 +11,7 @@ import {
   type GitRepoFixture,
   makeGitRepo,
   scaffoldProject,
-} from './test-helpers.js';
+} from './test-helpers.ts';
 
 const run = promisify(execFile);
 

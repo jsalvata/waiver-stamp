@@ -4,9 +4,9 @@
  */
 
 import type { Node, Project } from 'ts-morph';
-import { OpApplicationError } from '../../errors.js';
-import type { RenameOp } from '../../types.js';
-import { findDeclarations, resolveSelector } from '../project.js';
+import { OpApplicationError } from '../../errors.ts';
+import type { RenameOp } from '../../types.ts';
+import { findDeclarations, resolveSelector } from '../project.ts';
 
 interface Renameable {
   rename(newName: string): void;

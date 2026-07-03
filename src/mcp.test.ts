@@ -1,14 +1,14 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createServer } from './mcp.js';
+import { createServer } from './mcp.ts';
 import {
   FIXTURE_TSCONFIG_JSON,
   type GitRepoFixture,
   makeGitRepo,
   waiverCommitMessage,
-} from './test-helpers.js';
-import type { Waiver } from './types.js';
+} from './test-helpers.ts';
+import type { Waiver } from './types.ts';
 
 async function connectClient(): Promise<Client> {
   const server = createServer('0.1.0');

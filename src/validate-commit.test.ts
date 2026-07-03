@@ -6,9 +6,9 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from './test-helpers.js';
-import type { Waiver } from './types.js';
-import { validateCommit } from './validate-commit.js';
+import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from './test-helpers.ts';
+import type { Waiver } from './types.ts';
+import { validateCommit } from './validate-commit.ts';
 
 let g: GitRepoFixture | undefined;
 afterEach(async () => {

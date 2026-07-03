@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { OpApplicationError } from '../../errors.js';
-import { type Fixture, scaffoldProject } from '../../test-helpers.js';
-import { loadProject } from '../project.js';
-import { applyRename } from './rename.js';
+import { OpApplicationError } from '../../errors.ts';
+import { type Fixture, scaffoldProject } from '../../test-helpers.ts';
+import { loadProject } from '../project.ts';
+import { applyRename } from './rename.ts';
 
 let fix: Fixture | undefined;
 afterEach(async () => {

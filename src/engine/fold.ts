@@ -5,10 +5,10 @@
  */
 
 import type { Project } from 'ts-morph';
-import { OpApplicationError } from '../errors.js';
-import type { Op } from '../types.js';
-import { applyMoveFile } from './ops/move-file.js';
-import { applyRename } from './ops/rename.js';
+import { OpApplicationError } from '../errors.ts';
+import type { Op } from '../types.ts';
+import { applyMoveFile } from './ops/move-file.ts';
+import { applyRename } from './ops/rename.ts';
 
 /** Apply one transform op to the project. Exclusion ops are a no-op here (§2). */
 export function applyTransformOp(project: Project, cwd: string, op: Op): void {

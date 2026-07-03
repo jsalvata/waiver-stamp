@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
-import { apply } from './apply.js';
+import { apply } from './apply.ts';
 import {
   CommitResolutionError,
   NotImplementedError,
@@ -9,11 +9,11 @@ import {
   SelectorResolutionError,
   WaiverParseError,
   WaiverValidationError,
-} from './errors.js';
-import { startMcpServer } from './mcp.js';
-import { EXIT, type ExitCode } from './report.js';
-import { stamp } from './stamp.js';
-import { verify } from './verify.js';
+} from './errors.ts';
+import { startMcpServer } from './mcp.ts';
+import { EXIT, type ExitCode } from './report.ts';
+import { stamp } from './stamp.ts';
+import { verify } from './verify.ts';
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
 

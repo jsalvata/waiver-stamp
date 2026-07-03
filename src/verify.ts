@@ -1,8 +1,8 @@
 /** Single-commit verification (§17.4): classify one commit by its embedded waiver. */
-import { extractWaiverBlock } from './commit-waiver.js';
-import { commitMessage, commitSubject, parents, resolveCommit } from './git.js';
-import type { PerCommitResult } from './report.js';
-import { validateCommit } from './validate-commit.js';
+import { extractWaiverBlock } from './commit-waiver.ts';
+import { commitMessage, commitSubject, parents, resolveCommit } from './git.ts';
+import type { PerCommitResult } from './report.ts';
+import { validateCommit } from './validate-commit.ts';
 
 export interface VerifyOptions {
   /** Commit-ish to verify. Defaults to HEAD. */

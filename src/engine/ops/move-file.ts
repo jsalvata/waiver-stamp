@@ -13,9 +13,9 @@
 
 import { isAbsolute, join } from 'node:path';
 import type { Project } from 'ts-morph';
-import { OpApplicationError } from '../../errors.js';
-import type { MoveFileOp } from '../../types.js';
-import { getSourceFile } from '../project.js';
+import { OpApplicationError } from '../../errors.ts';
+import type { MoveFileOp } from '../../types.ts';
+import { getSourceFile } from '../project.ts';
 
 export function applyMoveFile(project: Project, cwd: string, op: MoveFileOp): void {
   const sf = getSourceFile(project, cwd, op.from);

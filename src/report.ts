@@ -1,6 +1,6 @@
 /** The PASS/FAIL report shape `waiver stamp --json` emits (§10) — the seam for the automation layer. */
 
-import type { OpKind } from './types.js';
+import type { OpKind } from './types.ts';
 
 export interface ValidationReport {
   /** True iff the PR is fully accounted for by the waiver and every guard holds. */

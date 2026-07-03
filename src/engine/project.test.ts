@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { SelectorResolutionError } from '../errors.js';
-import { type Fixture, scaffoldProject } from '../test-helpers.js';
-import { loadProject, resolveSelector } from './project.js';
+import { SelectorResolutionError } from '../errors.ts';
+import { type Fixture, scaffoldProject } from '../test-helpers.ts';
+import { loadProject, resolveSelector } from './project.ts';
 
 let fix: Fixture | undefined;
 afterEach(async () => {

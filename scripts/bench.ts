@@ -41,11 +41,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { applyWaiver } from '../src/apply.js';
-import { emitForFile } from '../src/engine/emit-compare.js';
-import { loadProject } from '../src/engine/project.js';
-import { loadWaiverFromObject } from '../src/load.js';
-import { scaffoldProject } from '../src/test-helpers.js';
+import { applyWaiver } from '../src/apply.ts';
+import { emitForFile } from '../src/engine/emit-compare.ts';
+import { loadProject } from '../src/engine/project.ts';
+import { loadWaiverFromObject } from '../src/load.ts';
+import { scaffoldProject } from '../src/test-helpers.ts';
 
 const exec = promisify(execFile);
 

@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { WaiverParseError, WaiverValidationError } from './errors.js';
-import { loadWaiver, loadWaiverFromObject } from './load.js';
+import { WaiverParseError, WaiverValidationError } from './errors.ts';
+import { loadWaiver, loadWaiverFromObject } from './load.ts';
 
 const validExample = fileURLToPath(new URL('../examples/valid.waiver.json', import.meta.url));
 
