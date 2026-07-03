@@ -5,16 +5,15 @@ import { predicateOk } from './engine/exclude.js';
 import { applyTransformOp } from './engine/fold.js';
 import { baseChecks, emitDivergenceGuard, headChecks } from './engine/guards.js';
 import { loadProject } from './engine/project.js';
-import { changedFiles, worktreeAt } from './git.js';
+import { CommitParentError } from './errors.js';
+import { changedFiles, parents, worktreeAt } from './git.js';
 import type { FileFinding, OpFinding, ValidationReport } from './report.js';
 import type { Op, Waiver } from './types.js';
 
-export interface StampOptions {
-  /** Base git ref to fold the transform ops over. */
-  base: string;
-  /** Head git ref whose diff is being stamped. */
-  head: string;
-  /** Repo path where `base`/`head` live. Defaults to `process.cwd()`. */
+export interface ValidateOptions {
+  /** The commit whose diff against its parent is validated. */
+  commit: string;
+  /** Repo path where `commit` lives. Defaults to `process.cwd()`. */
   cwd?: string;
 }
 
@@ -24,18 +23,25 @@ const TS_SOURCE = /\.(ts|tsx|mts|cts)$/;
 const DECLARATION = /\.d\.ts$/;
 
 /**
- * Stamper (§4): validate a PR diff against its waiver via the §3.1 stamping
- * principle — fold the transform ops over a clean `base` checkout to produce `O`,
+ * Validate one commit against its waiver via the §3.1 stamping principle — fold
+ * the transform ops over a clean checkout of the commit's parent to produce `O`,
  * predicate-check the exclusion ops, then require that every changed file not
- * excluded has matching compiler emit between `O` and head (spec §7).
+ * excluded has matching compiler emit between `O` and the commit (spec §7). The
+ * parent is derived here, so callers pass only the commit.
  *
  * Does NOT run tsc or tests — the §3.1.6 backstop is the host CI's job (spec §4).
  */
-export async function validateCommit(waiver: Waiver, options: StampOptions): Promise<ValidationReport> {
+export async function validateCommit(
+  waiver: Waiver,
+  options: ValidateOptions,
+): Promise<ValidationReport> {
   const cwd = options.cwd ?? process.cwd();
+  const head = options.commit;
+  const [base] = await parents(cwd, head);
+  if (!base) throw new CommitParentError(head);
 
-  const oWt = await worktreeAt(cwd, options.base);
-  const headWt = await worktreeAt(cwd, options.head);
+  const oWt = await worktreeAt(cwd, base);
+  const headWt = await worktreeAt(cwd, head);
   try {
     const opFindings: OpFinding[] = [];
     const fileFindings: FileFinding[] = [];
@@ -74,7 +80,7 @@ export async function validateCommit(waiver: Waiver, options: StampOptions): Pro
       failures.push(`guard ${finding.guard}: ${finding.detail}`);
     }
 
-    const compareSet = await buildCompareSet(cwd, options, oProject, oWt.dir, excluded);
+    const compareSet = await buildCompareSet(cwd, base, head, oProject, oWt.dir, excluded);
 
     // Emit-divergence guard over the changed files on head (the tsc-vs-deploy gap, §8).
     for (const finding of emitDivergenceGuard(
@@ -146,12 +152,13 @@ function applyTransform(
 
 async function buildCompareSet(
   cwd: string,
-  options: StampOptions,
+  base: string,
+  head: string,
   oProject: Project,
   oDir: string,
   excluded: Set<string>,
 ): Promise<string[]> {
-  const changed = await changedFiles(cwd, options.base, options.head);
+  const changed = await changedFiles(cwd, base, head);
   const touched = oProject
     .getSourceFiles()
     .filter((sf) => !sf.isSaved())
