@@ -34,6 +34,16 @@ export async function commitsInRange(repo: string, base: string, head: string): 
   return out ? out.split('\n') : [];
 }
 
+/**
+ * SHAs reachable from `tip` but not from any remote-tracking ref, oldest first.
+ * The pre-push fallback for a brand-new branch (no upstream to diff against): what
+ * `tip` would push that no remote already has (mirrors git's own pre-push.sample).
+ */
+export async function commitsNotOnRemotes(repo: string, tip: string): Promise<string[]> {
+  const out = await runGit(repo, ['rev-list', '--reverse', tip, '--not', '--remotes']);
+  return out ? out.split('\n') : [];
+}
+
 /** Parent SHAs of a commit; length ≥ 2 means a merge commit (§17.1). */
 export async function parents(repo: string, sha: string): Promise<string[]> {
   const out = await runGit(repo, ['show', '-s', '--format=%P', sha]);

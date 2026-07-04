@@ -11,6 +11,7 @@ import {
   WaiverValidationError,
 } from './errors.ts';
 import { startMcpServer } from './mcp.ts';
+import { formatDriftReport, prepush } from './prepush.ts';
 import { EXIT, type ExitCode } from './report.ts';
 import { stamp } from './stamp.ts';
 import { verify } from './verify.ts';
@@ -51,6 +52,13 @@ async function run(body: () => Promise<void>): Promise<void> {
 
 function setExit(code: ExitCode): void {
   process.exitCode = code;
+}
+
+/** Drain stdin to a string (git's pre-push hook delivers its ref lines this way). */
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 const program = new Command();
@@ -106,6 +114,22 @@ program
           console.log(`  ${c.sha.slice(0, 8)} ${c.class.padEnd(10)} ${c.subject}`);
       }
       if (report.verdict === 'REQUEST_CHANGES') setExit(EXIT.FAILURE);
+    });
+  });
+
+program
+  .command('prepush')
+  .description('re-verify outgoing waivered dependency bumps before a push (§6.3 drift guard)')
+  .action(async () => {
+    await run(async () => {
+      // As a git pre-push hook, git feeds ref lines on stdin; run standalone otherwise.
+      const stdin = process.stdin.isTTY ? undefined : await readStdin();
+      const report = await prepush({ cwd: process.cwd(), stdin });
+      if (report.failures.length > 0) {
+        console.error(formatDriftReport(report.failures));
+        setExit(EXIT.FAILURE);
+      }
+      // Fast path: nothing outgoing drifted → exit 0 silently (default STAMPED).
     });
   });
 

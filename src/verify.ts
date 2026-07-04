@@ -9,15 +9,24 @@ export interface VerifyOptions {
   commit?: string;
   /** Repo path. Defaults to process.cwd(). */
   cwd?: string;
+  /**
+   * Lockfile re-resolution for the dependency-bump policy (§6.3, test seam). Defaults
+   * to the real pnpm subprocess; tests inject fakes so no network or pnpm binary runs.
+   */
+  resolveLockfile?: (dir: string) => Promise<void>;
 }
 
 export async function verify(options: VerifyOptions = {}): Promise<PerCommitResult> {
   const cwd = options.cwd ?? process.cwd();
   const sha = await resolveCommit(cwd, options.commit ?? 'HEAD');
-  return classifyCommit(cwd, sha);
+  return classifyCommit(cwd, sha, options.resolveLockfile);
 }
 
-export async function classifyCommit(cwd: string, sha: string): Promise<PerCommitResult> {
+export async function classifyCommit(
+  cwd: string,
+  sha: string,
+  resolveLockfile?: (dir: string) => Promise<void>,
+): Promise<PerCommitResult> {
   const subject = await commitSubject(cwd, sha);
   const base = { sha, subject, perOpFindings: [], uncoveredFiles: [] };
 
@@ -34,7 +43,7 @@ export async function classifyCommit(cwd: string, sha: string): Promise<PerCommi
   if (block.kind === 'none') return { ...base, class: 'unwaivered', reasons: [] };
   if (block.kind === 'invalid') return { ...base, class: 'invalid', reasons: [block.reason] };
 
-  const report = await validateCommit(block.waiver, { commit: sha, cwd });
+  const report = await validateCommit(block.waiver, { commit: sha, cwd, resolveLockfile });
   return {
     ...base,
     class: report.stamped ? 'stamped' : 'invalid',
