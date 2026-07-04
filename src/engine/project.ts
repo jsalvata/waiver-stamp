@@ -16,6 +16,14 @@ import type { Selector } from '../types.ts';
  * the repo's own tsconfig often sets `noEmit: true` for type-checking. The
  * runtime-affecting options (target, module, decorator/enum/class-field settings)
  * are left untouched so emit matches the repo's build semantics.
+ *
+ * `allowImportingTsExtensions` is forced on so a `move-file` rename preserves a
+ * repo's `.ts` import style: the language service only *generates* `.ts` endings
+ * when that flag is set, so without it a move silently downgrades `.ts` imports to
+ * `.js`. It is safe to force unconditionally — for repos that write `.js` or
+ * extensionless specifiers the service preserves that style, so the flag is a
+ * no-op there. (We cannot gate on `rewriteRelativeImportExtensions` instead:
+ * ts-morph's bundled TypeScript strips that newer option, so it reads back absent.)
  */
 export function loadProject(cwd: string): Project {
   return new Project({
@@ -26,6 +34,7 @@ export function loadProject(cwd: string): Project {
       declarationMap: false,
       sourceMap: false,
       inlineSourceMap: false,
+      allowImportingTsExtensions: true,
     },
   });
 }
