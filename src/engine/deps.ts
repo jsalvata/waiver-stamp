@@ -11,8 +11,8 @@
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import semver from 'semver';
-import { z } from 'zod/v4';
 import type { FileFinding } from '../report.ts';
+import { CONFIG_FILENAME } from './config.ts';
 
 /** Dependency blocks whose version-string values a bump may change. */
 const DEP_BLOCKS = [
@@ -108,18 +108,12 @@ function versionMoveViolation(pkg: string, base: string, head: string): string |
   return null;
 }
 
-/** Per-repo config at the repo root, read from BASE — a PR cannot widen it for itself. */
-const CONFIG_FILE = '.waiver-stamp.json';
 const LOCKFILE = 'pnpm-lock.yaml';
 const MANIFEST = 'package.json';
 
-const RepoConfigSchema = z.looseObject({
-  allowBumping: z.array(z.string().min(1)).optional(),
-});
-
 /** What the standing policy needs from `validateCommit`. */
 export interface DependencyContext {
-  /** O's worktree (base = the commit's parent) — read for base's manifest + config. */
+  /** O's worktree (base = the commit's parent) — read for base's manifest. */
   oDir: string;
   /** The commit's worktree — read for head's manifest, never mutated. */
   headDir: string;
@@ -131,10 +125,14 @@ export interface DependencyContext {
  * the policy claimed, so the caller's byte-compare skips them. Only the manifest
  * envelope is checked here — the lockfile bytes are vouched by the repo's external
  * lockfile-honesty check (§6.3 step 5), never re-derived by this tool.
+ *
+ * `allowBumping` is the base config's slice (§6.3), parsed once by the caller from
+ * `.waiver-stamp.json` — a PR cannot widen it for itself.
  */
 export async function coverDependencyBump(
   compareSet: readonly string[],
   ctx: DependencyContext,
+  allowBumping: readonly string[],
   fileFindings: FileFinding[],
   failures: string[],
 ): Promise<Set<string>> {
@@ -143,7 +141,7 @@ export async function coverDependencyBump(
   claimed.add(MANIFEST);
   if (compareSet.includes(LOCKFILE)) claimed.add(LOCKFILE);
 
-  const reason = await evaluate(ctx);
+  const reason = await evaluate(ctx, allowBumping);
   if (reason === null) {
     for (const f of claimed) fileFindings.push({ file: f, status: 'reproduced' });
   } else {
@@ -154,7 +152,10 @@ export async function coverDependencyBump(
 }
 
 /** `null` if the manifest+lockfile change is a covered bump; else the reason it is not. */
-async function evaluate(ctx: DependencyContext): Promise<string | null> {
+async function evaluate(
+  ctx: DependencyContext,
+  allowBumping: readonly string[],
+): Promise<string | null> {
   const baseManifest = await readManifest(ctx.oDir);
   if (!baseManifest) return `${MANIFEST} not found or invalid in base`;
 
@@ -168,14 +169,12 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
     return `${LOCKFILE} not found in base`;
   }
 
-  const allowlist = await loadAllowlist(ctx.oDir);
-  if (allowlist === null) return `${CONFIG_FILE} is invalid`;
-  if (allowlist.length === 0) return `no allowBumping configured in base ${CONFIG_FILE}`;
+  if (allowBumping.length === 0) return `no allowBumping configured in base ${CONFIG_FILENAME}`;
 
   const headManifest = await readManifest(ctx.headDir);
   if (!headManifest) return `${MANIFEST} not found or invalid in head`;
 
-  const violations = manifestBumpViolations(baseManifest, headManifest, allowlist);
+  const violations = manifestBumpViolations(baseManifest, headManifest, allowBumping);
   if (violations.length > 0) return violations.join('; ');
   return null;
 }
@@ -183,21 +182,6 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
 async function readManifest(dir: string): Promise<Record<string, unknown> | null> {
   try {
     return asRecord(JSON.parse(await readFile(join(dir, MANIFEST), 'utf8')));
-  } catch {
-    return null;
-  }
-}
-
-/** `null` on malformed config; `[]` on absent/empty (feature off, fail-closed at the call site). */
-async function loadAllowlist(baseDir: string): Promise<readonly string[] | null> {
-  let raw: string;
-  try {
-    raw = await readFile(join(baseDir, CONFIG_FILE), 'utf8');
-  } catch {
-    return [];
-  }
-  try {
-    return RepoConfigSchema.parse(JSON.parse(raw)).allowBumping ?? [];
   } catch {
     return null;
   }

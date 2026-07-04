@@ -3,12 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { WaiverConfigError } from '../errors.ts';
-import { CONFIG_FILENAME, loadDocPolicy } from './config.ts';
+import { CONFIG_FILENAME, type DocPolicy, docPolicyFrom, loadConfig } from './config.ts';
 
 async function repoWith(config?: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'waiver-cfg-'));
   if (config !== undefined) await writeFile(join(dir, CONFIG_FILENAME), config, 'utf8');
   return dir;
+}
+
+/** Load the config and compile its `change-docs` slice, exercising the unified path. */
+async function loadDocPolicy(dir: string): Promise<DocPolicy> {
+  return docPolicyFrom(await loadConfig(dir));
 }
 
 describe('loadDocPolicy', () => {
