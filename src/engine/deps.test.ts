@@ -1,5 +1,3 @@
-import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from '../test-helpers.ts';
 import type { Waiver } from '../types.ts';
@@ -119,11 +117,6 @@ function pkgJson(overrides: Record<string, unknown> = {}): string {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
-/** The fake resolver stands in for pnpm: lands O's lockfile on head's bytes. */
-async function fakeResolver(dir: string): Promise<void> {
-  await writeFile(join(dir, 'pnpm-lock.yaml'), HEAD_LOCK, 'utf8');
-}
-
 async function baseCommit(extra: Record<string, string> = {}): Promise<string> {
   if (!g) throw new Error('repo not initialized');
   return g.commit(
@@ -139,13 +132,13 @@ async function baseCommit(extra: Record<string, string> = {}): Promise<string> {
   );
 }
 
-async function validate(commit: string, resolveLockfile = fakeResolver) {
+async function validate(commit: string) {
   if (!g) throw new Error('repo not initialized');
-  return validateCommit(EMPTY_WAIVER, { commit, cwd: g.repo, resolveLockfile });
+  return validateCommit(EMPTY_WAIVER, { commit, cwd: g.repo });
 }
 
 describe('dependency-bump policy (validateCommit integration)', () => {
-  it('COVERS an allowlisted up-move whose lockfile re-derives exactly', async () => {
+  it('COVERS an allowlisted up-move (lockfile honesty is delegated)', async () => {
     g = await makeGitRepo();
     await baseCommit();
     const head = await g.commit(
@@ -160,20 +153,22 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     expect(report.stamped).toBe(true);
   });
 
-  it('FAILS when the re-derived lockfile differs from head', async () => {
+  it('COVERS the lockfile bytes sight-unseen — honesty is the external check, not ours', async () => {
+    // Spec §6.3 step 5: the tool never re-resolves. Whatever the lockfile contains,
+    // the policy claims it once the manifest envelope passes; the repo's required
+    // lockfile-honesty check (e.g. lockfile-firewall) is what vouches the bytes.
     g = await makeGitRepo();
     await baseCommit();
     const head = await g.commit(
       {
         'package.json': pkgJson({ dependencies: { lodash: '^2.0.0', 'left-pad': '^1.0.0' } }),
-        'pnpm-lock.yaml': 'lockfileVersion: "9.0"\n# tampered\n',
+        'pnpm-lock.yaml': 'lockfileVersion: "9.0"\n# bytes this tool does not judge\n',
       },
-      'bump + tampered lock',
+      'bump lodash, arbitrary lock bytes',
     );
     const report = await validate(head);
-    expect(report.stamped).toBe(false);
-    expect(report.failures.join('\n')).toContain('dependency bump not covered');
-    expect(report.uncovered).toContain('pnpm-lock.yaml');
+    expect(report.failures).toEqual([]);
+    expect(report.stamped).toBe(true);
   });
 
   it('FAILS when the bumped package is not on allowBumping', async () => {
@@ -265,24 +260,6 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     expect(report.failures.join('\n')).toContain('pnpm');
   });
 
-  it('FAILS with the resolver error when re-resolution blows up', async () => {
-    g = await makeGitRepo();
-    await baseCommit();
-    const head = await g.commit(
-      {
-        'package.json': pkgJson({ dependencies: { lodash: '^2.0.0', 'left-pad': '^1.0.0' } }),
-        'pnpm-lock.yaml': HEAD_LOCK,
-      },
-      'bump lodash',
-    );
-    const boom = async () => {
-      throw new Error('registry unreachable');
-    };
-    const report = await validate(head, boom);
-    expect(report.stamped).toBe(false);
-    expect(report.failures.join('\n')).toContain('registry unreachable');
-  });
-
   it('FAILS closed when the PR widens .waiver-stamp.json for itself', async () => {
     g = await makeGitRepo();
     await baseCommit();
@@ -321,7 +298,7 @@ describe('dependency-bump policy (validateCommit integration)', () => {
   it('COVERS removing a dependency (any package, no allowlist entry needed)', async () => {
     g = await makeGitRepo();
     await baseCommit();
-    // Drop `left-pad` (never allowlisted); the lockfile re-resolves to head.
+    // Drop `left-pad` (never allowlisted); the lockfile churn is the external check's job.
     const head = await g.commit(
       {
         'package.json': pkgJson({ dependencies: { lodash: '^1.0.0' } }),

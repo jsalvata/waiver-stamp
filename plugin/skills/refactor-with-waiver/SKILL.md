@@ -163,16 +163,13 @@ land a bump:
 1. Bump it with your package manager: `pnpm add <pkg>@latest` (or `@5.1.0` to pin).
 2. Commit `package.json` + `pnpm-lock.yaml` with an **empty** waiver embedded —
    `{ "schema": "waiver-stamp/v0", "ops": [] }` — which opts the commit into stamping.
-3. `waiver verify` — the policy re-resolves the lockfile and checks it matches.
+3. `waiver verify` — the policy checks the manifest envelope (allowlisted, up-moving,
+   confined).
 
 `apply` does **not** expand a bump (there is no op). pnpm repos only. Anything outside
 the envelope — an added dependency, a non-allowlisted bump, a downward move, a
 `git:`/`npm:` specifier, any other manifest field — is not covered → the commit falls to
-review. Re-resolution re-runs
-on **every** check — local `waiver verify` and CI's `waiver stamp` alike — so **prefer
-exact pins** to minimize drift; a registry that publishes a newer transitive after you
-authored can FAIL a later re-check (fail-closed). Keep a bump in **its own commit** when
-bundling with a `rename`/`move-file`, so a registry hiccup can't un-stamp the refactor.
+review. Keep a bump in **its own commit** when bundling with a `rename`/`move-file`.
 
 ## What is out of scope (let it fall to review)
 
@@ -200,12 +197,6 @@ After committing, always confirm the commit stamps and report the result:
 
 ```bash
 waiver verify --json
-```
-
-If a target repo and base/head refs are available, also preview the PR verdict:
-
-```bash
-waiver stamp --base <ref> --head <ref> --json
 ```
 
 See `docs/spec.md` for the full model, guards, and worked examples (§11).

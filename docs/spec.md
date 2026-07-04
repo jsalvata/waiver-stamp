@@ -65,7 +65,7 @@ yield three operation **families**, processed in two **phases**:
 |---|---|---|---|
 | **Reproductive ops** (`rename`, `move-file`, `extract-function`, `move-to-new-file`) | transform | provably cannot alter runtime behaviour | re-run on base; output matches head |
 | **Confinement ops** (`change-test`, `change-docs`) | exclusion | provably cannot reach production | named files proven non-shipping; dropped from the comparison |
-| **Dependency bumps** (standing policy — *no op*, §6.3) | compare | only pulls in code held to the same review bar | change fits the configured envelope; lockfile honestly re-resolves |
+| **Dependency bumps** (standing policy — *no op*, §6.3) | compare | only pulls in code held to the same review bar | change fits the configured envelope; lockfile vouched by the external honesty check |
 
 These are *different strengths of claim*. A reproductive op asserts "no behaviour
 change." A **dependency bump explicitly *does* change behaviour** — its safety rests on
@@ -171,8 +171,7 @@ The tool is **waiver-stamp**; its CLI binary is `waiver`.
   these per-commit verdicts over a PR range (§17.2). No separate trusted code — the
   verifier *is* the runner's verification mode. It does **not** run `tsc` or tests: the
   backstop (§3.1.6) is the host CI's existing gate, confirmed by the automation layer. So
-  the tool's only deps are ts-morph, the package manager (for the dependency-bump policy,
-  §6.3), and git.
+  the tool's only deps are ts-morph and git.
 
 The **op vocabulary** has a single source of truth: the **Zod schema**
 (`src/schema.ts`). The TypeScript types are inferred from it and the **JSON Schema**
@@ -384,8 +383,7 @@ otherwise they stay un-covered → the commit fails to stamp → review:
    `packageManager`, …) → not covered. Within those blocks the three kinds of change
    differ: an **addition** → not covered (adding is the supply-chain surface); a
    **removal** → covered for *any* package (removing pulls in nothing, so it needs no
-   allowlist entry — step 5's re-resolve still guards any transitive churn); a **version
-   change** → covered only under steps 2–4.
+   allowlist entry); a **version change** → covered only under steps 2–4.
 2. **Allowlisted** — every dependency whose version changed is on `allowBumping` and was
    already a dependency in base. (Removals need no allowlist entry; see step 1.)
 3. **Plain-semver shape** — each changed version string is a plain semver version or
@@ -397,88 +395,18 @@ otherwise they stay un-covered → the commit fails to stamp → review:
    exact pin, or a narrowing/superseding of base's range). A widening that re-admits
    lower or arbitrary versions (`^2.0.0 → ^2.0.0 || >=0.0.0`) is the smuggle vector → not
    covered.
-5. **Honest lockfile** — adopt head's `package.json`, **re-resolve** the lockfile with
-   the repo's package manager under **base's committed config**
-   (`pnpm install --lockfile-only --ignore-scripts --prefer-frozen-lockfile`), and
-   require the re-derived lockfile to **byte-match head's**.
+5. **Honest lockfile — a delegated precondition.** The lockfile bytes are vouched by
+   the repo's **external lockfile-honesty check** (e.g. `lockfile-firewall`): an
+   always-on required CI gate that re-derives the lockfile from the PR's visible
+   inputs and byte-compares. Like the §3.1.6 backstop, it is **not re-run by
+   `waiver stamp`** — the automation layer confirms the check is required on the repo
+   and green on the exact head SHA alongside the stamp. A repo without such a check
+   must not set `allowBumping` without taking into account that gates 1–4 alone would
+   accept a tampered lockfile inside an allowlisted bump (as any human reviewer would
+   probably do, admittedly).
 
-Steps 1–4 are offline and deterministic; step 5 is the load-bearing one.
-
-**Registry pinning is structural.** Re-resolution runs under base's committed
-`.npmrc`/config, which the PR cannot alter (an `.npmrc` edit is an un-covered file → review;
-a `pnpm`/`overrides` manifest edit trips step 1). So `@myorg/*` resolves through whatever
-registry base pins — a same-named public scope cannot be substituted. Determinism and the
-registry-drift residual are covered in §9.
-
-### 6.4 Lockfile firewall (proposed)
-
-> **Status: proposed — semantics under discussion, not in v0.** Full design (triage
-> algorithm, rollout, open questions):
-> `docs/superpowers/specs/2026-07-04-lockfile-firewall.md`.
-
-§6.3's honest-lockfile check exists because CI's frozen install *trusts* the lockfile.
-That trust is not specific to bumps — it holds on **every** PR — and the lockfile is the
-one changed file **no human reviews**: thousands of generated lines, collapsed by
-default. A frozen install verifies that the lockfile's *importers* match `package.json`
-specifiers, then trusts the rest wholesale — the transitive graph and every
-`resolution:` entry. The live poisoning shapes: swap a legit package's registry
-resolution for a `tarball:` URL (`require('lodash')` now runs attacker code), or inject
-phantom edges into a snapshot's dependency list. (Lying about *integrity* alone mostly
-self-destructs — the registry serves the real tarball and the hash check fails the
-install. The dangerous shapes are exactly the ones an honest re-resolution can never
-emit.) So "falls to human review", the fail-closed backstop everywhere else in this
-spec, is a real net for source files and a **fiction for this one**. Honesty must be
-checked, not reviewed.
-
-**The check.** Whenever the PR's **net base→head diff** touches the lockfile or any of
-its inputs — waiver or no waiver: stage base's lockfile plus **head's visible inputs**
-(`package.json`, `.npmrc`, `pnpm-workspace.yaml`, patches), re-resolve with the pinned
-package manager (§6.3 step 5's invocation), and require the result to **byte-match**
-head's lockfile. What byte-match proves: *the lockfile is exactly the derivation of
-files a reviewer can actually read.* Unlike §6.3 the staging takes **head's** config —
-an arbitrary PR may legitimately change `.npmrc` or workspace config, and a registry
-redirect through those files is a small, visible, reviewable diff. The firewall closes
-the invisible channel; the visible ones stay review's job.
-
-**Net diff, not per-commit.** Intermediate lockfile states inside a PR are installed by
-no one; only the merged result ships. Per-commit checking would veto the routine "fix
-the lockfile in a follow-up commit" pattern for no security gain.
-
-**Verdict semantics — a deliberate contract change.** Today only a commit that *claims*
-a waiver can produce REQUEST_CHANGES (§17.2); unwaivered commits are ABSTAIN material.
-The firewall is the first check that can flag a commit which never opted in — the stamp
-becomes a gate as well as an approver. That posture is per-repo configuration in
-`.waiver-stamp.json` (read from **base**, like `allowBumping`):
-`"lockfileFirewall": "off" | "warn" | "enforce"`, default **off**. `warn` → a mismatch
-caps the PR verdict at **COMMENT** (never APPROVE) with the finding attached; `enforce`
-→ **REQUEST_CHANGES**.
-
-**Tamper vs drift — triage before veto.** A byte-mismatch conflates two populations:
-**tampering** (the lockfile contains what re-resolution cannot derive) and honest
-**registry drift** (§9 — the registry moved between author time and stamp time). On
-mismatch the firewall validates each disagreeing entry against the registry directly:
-integrity equality for the exact `name@version` (time-invariant, unlike "highest
-satisfying now"), resolution shapes declared by some manifest, graph edges consistent
-with the real packages' own manifests, ranges satisfied. All-honest → **drift** →
-warn-tier outcome plus refresh guidance (and the same classification softens a §6.3
-step-5 failure from bare `invalid` to "drift — refresh"). Anything else → **tamper** →
-REQUEST_CHANGES naming the entry — proposed to apply at every knob level including
-`warn` (a detected attack should not be a comment; open question in the design doc).
-The residual the drift class tolerates — an attacker *choosing* among real,
-range-satisfying versions (e.g. pinning a vulnerable one) — is bounded by §6.3's
-up-moving gate on the auto-approve path and accepted (§1.1) on the review path, where
-the manifest diff is visible anyway.
-
-**Relation to §6.3.** The bump policy's step 5 *is* this check under stricter staging —
-base's config, which coincides with head's whenever the bump is covered (a config edit
-is an un-covered file) — plus gates 1–4. One evaluator serves both: the policy is the
-auto-approve envelope; the firewall is the always-on honesty gate.
-
-**Residuals.** The firewall does not vet what the registry *serves* (upstream trust
-stays with `allowBumping` and review of manifest diffs). Enablement trusts the existing
-lockfile as its induction base (the triage machinery doubles as an optional one-time
-baseline audit). v1 is pnpm-only; npm's `package-lock.json` — whose in-lockfile
-`resolved` URLs are the classic injection surface — is the natural next target (§13).
+Steps 1–4 are offline and deterministic; step 5 is deliberately someone else's load,
+delegated exactly the way tsc-clean and tests-green are (§3.1.6).
 
 ---
 
@@ -598,18 +526,12 @@ Given those, the rest is mechanical:
 - `getApplicableRefactors` action selection uses a documented deterministic rule.
 - Comparison is by **compiler emit** (§7), canonically formatted and deterministic given
   the repo's options, so formatter drift is irrelevant.
-- Dependency-bump coverage (§6.3) re-resolves the lockfile with the repo's package
-  manager (`pnpm install --lockfile-only --ignore-scripts --prefer-frozen-lockfile`) from
-  base's manifest, lockfile, and committed config. Re-resolution keeps every
-  already-locked dependency pinned and re-derives only the bumped subtree, so it is
-  deterministic given registry state. The residual is **registry drift**: a
-  newly-introduced transitive edge whose range floats can resolve to a later version at
-  stamp time than at author time — so a commit that stamps today can fail to re-stamp
-  later. This is narrow (new edges only), **fail-closed** (drift → byte mismatch →
-  review, never a false stamp), and the same bounded acceptance §1.1 makes elsewhere;
-  `--prefer-frozen-lockfile` shrinks it to its minimum. The proposed lockfile firewall
-  (§6.4) inherits exactly this residual over a wider trigger surface; its triage tier
-  classifies drift apart from tampering rather than eliminating it.
+- Dependency-bump coverage (§6.3) is **offline and deterministic**: the gates read
+  manifests and config from the checked-out base/head, and the lockfile bytes are
+  vouched by the external lockfile-honesty check (step 5), which the tool does not run
+  — like the §3.1.6 backstop, its verdict is a CI fact about the exact head SHA. A
+  stamp therefore never touches the network and never depends on registry state;
+  registry drift is the external check's residual to manage, not this tool's.
 - `lint-fix` adds a **new assumption class**: that the external lint binary is
   deterministic given its pinned version (lockfile) and committed config. True in
   practice for Biome/ESLint safe fixes, but unlike the AST ops the engine performs
@@ -663,7 +585,7 @@ aggregate verdict — the seam for the CI/automation layer.
 | change a string constant's value | — | Out of scope: string-value change, not behaviour-preserving; nothing reproduces it → mismatch → review. |
 | refactor + hand-edited tests | `[rename, change-test]` | Stamps: `rename` reproduces source; test files excluded + predicate-passed; suite green. |
 | relocate a file into a subdirectory | `[move-file]` | Stamps: the move rewrites every static import/export and dynamic `import()` specifier; a `require('./x')` or `jest.mock` path → dynamic-reference guard → review. |
-| internal lib bump | `[]` (empty waiver) | Stamps: the dependency-bump policy (§6.3) covers manifest+lockfile — allowlisted, up-moving, lockfile re-resolves to head. No op. |
+| internal lib bump | `[]` (empty waiver) | Stamps: the dependency-bump policy (§6.3) covers manifest+lockfile — allowlisted, up-moving. No op. |
 | README typo / reformat | `[]` or `[change-docs]` | Reformat/comment-only → empty waiver. `*.md` edit → `change-docs`. |
 
 ---
@@ -705,16 +627,9 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
 - An additive `add-export` op, if widening export visibility on its own proves common
   (other additive type/JSDoc edits already pass for free under emit comparison, §7).
 - Custom non-LS ops with mandatory tsc+tests gating.
-- Dependency-bump policy breadth (§6.3): npm/yarn support, workspaces/multi-manifest, a
-  per-package version ceiling (`maxBump`), and an explicit per-package required-registry
-  cross-check (natural on npm's JSON lockfile, which records `resolved` URLs). Plus
-  cross-repo released-artifact verification.
-- **Lockfile firewall (§6.4, proposed):** always-on honest-lockfile check over the net
-  PR diff — staged from head's visible inputs, byte-compared, config-gated
-  (`lockfileFirewall: off | warn | enforce`) — with a registry-truth triage tier
-  separating tamper (veto) from drift (warn + refresh guidance). pnpm first; npm's
-  `resolved`-URL lockfile next. Design:
-  `docs/superpowers/specs/2026-07-04-lockfile-firewall.md`.
+- Dependency-bump policy breadth (§6.3): npm/yarn support (tracks the ecosystems the
+  external lockfile-honesty check covers), workspaces/multi-manifest, and a per-package
+  version ceiling (`maxBump`). Plus cross-repo released-artifact verification.
 - Extend the token-economy benchmark (§19) with a `move-file` task (relocate a
   widely-imported file and rewire its importers) and regenerate the README table
   from a real `pnpm bench` run.
@@ -733,9 +648,10 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
    **version change** must be allowlisted, plain-semver-shaped, and **up-moving** (head
    admits no version below base's floor); a **removal** is covered for any package (it
    pulls in nothing); an **addition** is never covered. In every case the lockfile must
-   **honestly re-resolve** to head's bytes — the check CI's
-   frozen install does *not* perform. Registry pinning is structural (re-resolution under
-   base's committed config, which the PR can't alter). A per-package version ceiling
+   be **honest** — vouched by the repo's external always-on lockfile-honesty check, a
+   delegated precondition confirmed like CI's tsc/tests gate rather than re-run by the
+   tool (§6.3 step 5, §3.1.6). Registry pinning is structural (the check re-derives
+   under committed config, which a covered bump can't alter). A per-package version ceiling
    (`maxBump`) is roadmap; v0's trust is upstream review, not a version bound.
    (Supersedes the earlier "central allowlist baked into the runner" design: per-repo
    config keeps the tool repo-agnostic and the review boundary local, and making it a
@@ -754,7 +670,7 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
    already establishes (and already gates merges on), so the automation layer confirms CI
    is green on the exact head SHA alongside the stamp. This avoids duplicating the
    expensive run and keeps the tool free of per-project test-runner integration (its
-   only deps are ts-morph, the package manager, and git). On pure-reproductive PRs the
+   only deps are ts-morph and git). On pure-reproductive PRs the
    backstop also doubles as a net for the introspection blind spots of §1.1 (e.g. a
    rename that silently broke a dynamic reference). Caveats for the automation layer:
    the CI result must be on the *exact* stamped head SHA, and affected-test selection
