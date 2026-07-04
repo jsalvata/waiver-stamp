@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { DocPolicy } from './config.ts';
-import { predicateOk } from './exclude.ts';
+import type { WaiverConfig } from './config.ts';
+import { type DocPolicy, docPolicyFrom, predicateOk } from './exclude.ts';
 
 const permitAll: DocPolicy = { permits: () => true };
 const permitNone: DocPolicy = { permits: () => false };
 const permitOnly = (paths: string[]): DocPolicy => ({ permits: (f) => paths.includes(f) });
+
+/** Build a config with the given `changeDocs` slice (other keys at their defaults). */
+const configWith = (allow: string[], deny: string[] = []): WaiverConfig => ({
+  changeDocs: { allow, deny },
+  allowBumping: [],
+});
 
 describe('predicateOk — change-docs', () => {
   it('requires the extension floor: .md/.markdown/.txt pass, other extensions fail', () => {
@@ -36,5 +42,27 @@ describe('predicateOk — change-test (unchanged by policy)', () => {
 
   it('rejects a non-test source file', () => {
     expect(predicateOk('change-test', 'src/a.ts', permitAll)).toBe(false);
+  });
+});
+
+describe('docPolicyFrom — compiles the changeDocs slice', () => {
+  it('permits nothing when allow is empty', () => {
+    const policy = docPolicyFrom(configWith([]));
+    expect(policy.permits('docs/guide.md')).toBe(false);
+  });
+
+  it('permits files matching an allow glob', () => {
+    const policy = docPolicyFrom(configWith(['docs/**']));
+    expect(policy.permits('docs/guide.md')).toBe(true);
+    expect(policy.permits('docs/nested/deep.md')).toBe(true);
+    expect(policy.permits('src/notes.md')).toBe(false);
+  });
+
+  it('denies a file even when it is also allowed (deny wins)', () => {
+    const policy = docPolicyFrom(configWith(['**'], ['.claude/**', '**/CLAUDE.md']));
+    expect(policy.permits('docs/guide.md')).toBe(true);
+    expect(policy.permits('.claude/skills/x/SKILL.md')).toBe(false);
+    expect(policy.permits('CLAUDE.md')).toBe(false);
+    expect(policy.permits('packages/app/CLAUDE.md')).toBe(false);
   });
 });

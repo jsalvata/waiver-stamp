@@ -11,7 +11,44 @@
  * deliberately conservative.
  */
 
-import type { DocPolicy } from './config.ts';
+import picomatch from 'picomatch';
+import { type WaiverConfig, loadConfig } from './config.ts';
+
+/**
+ * Whether the project policy permits confining a doc file via `change-docs`.
+ *
+ * A doc file is confinable only when it passes the op's intrinsic extension
+ * floor AND this policy permits it: matched by `allow` and not matched by
+ * `deny`. Both lists are empty by default, so a repo with no config (or an
+ * empty `allow`) confines nothing — an AI-instruction asset like `.claude/**`
+ * or `CLAUDE.md` cannot be waived away without an explicit, reviewable opt-in.
+ */
+export interface DocPolicy {
+  /** True iff `file` is matched by `allow` and not matched by `deny`. */
+  permits(file: string): boolean;
+}
+
+/** A matcher over repo-relative posix paths; empty patterns match nothing. */
+function globMatcher(globs: string[]): (file: string) => boolean {
+  if (globs.length === 0) return () => false;
+  const isMatch = picomatch(globs, { dot: true });
+  return (file) => isMatch(file);
+}
+
+/** Compile the `changeDocs` slice of a parsed config into a {@link DocPolicy}. */
+export function docPolicyFrom(config: WaiverConfig): DocPolicy {
+  const allowed = globMatcher(config.changeDocs.allow);
+  const denied = globMatcher(config.changeDocs.deny);
+  return { permits: (file) => allowed(file) && !denied(file) };
+}
+
+/**
+ * Load `<dir>/.waiver-stamp.json` and compile its `change-docs` policy. Throws
+ * {@link WaiverConfigError} on a malformed config — the caller fails closed.
+ */
+export async function loadDocPolicy(dir: string): Promise<DocPolicy> {
+  return docPolicyFrom(await loadConfig(dir));
+}
 
 const TEST_FILE = /(\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)__tests__\/)/;
 // The `change-docs` extension floor: inert text assets only. `.mdx` is

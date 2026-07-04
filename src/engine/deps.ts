@@ -12,7 +12,7 @@ import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import semver from 'semver';
 import type { FileFinding } from '../report.ts';
-import { CONFIG_FILENAME } from './config.ts';
+import { CONFIG_FILENAME, loadConfig } from './config.ts';
 
 /** Dependency blocks whose version-string values a bump may change. */
 const DEP_BLOCKS = [
@@ -113,7 +113,7 @@ const MANIFEST = 'package.json';
 
 /** What the standing policy needs from `validateCommit`. */
 export interface DependencyContext {
-  /** O's worktree (base = the commit's parent) — read for base's manifest. */
+  /** O's worktree (base = the commit's parent) — read for base's manifest + config. */
   oDir: string;
   /** The commit's worktree — read for head's manifest, never mutated. */
   headDir: string;
@@ -126,13 +126,12 @@ export interface DependencyContext {
  * envelope is checked here — the lockfile bytes are vouched by the repo's external
  * lockfile-honesty check (§6.3 step 5), never re-derived by this tool.
  *
- * `allowBumping` is the base config's slice (§6.3), parsed once by the caller from
- * `.waiver-stamp.json` — a PR cannot widen it for itself.
+ * The `allowBumping` allowlist (§6.3) is pulled from the base `.waiver-stamp.json`
+ * via the shared config module — a PR cannot widen it for itself.
  */
 export async function coverDependencyBump(
   compareSet: readonly string[],
   ctx: DependencyContext,
-  allowBumping: readonly string[],
   fileFindings: FileFinding[],
   failures: string[],
 ): Promise<Set<string>> {
@@ -141,7 +140,7 @@ export async function coverDependencyBump(
   claimed.add(MANIFEST);
   if (compareSet.includes(LOCKFILE)) claimed.add(LOCKFILE);
 
-  const reason = await evaluate(ctx, allowBumping);
+  const reason = await evaluate(ctx);
   if (reason === null) {
     for (const f of claimed) fileFindings.push({ file: f, status: 'reproduced' });
   } else {
@@ -152,10 +151,7 @@ export async function coverDependencyBump(
 }
 
 /** `null` if the manifest+lockfile change is a covered bump; else the reason it is not. */
-async function evaluate(
-  ctx: DependencyContext,
-  allowBumping: readonly string[],
-): Promise<string | null> {
+async function evaluate(ctx: DependencyContext): Promise<string | null> {
   const baseManifest = await readManifest(ctx.oDir);
   if (!baseManifest) return `${MANIFEST} not found or invalid in base`;
 
@@ -169,6 +165,14 @@ async function evaluate(
     return `${LOCKFILE} not found in base`;
   }
 
+  // Pull the allowlist slice straight from the shared config (base) — a PR
+  // cannot widen it for itself. A malformed config fails closed here.
+  let allowBumping: readonly string[];
+  try {
+    allowBumping = (await loadConfig(ctx.oDir)).allowBumping;
+  } catch {
+    return `${CONFIG_FILENAME} is invalid`;
+  }
   if (allowBumping.length === 0) return `no allowBumping configured in base ${CONFIG_FILENAME}`;
 
   const headManifest = await readManifest(ctx.headDir);

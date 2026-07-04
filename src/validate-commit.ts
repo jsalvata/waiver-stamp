@@ -1,15 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import {
-  type DocPolicy,
-  EMPTY_CONFIG,
-  type WaiverConfig,
-  docPolicyFrom,
-  loadConfig,
-} from './engine/config.ts';
 import { coverDependencyBump } from './engine/deps.ts';
 import { emitForFile } from './engine/emit-compare.ts';
-import { predicateOk } from './engine/exclude.ts';
+import { type DocPolicy, loadDocPolicy, predicateOk } from './engine/exclude.ts';
 import { applyTransformOp } from './engine/fold.ts';
 import { baseChecks, emitDivergenceGuard, headChecks } from './engine/guards.ts';
 import { loadProject } from './engine/project.ts';
@@ -59,18 +52,16 @@ export async function validateCommit(
     const oProject = loadProject(oWt.dir);
     const headProject = loadProject(headWt.dir);
 
-    // The project config, read once from BASE (spec §6.2/§6.3) — a PR cannot
-    // widen it for itself. Each standing policy consumes its own slice below:
-    // `changeDocs` here, `allowBumping` at the dependency-bump step. A malformed
-    // config fails closed: confine nothing, allow no bump, record the failure.
-    let config: WaiverConfig;
+    // The `change-docs` allow/deny policy, read from BASE (spec §6.2) — a PR
+    // cannot widen it for itself, matching the `allowBumping` policy (§6.3). A
+    // malformed config fails closed: confine nothing, record the failure.
+    let docPolicy: DocPolicy;
     try {
-      config = await loadConfig(oWt.dir);
+      docPolicy = await loadDocPolicy(oWt.dir);
     } catch (err) {
-      config = EMPTY_CONFIG;
+      docPolicy = { permits: () => false };
       failures.push(`invalid config: ${err instanceof Error ? err.message : String(err)}`);
     }
-    const docPolicy: DocPolicy = docPolicyFrom(config);
 
     // Exclusion ops first: the guards and the transform pass both need the
     // confined file set they produce (spec §6.2).
@@ -115,7 +106,6 @@ export async function validateCommit(
     const claimed = await coverDependencyBump(
       compareSet,
       { oDir: oWt.dir, headDir: headWt.dir },
-      config.allowBumping,
       fileFindings,
       failures,
     );
