@@ -224,8 +224,8 @@ reference: [`docs/spec.md` §5](docs/spec.md).
 
 ## Configuration — `.waiver-stamp.json`
 
-Optional per-repo policy at the repo root, holding one key per standing policy. Every
-policy is **read from base** (the commit's parent), so a PR can't widen its own
+Optional per-repo policy at the repo root. Every policy is **read from base** (the
+commit's parent), so a PR can't widen its own
 permissions in the same commit — and since `.waiver-stamp.json` can never itself be
 waived (it's not a doc or a test), any edit to it is a byte-compared, review-forcing
 diff. Absent file or absent key ⇒ that policy is **off**; nothing is auto-enabled.
@@ -242,13 +242,13 @@ diff. Absent file or absent key ⇒ that policy is **off**; nothing is auto-enab
 
 ### Dependency bumps — `allowBumping`
 
-A version bump of an allowlisted dependency needs **no op**: a standing policy covers the
-`package.json` + lockfile change during the compare. Entries ending in `/*` are scope
-prefixes; others are exact names. Covered only when the change is an allowlisted,
-plain-semver **up-move**; the lockfile bytes are vouched separately by the repo's
-external lockfile-honesty check (an always-on CI gate), not re-resolved by the stamp
-itself. Adding/removing a dependency, or any other manifest edit, still falls to review.
-Empty or absent ⇒ every `package.json`/lockfile change is reviewed. See
+A standing policy covers a `package.json` + lockfile change during the compare when it is
+a plain-semver **up-move** of an allowlisted dependency (entries ending in `/*` are scope
+prefixes; others are exact names) — or a dependency **removal**, which is covered for any
+package, no allowlist entry needed. The lockfile bytes should be vouched separately by
+the repo's external lockfile-honesty check (a CI gate which should always be on); the
+stamp does not re-resolve them itself. Adding a dependency, or any other manifest edit,
+still falls to review. Empty or absent ⇒ every version bump falls to review. See
 [`docs/spec.md` §6.3](docs/spec.md).
 
 ### Confining docs — `changeDocs`
