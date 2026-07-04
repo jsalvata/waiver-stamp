@@ -1,9 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { type DocPolicy, loadDocPolicy } from './engine/config.ts';
 import { coverDependencyBump } from './engine/deps.ts';
 import { emitForFile } from './engine/emit-compare.ts';
-import { predicateOk } from './engine/exclude.ts';
+import { type DocPolicy, loadDocPolicy, predicateOk } from './engine/exclude.ts';
 import { applyTransformOp } from './engine/fold.ts';
 import { baseChecks, emitDivergenceGuard, headChecks } from './engine/guards.ts';
 import { loadProject } from './engine/project.ts';

@@ -1,20 +1,18 @@
 /**
- * Project policy for the `change-docs` confinement op (spec §6.2), read from
- * `.waiver-stamp.json` at the repo root. A doc file is confinable only when it
- * passes the op's intrinsic extension floor AND this policy permits it:
- * matched by `allow` and not matched by `deny`. Both lists are empty by
- * default, so a repo with no config (or an empty `allow`) confines nothing —
- * an AI-instruction asset like `.claude/**` or `CLAUDE.md` cannot be waived
- * away without an explicit, reviewable opt-in.
+ * The project config at `.waiver-stamp.json` (repo root). One file, one schema,
+ * loaded by {@link loadConfig}; each standing policy pulls the slice it owns:
  *
- * The policy is read from BASE (like `allowBumping`, §6.3): a PR cannot widen it
- * for itself. Belt-and-suspenders, a `.waiver-stamp.json` edit is also a
- * non-excludable, byte-compared diff, so loosening the policy forces review.
+ *   - `changeDocs` — the allow/deny globs for the `change-docs` confinement op
+ *     (spec §6.2), compiled into a `DocPolicy` by `exclude.ts`.
+ *   - `allowBumping` — the dependency-bump allowlist (§6.3), read by `deps.ts`.
+ *
+ * The config is read from BASE (§6.3): a PR cannot widen it for itself.
+ * Belt-and-suspenders, a `.waiver-stamp.json` edit is also a non-excludable,
+ * byte-compared diff, so loosening any policy forces review of that very commit.
  */
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import picomatch from 'picomatch';
 import { z } from 'zod/v4';
 import { WaiverConfigError } from '../errors.ts';
 
@@ -22,52 +20,39 @@ export const CONFIG_FILENAME = '.waiver-stamp.json';
 
 const GlobList = z.array(z.string());
 
-// The outer object is loose: `.waiver-stamp.json` also carries sibling policies
-// (`allowBumping` §6.3, `lockfileFirewall` §6.4) parsed elsewhere, so unknown
-// top-level keys must pass through untouched. The `changeDocs` block itself is
-// strict, to catch typos in `allow`/`deny`.
-const ConfigSchema = z.looseObject({
-  changeDocs: z
-    .object({
-      allow: GlobList.default([]),
-      deny: GlobList.default([]),
-    })
-    .strict()
-    .default({ allow: [], deny: [] }),
-});
+// One schema for the whole file. The outer object is STRICT: an unrecognised
+// top-level key is a hard error, never silently ignored — a config written for a
+// newer waiver-stamp must not slip through unenforced under an older one.
+// `changeDocs` is likewise strict, to catch typos in `allow`/`deny`.
+const ConfigSchema = z
+  .object({
+    changeDocs: z
+      .object({
+        allow: GlobList.default([]),
+        deny: GlobList.default([]),
+      })
+      .strict()
+      .default({ allow: [], deny: [] }),
+    allowBumping: z.array(z.string().min(1)).default([]),
+  })
+  .strict();
 
-/** Whether the project policy permits confining a given doc file via `change-docs`. */
-export interface DocPolicy {
-  /** True iff `file` is matched by `allow` and not matched by `deny`. */
-  permits(file: string): boolean;
-}
-
-/** A matcher over repo-relative posix paths; empty patterns match nothing. */
-function globMatcher(globs: string[]): (file: string) => boolean {
-  if (globs.length === 0) return () => false;
-  const isMatch = picomatch(globs, { dot: true });
-  return (file) => isMatch(file);
-}
-
-function makePolicy(allow: string[], deny: string[]): DocPolicy {
-  const allowed = globMatcher(allow);
-  const denied = globMatcher(deny);
-  return { permits: (file) => allowed(file) && !denied(file) };
-}
+/** The parsed project config; each policy reads the slice it owns. */
+export type WaiverConfig = z.infer<typeof ConfigSchema>;
 
 /**
- * Load the `change-docs` policy from `<dir>/.waiver-stamp.json`. A missing file
- * yields the empty policy (permits nothing). Malformed JSON or a schema
- * violation throws {@link WaiverConfigError} — fail closed.
+ * Parse `<dir>/.waiver-stamp.json` against the single project schema. A missing
+ * file yields the empty config (every policy off). Malformed JSON, an unknown
+ * key, or a schema violation throws {@link WaiverConfigError} — fail closed.
  */
-export async function loadDocPolicy(dir: string): Promise<DocPolicy> {
+export async function loadConfig(dir: string): Promise<WaiverConfig> {
   const path = join(dir, CONFIG_FILENAME);
 
   let raw: string;
   try {
     raw = await readFile(path, 'utf8');
   } catch {
-    return makePolicy([], []);
+    return ConfigSchema.parse({});
   }
 
   let parsed: unknown;
@@ -82,5 +67,5 @@ export async function loadDocPolicy(dir: string): Promise<DocPolicy> {
     throw new WaiverConfigError(path, result.error.issues.map((i) => i.message).join('; '));
   }
 
-  return makePolicy(result.data.changeDocs.allow, result.data.changeDocs.deny);
+  return result.data;
 }

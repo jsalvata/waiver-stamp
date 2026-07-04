@@ -11,8 +11,8 @@
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import semver from 'semver';
-import { z } from 'zod/v4';
 import type { FileFinding } from '../report.ts';
+import { CONFIG_FILENAME, loadConfig } from './config.ts';
 
 /** Dependency blocks whose version-string values a bump may change. */
 const DEP_BLOCKS = [
@@ -108,14 +108,8 @@ function versionMoveViolation(pkg: string, base: string, head: string): string |
   return null;
 }
 
-/** Per-repo config at the repo root, read from BASE — a PR cannot widen it for itself. */
-const CONFIG_FILE = '.waiver-stamp.json';
 const LOCKFILE = 'pnpm-lock.yaml';
 const MANIFEST = 'package.json';
-
-const RepoConfigSchema = z.looseObject({
-  allowBumping: z.array(z.string().min(1)).optional(),
-});
 
 /** What the standing policy needs from `validateCommit`. */
 export interface DependencyContext {
@@ -131,6 +125,9 @@ export interface DependencyContext {
  * the policy claimed, so the caller's byte-compare skips them. Only the manifest
  * envelope is checked here — the lockfile bytes are vouched by the repo's external
  * lockfile-honesty check (§6.3 step 5), never re-derived by this tool.
+ *
+ * The `allowBumping` allowlist (§6.3) is pulled from the base `.waiver-stamp.json`
+ * via the shared config module — a PR cannot widen it for itself.
  */
 export async function coverDependencyBump(
   compareSet: readonly string[],
@@ -168,14 +165,20 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
     return `${LOCKFILE} not found in base`;
   }
 
-  const allowlist = await loadAllowlist(ctx.oDir);
-  if (allowlist === null) return `${CONFIG_FILE} is invalid`;
-  if (allowlist.length === 0) return `no allowBumping configured in base ${CONFIG_FILE}`;
+  // Pull the allowlist slice straight from the shared config (base) — a PR
+  // cannot widen it for itself. A malformed config fails closed here.
+  let allowBumping: readonly string[];
+  try {
+    allowBumping = (await loadConfig(ctx.oDir)).allowBumping;
+  } catch {
+    return `${CONFIG_FILENAME} is invalid`;
+  }
+  if (allowBumping.length === 0) return `no allowBumping configured in base ${CONFIG_FILENAME}`;
 
   const headManifest = await readManifest(ctx.headDir);
   if (!headManifest) return `${MANIFEST} not found or invalid in head`;
 
-  const violations = manifestBumpViolations(baseManifest, headManifest, allowlist);
+  const violations = manifestBumpViolations(baseManifest, headManifest, allowBumping);
   if (violations.length > 0) return violations.join('; ');
   return null;
 }
@@ -183,21 +186,6 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
 async function readManifest(dir: string): Promise<Record<string, unknown> | null> {
   try {
     return asRecord(JSON.parse(await readFile(join(dir, MANIFEST), 'utf8')));
-  } catch {
-    return null;
-  }
-}
-
-/** `null` on malformed config; `[]` on absent/empty (feature off, fail-closed at the call site). */
-async function loadAllowlist(baseDir: string): Promise<readonly string[] | null> {
-  let raw: string;
-  try {
-    raw = await readFile(join(baseDir, CONFIG_FILE), 'utf8');
-  } catch {
-    return [];
-  }
-  try {
-    return RepoConfigSchema.parse(JSON.parse(raw)).allowBumping ?? [];
   } catch {
     return null;
   }
