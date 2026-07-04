@@ -1,9 +1,15 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { apply } from './apply.ts';
+import { apply, applyWaiver } from './apply.ts';
 import { WaiverValidationError } from './errors.ts';
-import { type Fixture, scaffoldProject } from './test-helpers.ts';
+import {
+  FIXTURE_BIOME_JSON,
+  FIXTURE_PACKAGE_JSON,
+  type Fixture,
+  REPO_ROOT,
+  scaffoldProject,
+} from './test-helpers.ts';
 
 let fix: Fixture | undefined;
 afterEach(async () => {
@@ -43,6 +49,25 @@ describe('apply', () => {
     expect(orders).toContain('function computeTotal');
     expect(usage).toContain('computeTotal(21)');
     expect(usage).not.toContain('calculateTotal');
+  });
+
+  it('applies a lint-fix and reports the file it changed on disk', async () => {
+    fix = await scaffoldProject({
+      'package.json': FIXTURE_PACKAGE_JSON,
+      'biome.json': FIXTURE_BIOME_JSON,
+      'src/m.ts': 'export const a = 1;\nexport const b = 2;\n',
+      'src/use.ts': "import { b, a } from './m';\nexport const s = a + b;\n",
+    });
+
+    // The fixture has no install; resolve the linter from the real repo.
+    const result = await applyWaiver(
+      { schema: 'waiver-stamp/v0', ops: [{ op: 'lint-fix', files: ['src/use.ts'] }] },
+      { cwd: fix.cwd, toolchainRoot: REPO_ROOT },
+    );
+
+    expect(result.files).toEqual(['src/use.ts']);
+    const use = await readFile(join(fix.cwd, 'src/use.ts'), 'utf8');
+    expect(use).toContain('import { a, b }');
   });
 
   it('rejects an invalid waiver before reaching the engine', async () => {

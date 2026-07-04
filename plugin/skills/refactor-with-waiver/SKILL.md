@@ -46,8 +46,8 @@ not an obligation.
 
 The intended loop (spec §3.3, §17.4) makes a stamp predictable:
 
-1. Express the **production-code** change as transform ops — in v0, `rename`
-   and `move-file`.
+1. Express the **production-code** change as transform ops — in v0, `rename`,
+   `move-file`, and `lint-fix`.
    Prefer `waiver_apply` (MCP) or `waiver apply <waiver>` (CLI) to expand it into
    the working tree — don't hand-edit production code.
 2. Hand-edit only the **test/doc** files; name them with `change-test` /
@@ -120,6 +120,13 @@ Validate against it — never invent ops.
   file; static imports/exports and dynamic `import()` specifiers are rewritten
   for you. Refuses if a file already exists at `to`.
 
+**Transform · tool-reproducible** (folded over base, in order):
+- `{ "op": "lint-fix", "files": [...] }` — run the repo's own committed linter
+  (v0: Biome) over exactly the named files, applying **safe fixes only**. List it
+  **last**, after the ops whose output it cleans up (e.g. a `move-file` rewrites
+  import specifiers, then `lint-fix` sorts them). Works on any file, standalone or
+  alongside other ops. The repo must declare the linter in `package.json`.
+
 **Exclusion · confinement** (removed from the comparison; order-free):
 - `{ "op": "change-test", "files": [...] }` — verified non-shipping test files.
 - `{ "op": "change-docs", "files": [...] }` — inert doc files (`*.md`/`*.markdown`/`*.txt`,
@@ -129,7 +136,7 @@ Validate against it — never invent ops.
 > **Not yet implemented in this build:** `extract-function` and `move-to-new-file`.
 > The schema still lists them, but `apply` / `stamp` will FAIL with "not yet
 > implemented in v0" if a waiver uses them. They are planned next — do **not** author
-> waivers using them yet. For v0, stick to `rename` / `move-file`, the
+> waivers using them yet. For v0, stick to `rename` / `move-file` / `lint-fix`, the
 > `change-test` / `change-docs` exclusions, and empty/minimal waivers.
 
 ## Selector cookbook for `rename` (§5.2)

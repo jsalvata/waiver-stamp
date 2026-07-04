@@ -90,6 +90,16 @@ export const MoveFileOpSchema = z
   .strict()
   .describe('Move/rename a source file, rewriting module specifiers that reference it.');
 
+// ── Transform · tool-reproducible ─────────────────────────────────────────────
+
+export const LintFixOpSchema = z
+  .object({
+    op: z.literal('lint-fix'),
+    files: z.array(nonEmpty).min(1),
+  })
+  .strict()
+  .describe("Run the repo's own committed linter (safe fixes only) over the named files.");
+
 // ── Exclusion · confinement ──────────────────────────────────────────────────
 
 export const ChangeTestOpSchema = z
@@ -113,6 +123,7 @@ export const OpSchema = z.discriminatedUnion('op', [
   ExtractFunctionOpSchema,
   MoveToNewFileOpSchema,
   MoveFileOpSchema,
+  LintFixOpSchema,
   ChangeTestOpSchema,
   ChangeDocsOpSchema,
 ]);
