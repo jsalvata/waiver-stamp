@@ -321,8 +321,7 @@ against the **same pinned base**, every form is deterministic; the choice of
   claim: `O`'s post-fix emit must equal head's, so a hand edit smuggled in alongside
   the lint fix still mismatches — which also means the op is safe on *any* file, not
   just ones other ops touched (a standalone repo-wide lint-fix commit is a legitimate
-  waiver). Like the dependency-bump policy (§6.3), this is **tool-reproducible, not
-  engine-performed**: the
+  waiver). This is **tool-reproducible, not engine-performed**: the
   transform is delegated to an external binary resolved from the commit's own
   dependency tree (§9). And it is **not strictly behaviour-preserving**:
   `organizeImports`-class fixes reorder **module evaluation order**. This is accepted
@@ -401,19 +400,6 @@ otherwise they stay un-covered → the commit fails to stamp → review:
    require the re-derived lockfile to **byte-match head's**.
 
 Steps 1–4 are offline and deterministic; step 5 is the load-bearing one.
-
-**Why re-resolve — and why CI can't stand in for it.** The lockfile is where a bump can
-smuggle code: a hand-edited entry can point a dependency at an attacker-controlled
-tarball (with a matching forged integrity) or inject a phantom transitive dependency. A
-CI `pnpm install --frozen-lockfile` *trusts* the committed lockfile — it installs exactly
-what the lockfile says and passes if the downloaded bytes match the lockfile's own
-hashes, so a forged lockfile installs cleanly and green-tests. The backstop (§3.1.6)
-offloads "does it build and pass tests" to CI precisely because CI establishes that;
-lockfile **provenance** is a different question CI never asks. Re-resolving from the
-manifest under base's config re-derives the *real* registry resolutions and integrity, so
-a forged lockfile byte-differs → not covered. This is what keeps an auto-approved bump at
-least as safe as the review it replaces (a human doesn't audit lockfile URLs either) —
-the downside-bounded invariant (§1).
 
 **Registry pinning is structural.** Re-resolution runs under base's committed
 `.npmrc`/config, which the PR cannot alter (an `.npmrc` edit is an un-covered file → review;
@@ -622,7 +608,7 @@ aggregate verdict — the seam for the CI/automation layer.
 
 ## 13. Roadmap
 
-**v0 — single-project; transform + exclusion ops.**
+**v0 — single-project; transform + exclusion ops + the dependency-bump policy.**
 Ops: `rename`, `extract-function`, `move-to-new-file`, `move-file` (reproductive);
 `change-test`, `change-docs` (confinement). Plus the standing **dependency-bump policy**
 (§6.3, no op). Reproductive ops single-project + app-internal (§8). Stamping principle,

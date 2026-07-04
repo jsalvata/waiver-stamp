@@ -165,9 +165,10 @@ an `allowBumping` list, an allowlisted, up-moving bump confined to `package.json
 
 `apply` does **not** expand a bump (there is no op). pnpm repos only. Anything outside
 the envelope — a non-allowlisted package, a downward move, a `git:`/`npm:` specifier, any
-other manifest field — is not covered → the commit falls to review. Re-resolution runs at
-stamp time, so **stamp promptly** and **prefer exact pins**; a registry that moved after
-you authored can FAIL the re-stamp (fail-closed). Keep a bump in **its own commit** when
+other manifest field — is not covered → the commit falls to review. Re-resolution re-runs
+on **every** check — local `waiver verify` and CI's `waiver stamp` alike — so **prefer
+exact pins** to minimize drift; a registry that publishes a newer transitive after you
+authored can FAIL a later re-check (fail-closed). Keep a bump in **its own commit** when
 bundling with a `rename`/`move-file`, so a registry hiccup can't un-stamp the refactor.
 
 ## What is out of scope (let it fall to review)
