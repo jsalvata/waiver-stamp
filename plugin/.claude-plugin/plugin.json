@@ -6,6 +6,7 @@
   },
   "homepage": "https://github.com/jsalvata/waiver-stamp",
   "keywords": ["waiver-stamp", "refactor", "code-review", "pull-request"],
+  "hooks": "./hooks/hooks.json",
   "mcpServers": {
     "waiver-stamp": {
       "command": "sh",
