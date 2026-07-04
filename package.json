@@ -1,6 +1,6 @@
 {
   "name": "waiver-stamp",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Auto-approve PRs whose safety can be proven mechanically. A waiver is a JSON recipe describing a change; stamping validates a PR's diff against its waiver.",
   "keywords": [
     "refactor",
@@ -57,6 +57,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "commander": "^12.1.0",
     "picomatch": "^4.0.5",
+    "semver": "^7.8.5",
     "ts-morph": "^24.0.0",
     "zod": "^3.25.0"
   },
@@ -68,6 +69,7 @@
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^22.7.0",
     "@types/picomatch": "^4.0.3",
+    "@types/semver": "^7.7.1",
     "husky": "^9.1.6",
     "semantic-release": "^25.0.0",
     "tsx": "^4.19.1",

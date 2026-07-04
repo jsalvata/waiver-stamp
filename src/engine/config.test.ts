@@ -46,9 +46,16 @@ describe('loadDocPolicy', () => {
     );
   });
 
-  it('throws WaiverConfigError on unknown keys (strict)', async () => {
+  it('tolerates sibling top-level keys (allowBumping etc. are parsed elsewhere)', async () => {
+    const policy = await loadDocPolicy(
+      await repoWith('{"allowBumping":["lodash"],"changeDocs":{"allow":["docs/**"]}}'),
+    );
+    expect(policy.permits('docs/guide.md')).toBe(true);
+  });
+
+  it('throws WaiverConfigError on an unknown key inside changeDocs (strict)', async () => {
     await expect(
-      loadDocPolicy(await repoWith('{"changeDocs":{"allow":[]},"bogus":1}')),
+      loadDocPolicy(await repoWith('{"changeDocs":{"allow":[],"bogus":1}}')),
     ).rejects.toBeInstanceOf(WaiverConfigError);
   });
 });

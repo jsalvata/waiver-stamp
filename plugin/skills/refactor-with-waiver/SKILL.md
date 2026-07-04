@@ -1,6 +1,6 @@
 ---
 name: refactor-with-waiver
-description: Use when planning or writing a behaviour-preserving (pure/mechanical) refactor — renaming a symbol across the codebase, moving a declaration to its own file, extracting a helper, reformatting code, adding or removing comments, or a test-/doc-only change. If the closed op vocabulary can express the change, it can be auto-approved without human review, so reach for this any time a refactor is the goal. Invoke it early, during planning, to split a mixed change into a waiverable mechanical commit and a separate behavioural one. Trigger on "rename X everywhere", "extract this into a function", "move X to its own file", "pure/mechanical refactor", "behaviour-preserving change", "make this PR stampable", "write/generate a waiver", "land a waivered commit".
+description: Use when planning or writing any change that ships no behaviour change — a pure/mechanical refactor (renaming a symbol across the codebase, moving a declaration to its own file, extracting a helper, reformatting, adding or removing comments), OR a docs-only change (editing a README, doc comments, or any non-shipping doc file), OR a tests-only change (adding or editing tests without touching source). Invoke it early, during planning, to split a mixed change into a waiverable mechanical commit and a separate behavioural one. Trigger on "rename X everywhere", "extract this into a function", "move X to its own file", "pure/mechanical refactor", "behaviour-preserving change", "docs-only change", "update the README", "fix a typo", "edit a comment", "tests-only change", "add tests for X", "make this PR stampable", "write/generate a waiver", "land a waivered commit".
 ---
 
 # Refactoring with a waiver
@@ -22,6 +22,25 @@ to **separate commits** within one PR — each mechanical commit still stamps on
 own. Either way, a mechanical change entangled with a logic change in a single commit
 stamps as *invalid*, so doing this at planning time is what makes the stamp available
 at all.
+
+## Ask before waiving key docs and AI assets
+
+A `change-docs` exclusion is safe for genuinely inert files, but some non-code
+files carry real weight and a silent auto-waive is the wrong default for them.
+Before folding either category below into a waivered commit, **ask the user**
+whether they want to waive review — and if they decline, leave the file out of
+the waiver so the commit falls to normal human review:
+
+- **Non-trivial changes to key documents** — READMEs, specs, and similar
+  load-bearing docs. A typo fix or a reworded sentence is trivial; a rewrite, a
+  changed contract, or new/removed guidance is not.
+- **Any change to an AI asset** — skills (`SKILL.md`), agents, commands, or their
+  prompts/front-matter — regardless of size, since these steer future automated
+  behaviour.
+
+When in doubt about whether a doc is "key" or a change is "trivial", ask. This is
+the same fail-closed instinct as the rest of the skill: waiving is a convenience,
+not an obligation.
 
 ## The guaranteed-stamp authoring loop
 
@@ -107,13 +126,13 @@ Validate against it — never invent ops.
   never `*.mdx`) that the repo's `.waiver-stamp.json` `changeDocs.allow` permits and
   `deny` does not veto. **Empty/absent config confines nothing** — AI-instruction assets
   (`.claude/**`, `CLAUDE.md`, agent/skill files) are not confinable unless explicitly
-  allowed. See `docs/spec.md` §6.3.
+  allowed. See `docs/spec.md` §6.5.
 
-> **Not yet implemented in this build:** `extract-function`, `move-to-new-file`,
-> and `bump`. The schema still lists them, but `apply` / `stamp` will FAIL with
-> "not yet implemented in v0" if a waiver uses them. They are planned next — do
-> **not** author waivers using them yet. For v0, stick to `rename` / `move-file`,
-> the `change-test` / `change-docs` exclusions, and empty/minimal waivers.
+> **Not yet implemented in this build:** `extract-function` and `move-to-new-file`.
+> The schema still lists them, but `apply` / `stamp` will FAIL with "not yet
+> implemented in v0" if a waiver uses them. They are planned next — do **not** author
+> waivers using them yet. For v0, stick to `rename` / `move-file`, the
+> `change-test` / `change-docs` exclusions, and empty/minimal waivers.
 
 ## Selector cookbook for `rename` (§5.2)
 
@@ -136,6 +155,28 @@ waiver — do not add ops for them:
 
 A commit whose only changes are invisible to emit needs no transform op at all —
 an empty `ops` array stamps clean.
+
+## Dependency bumps need no op (standing policy, §6.3)
+
+Bumping a dependency is **not** a waiver op. If the repo has a `.waiver-stamp.json` with
+an `allowBumping` list, an allowlisted, up-moving bump confined to `package.json` +
+`pnpm-lock.yaml` is covered automatically — like formatting. **Removing** a dependency is
+also covered (any package — removing pulls in nothing), and **adding** one never is. To
+land a bump:
+
+1. Bump it with your package manager: `pnpm add <pkg>@latest` (or `@5.1.0` to pin).
+2. Commit `package.json` + `pnpm-lock.yaml` with an **empty** waiver embedded —
+   `{ "schema": "waiver-stamp/v0", "ops": [] }` — which opts the commit into stamping.
+3. `waiver verify` — the policy re-resolves the lockfile and checks it matches.
+
+`apply` does **not** expand a bump (there is no op). pnpm repos only. Anything outside
+the envelope — an added dependency, a non-allowlisted bump, a downward move, a
+`git:`/`npm:` specifier, any other manifest field — is not covered → the commit falls to
+review. Re-resolution re-runs
+on **every** check — local `waiver verify` and CI's `waiver stamp` alike — so **prefer
+exact pins** to minimize drift; a registry that publishes a newer transitive after you
+authored can FAIL a later re-check (fail-closed). Keep a bump in **its own commit** when
+bundling with a `rename`/`move-file`, so a registry hiccup can't un-stamp the refactor.
 
 ## What is out of scope (let it fall to review)
 

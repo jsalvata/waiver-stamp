@@ -1,3 +1,18 @@
+# [1.5.0](https://github.com/jsalvata/waiver-stamp/compare/v1.4.0...v1.5.0) (2026-07-04)
+
+
+### Bug Fixes
+
+* use dotted .waiver-stamp.json config name ([7087455](https://github.com/jsalvata/waiver-stamp/commit/7087455e0724209bb1b2f7aa0fd61a5554187016))
+
+
+### Features
+
+* cover dependency removals in the bump policy ([5745813](https://github.com/jsalvata/waiver-stamp/commit/5745813e3cbdbd502420f6529bc68e884d1c5655))
+* dependency-bump confinement gates ([10d7f18](https://github.com/jsalvata/waiver-stamp/commit/10d7f1836c8e543f6e1c9d1748074bfb782e339d))
+* drop the unimplemented bump op ([a841595](https://github.com/jsalvata/waiver-stamp/commit/a841595cd411193d75c053075136221ff920b711))
+* standing dependency-bump policy ([2427650](https://github.com/jsalvata/waiver-stamp/commit/2427650c94d05a93b9483a6ff39dee366380ef34))
+
 # [1.4.0](https://github.com/jsalvata/waiver-stamp/compare/v1.3.0...v1.4.0) (2026-07-03)
 
 

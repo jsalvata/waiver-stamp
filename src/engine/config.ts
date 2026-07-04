@@ -7,32 +7,34 @@
  * an AI-instruction asset like `.claude/**` or `CLAUDE.md` cannot be waived
  * away without an explicit, reviewable opt-in.
  *
- * The config is read from the commit under validation (spec §7): a change to
- * `.waiver-stamp.json` is itself a non-excludable, byte-compared diff, so
- * loosening the policy always forces human review of that very commit.
+ * The policy is read from BASE (like `allowBumping`, §6.3): a PR cannot widen it
+ * for itself. Belt-and-suspenders, a `.waiver-stamp.json` edit is also a
+ * non-excludable, byte-compared diff, so loosening the policy forces review.
  */
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import picomatch from 'picomatch';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { WaiverConfigError } from '../errors.ts';
 
 export const CONFIG_FILENAME = '.waiver-stamp.json';
 
 const GlobList = z.array(z.string());
 
-const ConfigSchema = z
-  .object({
-    changeDocs: z
-      .object({
-        allow: GlobList.default([]),
-        deny: GlobList.default([]),
-      })
-      .strict()
-      .default({ allow: [], deny: [] }),
-  })
-  .strict();
+// The outer object is loose: `.waiver-stamp.json` also carries sibling policies
+// (`allowBumping` §6.3, `lockfileFirewall` §6.4) parsed elsewhere, so unknown
+// top-level keys must pass through untouched. The `changeDocs` block itself is
+// strict, to catch typos in `allow`/`deny`.
+const ConfigSchema = z.looseObject({
+  changeDocs: z
+    .object({
+      allow: GlobList.default([]),
+      deny: GlobList.default([]),
+    })
+    .strict()
+    .default({ allow: [], deny: [] }),
+});
 
 /** Whether the project policy permits confining a given doc file via `change-docs`. */
 export interface DocPolicy {

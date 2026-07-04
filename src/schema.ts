@@ -90,16 +90,6 @@ export const MoveFileOpSchema = z
   .strict()
   .describe('Move/rename a source file, rewriting module specifiers that reference it.');
 
-// ── Transform · transitive ───────────────────────────────────────────────────
-
-export const BumpOpSchema = z
-  .object({
-    op: z.literal('bump'),
-    packages: z.array(nonEmpty).min(1),
-  })
-  .strict()
-  .describe('Bump allowlisted dependency versions (manifest + lockfile only).');
-
 // ── Exclusion · confinement ──────────────────────────────────────────────────
 
 export const ChangeTestOpSchema = z
@@ -123,7 +113,6 @@ export const OpSchema = z.discriminatedUnion('op', [
   ExtractFunctionOpSchema,
   MoveToNewFileOpSchema,
   MoveFileOpSchema,
-  BumpOpSchema,
   ChangeTestOpSchema,
   ChangeDocsOpSchema,
 ]);

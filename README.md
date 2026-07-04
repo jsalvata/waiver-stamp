@@ -183,10 +183,12 @@ waivered commits.
 ## Scope (v0)
 
 Implemented: the **`rename`** and **`move-file`** reproductive ops; **`change-test`** /
-**`change-docs`** exclusion ops; and the empty/minimal waiver (formatting-, comment-,
-and type-only changes are invisible to the emit comparison, so they need no op). Guards:
-dynamic-reference, published-API, emit-divergence (fail-closed). Single Nx project,
-app-internal.
+**`change-docs`** exclusion ops; the standing **dependency-bump policy** (allowlisted,
+up-moving dependency bumps confined to `package.json` + `pnpm-lock.yaml`, re-derived by
+running pnpm — pnpm repos only, `allowBumping` in a committed `.waiver-stamp.json`, off by
+default); and the empty/minimal waiver (formatting-, comment-, and type-only changes are
+invisible to the emit comparison, so they need no op). Guards: dynamic-reference,
+published-API, emit-divergence (fail-closed). Single Nx project, app-internal.
 
 Known shortcoming: the emit-divergence guard deliberately does **not** flag constructor
 parameter properties — mainstream transpilers all compile them the way tsc does, and
@@ -196,8 +198,9 @@ own CI/CD transpiler instead of tsc, which dissolves the whole tsc-vs-deploy
 enumeration. See [`docs/spec.md` §8](docs/spec.md) for the reasoning.
 
 Planned next (the vocabulary already lists them; authoring them errors today):
-`extract-function`, `move-to-new-file`, `bump`, and multi-project reproductive
-coverage. See [`docs/spec.md` §13/§21](docs/spec.md) for the roadmap.
+`extract-function`, `move-to-new-file`, npm/yarn support for the dependency-bump policy,
+and multi-project reproductive coverage. See [`docs/spec.md` §13/§21](docs/spec.md) for
+the roadmap.
 
 ## Waiver format
 
@@ -240,9 +243,9 @@ Both lists are gitignore-style globs and **empty by default** — with no config
 empty `allow`, `change-docs` confines **nothing**. `deny` is a hard veto over `allow`.
 This keeps AI-instruction assets (`.claude/**`, `CLAUDE.md`, agent/skill files) out of
 `change-docs` unless a repo explicitly, reviewably opts them in. The policy is read from
-the commit under validation, and `.waiver-stamp.json` is itself a byte-compared,
-non-confinable file — so loosening it is always a visible diff that forces human review.
-See [`docs/spec.md` §6.3](docs/spec.md).
+**base**, so a PR cannot widen it for itself; and `.waiver-stamp.json` is itself a
+byte-compared, non-confinable file — so loosening it is always a review-forcing diff.
+See [`docs/spec.md` §6.5](docs/spec.md).
 
 ## Development
 
