@@ -6,7 +6,13 @@
  * behaviour-preserving.
  */
 
+import { execFile } from 'node:child_process';
+import { access, copyFile, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
 import semver from 'semver';
+import { z } from 'zod/v4';
+import type { FileFinding } from '../report.ts';
 
 /** Dependency blocks whose version-string values a bump may change. */
 const DEP_BLOCKS = [
@@ -98,4 +104,136 @@ function versionMoveViolation(pkg: string, base: string, head: string): string |
   if (!up)
     return `'${pkg}' new version '${head}' admits versions below base floor ${floor.version}`;
   return null;
+}
+
+/** Per-repo config at the repo root, read from BASE — a PR cannot widen it for itself. */
+const CONFIG_FILE = 'waiver-stamp.json';
+const LOCKFILE = 'pnpm-lock.yaml';
+const MANIFEST = 'package.json';
+
+const RepoConfigSchema = z.looseObject({
+  allowBumping: z.array(z.string().min(1)).optional(),
+});
+
+/** What the standing policy needs from `validateCommit`. */
+export interface DependencyContext {
+  /** O's worktree (base = the commit's parent); the re-resolve writes here. */
+  oDir: string;
+  /** The commit's worktree — read for head's manifest + lockfile, never mutated. */
+  headDir: string;
+  /** Re-derive `oDir`'s lockfile from its manifest (pnpm subprocess; tests inject fakes). */
+  resolveLockfile: (dir: string) => Promise<void>;
+}
+
+/**
+ * If `package.json` is among the changed files, decide whether the manifest+lockfile
+ * change is a covered bump (spec §6.3) and record findings. Returns the set of files
+ * the policy claimed, so the caller's byte-compare skips them.
+ */
+export async function coverDependencyBump(
+  compareSet: readonly string[],
+  ctx: DependencyContext,
+  fileFindings: FileFinding[],
+  failures: string[],
+): Promise<Set<string>> {
+  const claimed = new Set<string>();
+  if (!compareSet.includes(MANIFEST)) return claimed;
+  claimed.add(MANIFEST);
+  if (compareSet.includes(LOCKFILE)) claimed.add(LOCKFILE);
+
+  const reason = await evaluate(ctx);
+  if (reason === null) {
+    for (const f of claimed) fileFindings.push({ file: f, status: 'reproduced' });
+  } else {
+    for (const f of claimed) fileFindings.push({ file: f, status: 'mismatch', reason });
+    failures.push(`dependency bump not covered: ${reason}`);
+  }
+  return claimed;
+}
+
+/** `null` if the manifest+lockfile change is a covered bump; else the reason it is not. */
+async function evaluate(ctx: DependencyContext): Promise<string | null> {
+  const baseManifest = await readManifest(ctx.oDir);
+  if (!baseManifest) return `${MANIFEST} not found or invalid in base`;
+
+  const pm = baseManifest.packageManager;
+  if (typeof pm !== 'string' || !pm.startsWith('pnpm@')) {
+    return 'base package.json must pin `packageManager` to pnpm (only pnpm is supported)';
+  }
+  try {
+    await access(join(ctx.oDir, LOCKFILE));
+  } catch {
+    return `${LOCKFILE} not found in base`;
+  }
+
+  const allowlist = await loadAllowlist(ctx.oDir);
+  if (allowlist === null) return `${CONFIG_FILE} is invalid`;
+  if (allowlist.length === 0) return `no allowBumping configured in base ${CONFIG_FILE}`;
+
+  const headManifest = await readManifest(ctx.headDir);
+  if (!headManifest) return `${MANIFEST} not found or invalid in head`;
+
+  const violations = manifestBumpViolations(baseManifest, headManifest, allowlist);
+  if (violations.length > 0) return violations.join('; ');
+
+  // Adopt head's manifest, then re-derive the lockfile from base's committed config.
+  await copyFile(join(ctx.headDir, MANIFEST), join(ctx.oDir, MANIFEST));
+  try {
+    await ctx.resolveLockfile(ctx.oDir);
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+
+  const [reResolved, headLock] = await Promise.all([
+    readOrEmpty(join(ctx.oDir, LOCKFILE)),
+    readOrEmpty(join(ctx.headDir, LOCKFILE)),
+  ]);
+  if (!reResolved.equals(headLock)) return `${LOCKFILE} does not re-resolve to head`;
+  return null;
+}
+
+const exec = promisify(execFile);
+
+/** The real resolver: lockfile-only, scripts inert, prefer existing pins to bound drift. */
+export async function resolvePnpmLockfile(dir: string): Promise<void> {
+  await exec(
+    'pnpm',
+    ['install', '--lockfile-only', '--ignore-scripts', '--prefer-frozen-lockfile'],
+    { cwd: dir },
+  );
+}
+
+async function readManifest(dir: string): Promise<Record<string, unknown> | null> {
+  try {
+    return asRecord(JSON.parse(await readFile(join(dir, MANIFEST), 'utf8')));
+  } catch {
+    return null;
+  }
+}
+
+/** `null` on malformed config; `[]` on absent/empty (feature off, fail-closed at the call site). */
+async function loadAllowlist(baseDir: string): Promise<readonly string[] | null> {
+  let raw: string;
+  try {
+    raw = await readFile(join(baseDir, CONFIG_FILE), 'utf8');
+  } catch {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const result = RepoConfigSchema.safeParse(parsed);
+  if (!result.success) return null;
+  return result.data.allowBumping ?? [];
+}
+
+async function readOrEmpty(path: string): Promise<Buffer> {
+  try {
+    return await readFile(path);
+  } catch {
+    return Buffer.alloc(0);
+  }
 }
