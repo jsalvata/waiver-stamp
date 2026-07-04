@@ -131,7 +131,7 @@ async function baseCommit(extra: Record<string, string> = {}): Promise<string> {
       'src/a.ts': 'export const a = 1;\n',
       'package.json': pkgJson(),
       'pnpm-lock.yaml': BASE_LOCK,
-      'waiver-stamp.json': ALLOW_JSON,
+      '.waiver-stamp.json': ALLOW_JSON,
       ...extra,
     },
     'base',
@@ -190,7 +190,7 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     expect(report.failures.join('\n')).toContain('not on allowBumping');
   });
 
-  it('FAILS when there is no waiver-stamp.json (feature off)', async () => {
+  it('FAILS when there is no .waiver-stamp.json (feature off)', async () => {
     g = await makeGitRepo();
     await g.commit(
       {
@@ -282,14 +282,14 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     expect(report.failures.join('\n')).toContain('registry unreachable');
   });
 
-  it('FAILS closed when the PR widens waiver-stamp.json for itself', async () => {
+  it('FAILS closed when the PR widens .waiver-stamp.json for itself', async () => {
     g = await makeGitRepo();
     await baseCommit();
     const head = await g.commit(
       {
         'package.json': pkgJson({ dependencies: { lodash: '^1.0.0', 'left-pad': '^2.0.0' } }),
         'pnpm-lock.yaml': HEAD_LOCK,
-        'waiver-stamp.json': `${JSON.stringify({ allowBumping: ['lodash', 'left-pad'] })}\n`,
+        '.waiver-stamp.json': `${JSON.stringify({ allowBumping: ['lodash', 'left-pad'] })}\n`,
       },
       'self-widening bump',
     );
@@ -298,7 +298,7 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     // base allowlist governs (left-pad not on it)…
     expect(report.failures.join('\n')).toContain('not on allowBumping');
     // …and the config edit itself is uncovered.
-    expect(report.uncovered).toContain('waiver-stamp.json');
+    expect(report.uncovered).toContain('.waiver-stamp.json');
   });
 
   it('FAILS when a source file changes alongside the bump', async () => {

@@ -107,7 +107,7 @@ function versionMoveViolation(pkg: string, base: string, head: string): string |
 }
 
 /** Per-repo config at the repo root, read from BASE — a PR cannot widen it for itself. */
-const CONFIG_FILE = 'waiver-stamp.json';
+const CONFIG_FILE = '.waiver-stamp.json';
 const LOCKFILE = 'pnpm-lock.yaml';
 const MANIFEST = 'package.json';
 

@@ -154,7 +154,7 @@ an empty `ops` array stamps clean.
 
 ## Dependency bumps need no op (standing policy, §6.3)
 
-Bumping a dependency is **not** a waiver op. If the repo has a `waiver-stamp.json` with
+Bumping a dependency is **not** a waiver op. If the repo has a `.waiver-stamp.json` with
 an `allowBumping` list, an allowlisted, up-moving bump confined to `package.json` +
 `pnpm-lock.yaml` is covered automatically — like formatting. To land one:
 

@@ -362,7 +362,7 @@ already state: which packages moved, and to what, is read directly from the
 `package.json` diff. So a dependency bump is covered by a **standing per-repo policy**,
 evaluated during the compare (§3.1.5), the way emit-invisibility covers a reformat.
 
-**Configuration — `waiver-stamp.json` at the repo root, read from `base`.** A repo opts
+**Configuration — `.waiver-stamp.json` at the repo root, read from `base`.** A repo opts
 in by committing:
 
 ```json
@@ -660,7 +660,7 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
    trustworthiness is accepted per §1.1 (trusted, not verified) — we don't over-engineer
    vouching for the tool itself.
 2. **Dependency bumps — a standing per-repo policy, not an op (§6.3).** A committed
-   `waiver-stamp.json` lists allowed packages under `allowBumping` (`@myorg/*` scope
+   `.waiver-stamp.json` lists allowed packages under `allowBumping` (`@myorg/*` scope
    prefixes or exact names), read from **base** so a PR can't widen it for itself; absent
    → the feature is off. A covered bump must be confined to dependency version strings,
    allowlisted, plain-semver-shaped, **up-moving** (head admits no version below base's

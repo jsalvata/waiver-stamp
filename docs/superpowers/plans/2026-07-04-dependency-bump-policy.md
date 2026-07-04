@@ -4,7 +4,7 @@
 
 **Goal:** Replace the unimplemented `bump` op with a standing per-repo dependency-bump policy (spec §6.3): when a waivered commit changes `package.json`/`pnpm-lock.yaml`, those files are *covered* iff the change is allowlisted, up-moving, plain-semver, confined, and the lockfile honestly re-resolves.
 
-**Architecture:** `bump` leaves the op vocabulary entirely. A new `src/engine/deps.ts` module holds pure gates (`matchesAllowlist`, `manifestBumpViolations`) plus an async evaluator that re-resolves the lockfile. `validateCommit` runs the evaluator as a standing pass during the compare — no op dispatch. The allowlist lives in `waiver-stamp.json` (read from base); absent → feature off.
+**Architecture:** `bump` leaves the op vocabulary entirely. A new `src/engine/deps.ts` module holds pure gates (`matchesAllowlist`, `manifestBumpViolations`) plus an async evaluator that re-resolves the lockfile. `validateCommit` runs the evaluator as a standing pass during the compare — no op dispatch. The allowlist lives in `.waiver-stamp.json` (read from base); absent → feature off.
 
 **Tech Stack:** TypeScript ESM (`.js` import suffixes), Zod v4 (`zod/v4`), `semver` (new dep), vitest, `node:child_process`/`fs`.
 
@@ -14,7 +14,7 @@
 - Commit rules (git-commit skill): prefixes `feat:`/`fix:`/`docs:` only, all lowercase, header ≤ 50 chars, no ticket trailer. **Never commit between Mon–Fri 09:00–18:00 (+0200)** — run `date '+%A %H:%M %z'` first; inside the window, stop and report.
 - Errors: data in structured properties (`OpApplicationError(opKind, detail)`), never interpolated into `message`.
 - ESM: all local imports use `.js` suffix; Zod from `'zod/v4'`.
-- Config file: `waiver-stamp.json` at repo root, key `allowBumping` (camelCase), read from **base**. Absent/empty → feature off (package.json changes fall to review).
+- Config file: `.waiver-stamp.json` at repo root, key `allowBumping` (camelCase), read from **base**. Absent/empty → feature off (package.json changes fall to review).
 - The policy runs only inside `validateCommit` (waivered commits); an unwaivered commit is `unwaivered` regardless of deps. A pure dep-bump commit needs an embedded empty waiver `{ "schema": "waiver-stamp/v0", "ops": [] }`.
 - Coverage rule (spec §6.3): allowlisted + plain-semver + up-moving (head admits no version below base's floor) + confined manifest diff (only version strings of existing deps change) + honest lockfile re-resolve (`pnpm install --lockfile-only --ignore-scripts --prefer-frozen-lockfile`).
 
@@ -429,7 +429,7 @@ async function baseCommit(extra: Record<string, string> = {}): Promise<string> {
       'src/a.ts': 'export const a = 1;\n',
       'package.json': pkgJson(),
       'pnpm-lock.yaml': BASE_LOCK,
-      'waiver-stamp.json': ALLOW_JSON,
+      '.waiver-stamp.json': ALLOW_JSON,
       ...extra,
     },
     'base',
@@ -488,7 +488,7 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     expect(report.failures.join('\n')).toContain('not on allowBumping');
   });
 
-  it('FAILS when there is no waiver-stamp.json (feature off)', async () => {
+  it('FAILS when there is no .waiver-stamp.json (feature off)', async () => {
     g = await makeGitRepo();
     await g.commit(
       {
@@ -580,14 +580,14 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     expect(report.failures.join('\n')).toContain('registry unreachable');
   });
 
-  it('FAILS closed when the PR widens waiver-stamp.json for itself', async () => {
+  it('FAILS closed when the PR widens .waiver-stamp.json for itself', async () => {
     g = await makeGitRepo();
     await baseCommit();
     const head = await g.commit(
       {
         'package.json': pkgJson({ dependencies: { lodash: '^1.0.0', 'left-pad': '^2.0.0' } }),
         'pnpm-lock.yaml': HEAD_LOCK,
-        'waiver-stamp.json': `${JSON.stringify({ allowBumping: ['lodash', 'left-pad'] })}\n`,
+        '.waiver-stamp.json': `${JSON.stringify({ allowBumping: ['lodash', 'left-pad'] })}\n`,
       },
       'self-widening bump',
     );
@@ -596,7 +596,7 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     // base allowlist governs (left-pad not on it)…
     expect(report.failures.join('\n')).toContain('not on allowBumping');
     // …and the config edit itself is uncovered.
-    expect(report.uncovered).toContain('waiver-stamp.json');
+    expect(report.uncovered).toContain('.waiver-stamp.json');
   });
 
   it('FAILS when a source file changes alongside the bump', async () => {
@@ -647,7 +647,7 @@ And append:
 
 ```ts
 /** Per-repo config at the repo root, read from BASE — a PR cannot widen it for itself. */
-const CONFIG_FILE = 'waiver-stamp.json';
+const CONFIG_FILE = '.waiver-stamp.json';
 const LOCKFILE = 'pnpm-lock.yaml';
 const MANIFEST = 'package.json';
 
@@ -844,7 +844,7 @@ git commit -m "feat: standing dependency-bump policy"
 
 ### Task 4: Docs — README + skill
 
-Spec is already updated. Bring the README scope and the skill's op vocabulary / authoring guidance in line: `bump` is not an op; dependency bumps are a standing policy needing an empty waiver + `waiver-stamp.json`.
+Spec is already updated. Bring the README scope and the skill's op vocabulary / authoring guidance in line: `bump` is not an op; dependency bumps are a standing policy needing an empty waiver + `.waiver-stamp.json`.
 
 **Files:**
 - Modify: `README.md`
@@ -860,7 +860,7 @@ Replace the "Implemented:" paragraph (the one listing `rename`/`move-file`/`chan
 Implemented: the **`rename`** and **`move-file`** reproductive ops; **`change-test`** /
 **`change-docs`** exclusion ops; the standing **dependency-bump policy** (allowlisted,
 up-moving dependency bumps confined to `package.json` + `pnpm-lock.yaml`, re-derived by
-running pnpm — pnpm repos only, `allowBumping` in a committed `waiver-stamp.json`, off by
+running pnpm — pnpm repos only, `allowBumping` in a committed `.waiver-stamp.json`, off by
 default); and the empty/minimal waiver (formatting-, comment-, and type-only changes are
 invisible to the emit comparison, so they need no op). Guards: dynamic-reference,
 published-API, emit-divergence (fail-closed). Single Nx project, app-internal.
@@ -894,7 +894,7 @@ After the "## What needs no op (free under emit comparison, §7)" section, inser
 ```markdown
 ## Dependency bumps need no op (standing policy, §6.3)
 
-Bumping a dependency is **not** a waiver op. If the repo has a `waiver-stamp.json` with
+Bumping a dependency is **not** a waiver op. If the repo has a `.waiver-stamp.json` with
 an `allowBumping` list, an allowlisted, up-moving bump confined to `package.json` +
 `pnpm-lock.yaml` is covered automatically — like formatting. To land one:
 
