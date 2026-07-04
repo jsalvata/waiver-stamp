@@ -1,15 +1,16 @@
 # Lockfile firewall — design (proposal)
 
 **Status:** proposal for discussion. Companion to spec §6.4 — read that first for the
-threat model and the one-paragraph shape of the check.
+threat model and the one-paragraph shape of the check. Updated 2026-07-04: the
+**triage tier is removed** — considered and rejected for this project (see "Rejected:
+the triage tier") — and a **prior art** survey is added.
 
-**Scope.** This document designs the always-on lockfile honesty check (tier 1) and its
-mismatch triage (tier 2). Explicitly **out of scope**: authoring-side drift *stability*
-(refresh ergonomics, pre-push hygiene, resolver-invocation changes to make honest
-lockfiles byte-stable for longer) — that work is being pursued separately. This design
-only requires that a mismatch be *classifiable*, not rarer: the interface between the
-two efforts is the drift-class report (§4), which must carry enough per-package detail
-for any refresh tooling to consume.
+**Scope.** This document designs the always-on lockfile honesty check and its failure
+report. Explicitly **out of scope**: authoring-side drift *stability* (refresh
+ergonomics, pre-push hygiene, verdict caching, resolver-invocation changes to make
+honest lockfiles byte-stable for longer) — that work is being pursued separately. The
+interface between the two efforts is the failure report (§4): its per-package
+committed-vs-re-derived delta summary must stay consumable by refresh tooling.
 
 ## 1. Threat model, by attack shape
 
@@ -19,18 +20,19 @@ Humans don't backstop this: the lockfile is collapsed as generated and never rea
 
 | Attack shape | Frozen install | Human review | Firewall |
 |---|---|---|---|
-| Registry resolution swapped for a `tarball:` URL (code injection on import) | installs it | never reads the lockfile | tier 1 mismatch → tier 2: undeclared resolution shape → **tamper** |
-| Phantom edge injected into a snapshot's `dependencies` | installs it | never reads it | tier 2: edge absent from the real package's manifest → **tamper** |
-| Integrity lie for a real `name@version` | install *fails* (registry serves the real tarball; hash mismatch) | — | tier 2: integrity ≠ registry's → **tamper** (defense in depth) |
+| Registry resolution swapped for a `tarball:` URL (code injection on import) | installs it | never reads the lockfile | byte mismatch — an honest re-resolve never emits the URL entry |
+| Phantom edge injected into a snapshot's `dependencies` | installs it | never reads it | byte mismatch — the edge has no honest origin |
+| Integrity lie for a real `name@version` | install *fails* (registry serves the real tarball; hash mismatch) | — | byte mismatch (defense in depth) |
+| Within-range **version-choice games** (e.g. pinning a real but vulnerable older version) | installs it | manifest visible; the lockfile *choice* is not | byte mismatch — the honest derivation picks its own resolution; **no surveyed alternative closes this channel** (§5) |
 | Registry redirect via `.npmrc` / workspace config | n/a | **visible diff** — review's job | passes by design (staged under head's config) |
-| Choosing an old-but-satisfying version (e.g. pinning a vulnerable one) | installs it | manifest visible; lockfile choice not | tier 2: honest → **drift** class; accepted residual (spec §1.1); §6.3's up-moving gate covers the auto-approve path |
+| Malicious *fresh release* of a real in-range package | installs it (unless quarantined) | — | out of scope — registry-content trust; mitigated by pnpm ≥ 11 `minimumReleaseAge`/`trustPolicy`, which **compose** (§5) |
 
 The firewall's claim after a pass: *the lockfile is exactly the derivation of files a
 reviewer can actually read* (manifests + committed config). It moves the trust boundary
 off the generated file and onto the visible diff. It does **not** vet what the registry
 serves — upstream trust stays with `allowBumping` and human review of manifest changes.
 
-## 2. Tier 1 — the byte check
+## 2. The check
 
 **Trigger.** The PR's **net base→head** diff touches `pnpm-lock.yaml` or any resolution
 input (`package.json`, `.npmrc`, `pnpm-workspace.yaml`, `patches/`). Waiver-independent
@@ -53,8 +55,8 @@ with a resolution mismatch.
 
 **Compare.** Whole-file byte equality against head's committed `pnpm-lock.yaml`.
 
-**Why bytes stay primary** (vs parsing both sides and deep-comparing): byte equality has
-zero parser-differential surface — a crafted lockfile cannot parse one way for the
+**Why bytes** (vs parsing both sides and deep-comparing): byte equality has zero
+parser-differential surface — a crafted lockfile cannot parse one way for the
 comparator and another way for pnpm. And pnpm's serializer is canonical, so bytes don't
 flake by themselves. Verified empirically (2026-07-04, pnpm 9.12.0 and 10.34.1):
 
@@ -67,105 +69,154 @@ flake by themselves. Verified empirically (2026-07-04, pnpm 9.12.0 and 10.34.1):
   re-resolved — only specs whose floor moved above base's lock, and edges new to the
   tree, resolve fresh. That fresh surface is the drift residual (spec §9).
 
-Match → the firewall passes; no verdict contribution. Mismatch → tier 2.
+Match → the firewall passes; no verdict contribution. Mismatch → fail closed (§3).
 
-## 3. Tier 2 — triage: tamper or drift?
+## 3. Mismatch handling — one failure, no triage
 
-The question tier 2 answers: is the committed lockfile something an honest resolution
-**could ever have produced** (against the visible inputs and the real registry), even if
-it is not the one produced *today*? It examines the entries on which the committed and
-re-resolved lockfiles disagree, plus any committed entry absent from the re-resolution.
-Every check uses **time-invariant** registry facts — never "highest satisfying now":
+A mismatch conflates **tampering** (content re-resolution cannot derive) with honest
+**registry drift** (the registry moved between author time and stamp time). The
+firewall does not classify them: both get the same knob-level verdict (§4) and the same
+remedy — **refresh** (re-run the package manager on the branch, amend). The remedy is
+self-healing: refreshing a tampered lockfile replaces the poison with the honest
+re-derivation, so even a rubber-stamp "just refresh it" response converges to a safe
+lockfile. What is lost without classification is the automated *alarm* — the
+incident-response signal that a mismatch was an attack rather than drift. The failure
+report (§4) recovers most of it for a human reader, and in a low-drift world (the
+separately-tracked stability work) mismatches are rare enough that each one is
+high-signal by itself.
 
-1. **Shape legality.** Every `resolution:` is registry-form (integrity only) unless
-   some manifest in head declares a matching non-registry specifier (tarball / git /
-   `link:` / `workspace:`); `patchedDependencies` entries correspond to committed
-   patches. Undeclared shape → **tamper**.
-2. **Registry truth.** For each entry, fetch metadata for the exact `name@version`
-   from the registry head's config names: the version must exist and the committed
-   integrity must equal the registry's. Deterministic — a published version's tarball
-   is immutable (npm forbids republishing a taken `name@version`). Mismatch or
-   nonexistent → **tamper**.
-3. **Graph consistency.** Every edge in a snapshot's `dependencies` /
-   `optionalDependencies` must exist in the real package's own manifest (from the
-   metadata fetched in 2) with the resolved target satisfying the declared range; no
-   extra edges. Extra or incompatible edge → **tamper**.
-4. **Importers.** Lockfile importer specifiers equal head's manifests (what
-   `--frozen-lockfile` itself checks). Divergence → **tamper**.
-5. **Reachability.** A changed entry unreachable from any importer has no honest
-   origin (an honest install prunes orphans) → **tamper**, conservatively.
+### Rejected: the triage tier
 
-All disagreeing entries pass → **drift**: the committed lockfile is a valid honest
-resolution from some earlier registry state. Report the per-package deltas (committed
-vs re-resolved version) plus refresh guidance. Any check fails → **tamper**, naming the
-entry and the failed check.
+An earlier revision of this design added a second tier on mismatch: validate each
+disagreeing entry against the registry (resolution-shape legality, integrity equality
+for the exact `name@version`, graph consistency against the real packages' manifests,
+importer equality, reachability), classify the mismatch **drift** (all entries honest)
+or **tamper** (anything else), and soften the drift verdict. **Rejected 2026-07-04 —
+this project will not build it.** Reasons:
 
-**Open sub-problem — peer suffixes.** Entries like `foo@1.0.0(bar@2.0.0)` encode peer
-resolution decisions; fully re-deriving the *legal* suffix set without running the
-resolver is the hardest part of tier 2. Options: (a) validate suffix components against
-the package's declared `peerDependencies` only — weaker but simple; (b) run pnpm once
-more with the committed lockfile as the wanted state and diff its acceptance — stronger
-but subtle. Proposal: (a) for the first triage version; measure what it misses.
+- **Zero added detection.** Byte-equality already fails closed on every deviation; the
+  tier only relabeled failures. Its entire payoff assumed drift would be *common* —
+  the classifier existed to keep an enforce-level veto liveable amid frequent honest
+  mismatches.
+- **Drift is being addressed at the source** (stability work: verification near
+  authoring plus cached verdicts), which removes the payoff. A classifier for a rare
+  event is machinery without a customer.
+- **Its hardest sub-problem bought nothing.** Re-deriving the legal peer-suffix set
+  without running the resolver was the bulk of the tier's subtlety — all of it in
+  service of the relabeling.
+- **A subtle leniency disappears with it.** The tier's drift class would have *softened*
+  the verdict for any mismatch whose entries were individually registry-true — which is
+  exactly the shape of a within-range version-choice attack. With no triage there is no
+  lenient class: under `enforce`, a chosen resolution that differs from the honest
+  derivation simply does not merge.
 
-**Cost.** One metadata fetch per disagreeing entry (cacheable; typically just the
-changed subtree). Same registry access + auth the tier-1 resolve already needs.
+Cost accepted: no automated tamper alarm (mitigated by the report contract below), and
+no registry-audit machinery to reuse as an enablement baseline scan (§6).
 
-## 4. Verdict wiring
+## 4. Verdicts and the failure report
 
 Config in `.waiver-stamp.json`, read from **base** like `allowBumping`:
 `"lockfileFirewall": "off" | "warn" | "enforce"`, default `off`.
 
-| Tier outcome | `off` | `warn` | `enforce` |
+| Outcome | `off` | `warn` | `enforce` |
 |---|---|---|---|
 | byte match | not evaluated | pass | pass |
-| drift | not evaluated | COMMENT + per-package deltas + refresh guidance | REQUEST_CHANGES + same report |
-| tamper | not evaluated | **REQUEST_CHANGES** (proposed — open question 1) | REQUEST_CHANGES |
+| mismatch | not evaluated | COMMENT (caps the verdict — never APPROVE) | REQUEST_CHANGES |
 | toolchain-skew | not evaluated | COMMENT (remedy: align pnpm with the pin) | REQUEST_CHANGES |
 
-`warn` never lets a mismatching PR reach APPROVE — it caps the verdict at COMMENT.
+**The failure report contract** (required, not cosmetic — it replaces the triage tier):
 
-**§6.3 integration.** The bump policy's step 5 is tier 1 under stricter staging (base's
-config — which coincides with head's whenever the bump is covered, since a config edit
-is an un-covered file) plus the policy gates. One evaluator serves both. The policy
-also adopts tier 2's classification in its failure report: a drifted honest bump reads
-"drift — refresh", not bare `invalid`.
+- a bounded **diff excerpt** of committed vs re-derived lockfile — a version delta reads
+  as drift; a `tarball:` URL or a novel edge reads as an attack;
+- a **per-package delta summary** (committed vs re-derived version per disagreeing
+  package) — computed by parsing the two lockfiles locally, **no registry queries**;
+  this is also the interface consumed by the drift-stability tooling;
+- the **refresh recipe**, verbatim;
+- **toolchain-skew** reported as its own failure with the pinned vs effective versions.
 
-**Contract note.** This is the stamp's first verdict source that applies to commits
-which never embedded a waiver — the stamp becomes a gate as well as an approver. Hence
-per-repo config, `off` by default, and open question 3 (own CI check vs stamp verdict).
+A §6.3 step-5 (dependency-bump policy) failure shares this contract.
 
-## 5. Rollout
+## 5. Prior art
+
+Surveyed 2026-07-04, prompted by "surely someone has done this". Partial solutions
+exist — the wave dates from the 2025–26 npm compromise era (Shai-Hulud, Glassworm) —
+but none re-derives from base and compares bytes, and none closes the version-choice
+channel.
+
+- **Yarn Berry hardened mode** (`enableHardenedMode`, Yarn 4, 2023) — the nearest
+  neighbour. On install it requires every resolution to be a *valid candidate* for its
+  range (`--check-resolutions`) and lockfile metadata to match the registry
+  (`--refresh-lockfile`). Two gaps the firewall closes: it accepts **any** range-valid
+  registry-true resolution, so version-choice games pass — that leniency is how it
+  bought drift immunity, the same trade our rejected triage tier would have made; and
+  it runs inside the PR's own install under PR-editable `.yarnrc.yml`, **default-on
+  only for public GitHub PRs** — off exactly where the modern threat lives (private
+  repos, compromised-maintainer and agent-authored PRs). The firewall's knob is read
+  from base and enforced from the stamping layer.
+- **pnpm ≥ 11 install-time hardening** — integrity mismatches are hard failures
+  (`ERR_PNPM_TARBALL_INTEGRITY`, 11.4), missing-integrity entries rejected, explicit
+  tarball URLs checked against registry metadata, `blockExoticSubdeps` (no git/tarball
+  resolutions in transitive deps), `minimumReleaseAge` (quarantine window on fresh
+  releases), `trustPolicy`. **Composes, doesn't compete**: it protects every install
+  everywhere (dev machines included) but does not validate the graph (phantom edges to
+  real registry packages pass frozen installs) and accepts any valid version choice.
+  Synergy worth exploiting: `minimumReleaseAge` committed in base config is honored by
+  the firewall's own re-resolve (staging runs under committed config), so it
+  quarantines fresh malware *and* stabilizes re-resolution — a direct assist to the
+  drift-stability work.
+- **lockfile-lint** (~2019) — static shape lint over npm/yarn `resolved` URLs (allowed
+  hosts/registries, https, integrity presence). No re-derivation; pnpm's registry
+  entries carry no URLs, so it has little to check there.
+- **Lockfile-changed-without-manifest tripwires** (CI actions) — a one-signal
+  heuristic; misses poison folded into a legitimate-looking bump.
+- **Folk practice** — the lockfile design-space study (arXiv 2505.04834) records a
+  practitioner doing exactly this check by hand: *"I'll pull their change into a
+  branch… and then see if my lockfile changed in the exact same way."* The firewall is
+  that practice, automated and anchored where the PR can't switch it off.
+
+References: [Yarn security features](https://yarnpkg.com/features/security) ·
+[pnpm 11.4 release notes](https://pnpm.io/blog/releases/11.4) ·
+[npm supply-chain defenses survey, 2026](https://mondoo.com/blog/npm-supply-chain-security-package-manager-defenses-2026) ·
+[The Design Space of Lockfiles Across Package Managers](https://arxiv.org/html/2505.04834v3)
+
+## 6. Rollout
 
 1. **off** (default at introduction) — code ships dormant.
-2. **warn** — collect: mismatch rate, drift:tamper ratio, time-to-refresh on drift
-   findings. The classification earns trust here.
-3. **enforce** — the veto. Prerequisite: the stamp job has registry reachability and
-   auth for every scope the lockfile resolves (private registries included).
+2. **warn** — collect: mismatch rate and human dispositions (refreshed vs investigated).
+3. **enforce** — the veto. Prerequisites: the stamp job has registry reachability and
+   auth for every scope the lockfile resolves, and drift is demonstrably rare (the
+   stability work has landed; warn-mode metrics are quiet).
 
-Enablement may optionally run the tier-2 audit over the *entire* existing lockfile once
-(baseline scan); otherwise the induction base is the trusted status quo, and the
-firewall guards deltas from there.
+Enablement trusts the existing lockfile as the induction base — with the triage tier
+rejected there is no built-in whole-lockfile baseline audit; a repo that wants one can
+lean on pnpm ≥ 11's install-time checks or an external scanner as a compensating
+one-time baseline.
 
-## 6. Non-goals
+Caveat for the automation layer: the firewall's anchor is only as strong as the CI
+wiring — a required check whose workflow the PR itself can edit needs protecting (org
+rulesets / required workflows), same as the rest of the stamp.
+
+## 7. Non-goals
 
 - Vetting registry *content* (malicious-but-real packages) — upstream trust is
-  `allowBumping` + human review of manifest diffs.
-- npm / yarn support — roadmap. Notably npm's `package-lock.json` records `resolved`
-  URLs in-file, the classic lockfile-injection surface: a richer attack surface and a
-  richer checkable structure (tier 2's shape check maps naturally).
+  `allowBumping` + human review of manifest diffs, plus pnpm ≥ 11 runtime policies.
+- Mismatch classification — rejected, §3.
+- npm / yarn support — roadmap. npm's `package-lock.json` records `resolved` URLs
+  in-file, the classic injection surface: a richer attack surface and a richer
+  checkable structure.
 - Drift *reduction* and authoring ergonomics — separate work stream (see Scope).
 
-## 7. Open questions
+## 8. Open questions
 
-1. Does **tamper veto under `warn`**? Proposed yes — a detected attack should not be a
-   comment — but it means a triage bug can block PRs during the trust-building phase.
+1. Is `warn` an acceptable rollout stage given that, without classification, a real
+   attack surfaces during it as a COMMENT-capped mismatch rather than a veto? (The
+   self-healing refresh bounds the damage — the poison cannot merge *as committed* once
+   anyone refreshes — but a repo that merges on COMMENT without refreshing keeps the
+   committed bytes.)
 2. Knob naming and shape: flat `lockfileFirewall` string vs a nested object with room
-   for later options (baseline-scan toggle, per-path exemptions).
+   for later options (per-path exemptions, report verbosity).
 3. Surface: fold into `waiver stamp`'s verdict (proposed) or expose as a separate
    command (`waiver lockfile-check --base --head`) so branch protection can require it
    independently of stamping?
-4. Tier-2 peer-suffix depth (§3).
-5. Monorepo scoping: multi-importer workspaces where only some packages' manifests
+4. Monorepo scoping: multi-importer workspaces where only some packages' manifests
    change — stage all importers or only affected ones?
-6. Should tier 2 also run on byte-*match* as sampled defense-in-depth? Proposed no —
-   a match is honest by construction (the re-resolver derived it).

@@ -412,8 +412,8 @@ registry-drift residual are covered in §9.
 
 ### 6.4 Lockfile firewall (proposed)
 
-> **Status: proposed — semantics under discussion, not in v0.** Full design (triage
-> algorithm, rollout, open questions):
+> **Status: proposed — semantics under discussion, not in v0.** Full design (mismatch
+> handling, prior art, rollout, open questions):
 > `docs/superpowers/specs/2026-07-04-lockfile-firewall.md`.
 
 §6.3's honest-lockfile check exists because CI's frozen install *trusts* the lockfile.
@@ -453,21 +453,24 @@ becomes a gate as well as an approver. That posture is per-repo configuration in
 caps the PR verdict at **COMMENT** (never APPROVE) with the finding attached; `enforce`
 → **REQUEST_CHANGES**.
 
-**Tamper vs drift — triage before veto.** A byte-mismatch conflates two populations:
-**tampering** (the lockfile contains what re-resolution cannot derive) and honest
-**registry drift** (§9 — the registry moved between author time and stamp time). On
-mismatch the firewall validates each disagreeing entry against the registry directly:
-integrity equality for the exact `name@version` (time-invariant, unlike "highest
-satisfying now"), resolution shapes declared by some manifest, graph edges consistent
-with the real packages' own manifests, ranges satisfied. All-honest → **drift** →
-warn-tier outcome plus refresh guidance (and the same classification softens a §6.3
-step-5 failure from bare `invalid` to "drift — refresh"). Anything else → **tamper** →
-REQUEST_CHANGES naming the entry — proposed to apply at every knob level including
-`warn` (a detected attack should not be a comment; open question in the design doc).
-The residual the drift class tolerates — an attacker *choosing* among real,
-range-satisfying versions (e.g. pinning a vulnerable one) — is bounded by §6.3's
-up-moving gate on the auto-approve path and accepted (§1.1) on the review path, where
-the manifest diff is visible anyway.
+**Tamper vs drift — one failure, no triage.** A byte-mismatch conflates two
+populations: **tampering** (the lockfile contains what re-resolution cannot derive) and
+honest **registry drift** (§9 — the registry moved between author time and stamp time).
+The firewall does **not** classify them. A registry-truth triage tier (validating each
+disagreeing entry against the registry) was considered and **rejected for this
+project**: it adds zero detection — byte-equality already fails closed on every
+deviation — and would only relabel failures (design doc, "Rejected: the triage tier").
+Both populations get the same knob-level verdict and the same remedy, **refresh**
+(re-run the package manager, amend) — and the remedy is self-healing: refreshing a
+tampered lockfile replaces the poison with the honest re-derivation. In place of a
+classification, the failure report owes the human: a bounded **diff excerpt** (a
+version delta reads as drift; a `tarball:` URL reads as an attack), a **per-package
+summary** of committed-vs-re-derived versions (pure lockfile parsing — no registry
+queries), and a distinct **toolchain-skew** failure when the effective pnpm version
+disagrees with the pin. A §6.3 step-5 failure shares this report contract. One
+consequence worth naming: exactness without drift-leniency also closes the
+**version-choice** channel — pinning a real but vulnerable range-satisfying version is
+a byte mismatch like any other, a channel every surveyed alternative leaves open.
 
 **Relation to §6.3.** The bump policy's step 5 *is* this check under stricter staging —
 base's config, which coincides with head's whenever the bump is covered (a config edit
@@ -476,9 +479,15 @@ auto-approve envelope; the firewall is the always-on honesty gate.
 
 **Residuals.** The firewall does not vet what the registry *serves* (upstream trust
 stays with `allowBumping` and review of manifest diffs). Enablement trusts the existing
-lockfile as its induction base (the triage machinery doubles as an optional one-time
-baseline audit). v1 is pnpm-only; npm's `package-lock.json` — whose in-lockfile
-`resolved` URLs are the classic injection surface — is the natural next target (§13).
+lockfile as its induction base. v1 is pnpm-only; npm's `package-lock.json` — whose
+in-lockfile `resolved` URLs are the classic injection surface — is the natural next
+target (§13).
+
+**Prior art** (survey and deltas in the design doc): the nearest neighbour is Yarn's
+hardened mode — default-on only for *public* GitHub PRs, config PR-editable, and
+accepting **any** range-valid registry-true resolution; pnpm ≥ 11 ships install-time
+integrity/shape enforcement that **composes with** (does not replace) this check. No
+surveyed tool re-derives from base and compares bytes.
 
 ---
 
@@ -608,8 +617,9 @@ Given those, the rest is mechanical:
   later. This is narrow (new edges only), **fail-closed** (drift → byte mismatch →
   review, never a false stamp), and the same bounded acceptance §1.1 makes elsewhere;
   `--prefer-frozen-lockfile` shrinks it to its minimum. The proposed lockfile firewall
-  (§6.4) inherits exactly this residual over a wider trigger surface; its triage tier
-  classifies drift apart from tampering rather than eliminating it.
+  (§6.4) inherits exactly this residual over a wider trigger surface and does not
+  classify mismatches — drift and tampering fail identically, and the shared remedy
+  (refresh) re-derives the honest lockfile either way.
 - `lint-fix` adds a **new assumption class**: that the external lint binary is
   deterministic given its pinned version (lockfile) and committed config. True in
   practice for Biome/ESLint safe fixes, but unlike the AST ops the engine performs
@@ -711,9 +721,9 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
   cross-repo released-artifact verification.
 - **Lockfile firewall (§6.4, proposed):** always-on honest-lockfile check over the net
   PR diff — staged from head's visible inputs, byte-compared, config-gated
-  (`lockfileFirewall: off | warn | enforce`) — with a registry-truth triage tier
-  separating tamper (veto) from drift (warn + refresh guidance). pnpm first; npm's
-  `resolved`-URL lockfile next. Design:
+  (`lockfileFirewall: off | warn | enforce`) — failing closed on any mismatch with a
+  diff-excerpt report (no triage tier; rejected). pnpm first; npm's `resolved`-URL
+  lockfile next. Design:
   `docs/superpowers/specs/2026-07-04-lockfile-firewall.md`.
 - Extend the token-economy benchmark (§19) with a `move-file` task (relocate a
   widely-imported file and rewire its importers) and regenerate the README table
