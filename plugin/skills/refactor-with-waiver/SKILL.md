@@ -23,6 +23,25 @@ own. Either way, a mechanical change entangled with a logic change in a single c
 stamps as *invalid*, so doing this at planning time is what makes the stamp available
 at all.
 
+## Ask before waiving key docs and AI assets
+
+A `change-docs` exclusion is safe for genuinely inert files, but some non-code
+files carry real weight and a silent auto-waive is the wrong default for them.
+Before folding either category below into a waivered commit, **ask the user**
+whether they want to waive review — and if they decline, leave the file out of
+the waiver so the commit falls to normal human review:
+
+- **Non-trivial changes to key documents** — READMEs, specs, and similar
+  load-bearing docs. A typo fix or a reworded sentence is trivial; a rewrite, a
+  changed contract, or new/removed guidance is not.
+- **Any change to an AI asset** — skills (`SKILL.md`), agents, commands, or their
+  prompts/front-matter — regardless of size, since these steer future automated
+  behaviour.
+
+When in doubt about whether a doc is "key" or a change is "trivial", ask. This is
+the same fail-closed instinct as the rest of the skill: waiving is a convenience,
+not an obligation.
+
 ## The guaranteed-stamp authoring loop
 
 The intended loop (spec §3.3, §17.4) makes a stamp predictable:
