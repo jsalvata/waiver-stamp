@@ -1,9 +1,7 @@
 # Lockfile firewall — design (proposal)
 
 **Status:** proposal for discussion. Companion to spec §6.4 — read that first for the
-threat model and the one-paragraph shape of the check. Updated 2026-07-04: the
-**triage tier is removed** — considered and rejected for this project (see "Rejected:
-the triage tier") — and a **prior art** survey is added.
+threat model and the one-paragraph shape of the check.
 
 **Scope.** This document designs the always-on lockfile honesty check and its failure
 report. Explicitly **out of scope**: authoring-side drift *stability* (refresh
@@ -71,47 +69,46 @@ flake by themselves. Verified empirically (2026-07-04, pnpm 9.12.0 and 10.34.1):
 
 Match → the firewall passes; no verdict contribution. Mismatch → fail closed (§3).
 
-## 3. Mismatch handling — one failure, no triage
+## 3. Mismatch handling
 
 A mismatch conflates **tampering** (content re-resolution cannot derive) with honest
 **registry drift** (the registry moved between author time and stamp time). The
-firewall does not classify them: both get the same knob-level verdict (§4) and the same
-remedy — **refresh** (re-run the package manager on the branch, amend). The remedy is
+firewall treats them identically: same knob-level verdict (§4), same remedy —
+**refresh** (re-run the package manager on the branch, amend). The remedy is
 self-healing: refreshing a tampered lockfile replaces the poison with the honest
 re-derivation, so even a rubber-stamp "just refresh it" response converges to a safe
-lockfile. What is lost without classification is the automated *alarm* — the
-incident-response signal that a mismatch was an attack rather than drift. The failure
-report (§4) recovers most of it for a human reader, and in a low-drift world (the
-separately-tracked stability work) mismatches are rare enough that each one is
-high-signal by itself.
+lockfile. There is deliberately no automated *alarm* — no machine judgment that a
+mismatch was an attack rather than drift; the failure report (§4) hands that judgment
+to the human reading it, and in a low-drift world (the separately-tracked stability
+work) mismatches are rare enough that each one is high-signal by itself.
 
-### Rejected: the triage tier
+### Rejected alternative: a registry-truth triage tier
 
-An earlier revision of this design added a second tier on mismatch: validate each
-disagreeing entry against the registry (resolution-shape legality, integrity equality
-for the exact `name@version`, graph consistency against the real packages' manifests,
-importer equality, reachability), classify the mismatch **drift** (all entries honest)
-or **tamper** (anything else), and soften the drift verdict. **Rejected 2026-07-04 —
+The obvious extension is a classification pass on mismatch: validate each disagreeing
+entry against the registry (resolution-shape legality, integrity equality for the
+exact `name@version`, graph consistency against the real packages' manifests, importer
+equality, reachability), label the mismatch **drift** (all entries honest) or
+**tamper** (anything else), and soften the drift verdict. **Rejected 2026-07-04 —
 this project will not build it.** Reasons:
 
-- **Zero added detection.** Byte-equality already fails closed on every deviation; the
-  tier only relabeled failures. Its entire payoff assumed drift would be *common* —
-  the classifier existed to keep an enforce-level veto liveable amid frequent honest
-  mismatches.
+- **Zero added detection.** Byte-equality already fails closed on every deviation; a
+  classifier would only relabel failures. Its entire payoff assumes drift is *common*
+  — it exists to keep an enforce-level veto liveable amid frequent honest mismatches.
 - **Drift is being addressed at the source** (stability work: verification near
-  authoring plus cached verdicts), which removes the payoff. A classifier for a rare
+  authoring plus cached verdicts), which removes that payoff. A classifier for a rare
   event is machinery without a customer.
-- **Its hardest sub-problem bought nothing.** Re-deriving the legal peer-suffix set
-  without running the resolver was the bulk of the tier's subtlety — all of it in
-  service of the relabeling.
-- **A subtle leniency disappears with it.** The tier's drift class would have *softened*
-  the verdict for any mismatch whose entries were individually registry-true — which is
-  exactly the shape of a within-range version-choice attack. With no triage there is no
-  lenient class: under `enforce`, a chosen resolution that differs from the honest
-  derivation simply does not merge.
+- **Its hardest sub-problem buys nothing.** Re-deriving the legal peer-suffix set
+  without running the resolver is the bulk of the subtlety — all of it in service of
+  the relabeling.
+- **It would introduce a subtle leniency.** The drift class softens the verdict for
+  any mismatch whose entries are individually registry-true — exactly the shape of a
+  within-range version-choice attack (pinning a real but vulnerable range-satisfying
+  version). With no lenient class, under `enforce` a chosen resolution that differs
+  from the honest derivation simply does not merge.
 
-Cost accepted: no automated tamper alarm (mitigated by the report contract below), and
-no registry-audit machinery to reuse as an enablement baseline scan (§6).
+Costs accepted with the rejection: no automated tamper alarm (mitigated by the report
+contract below), and no registry-audit machinery that could double as an enablement
+baseline scan (§6).
 
 ## 4. Verdicts and the failure report
 
@@ -124,7 +121,8 @@ Config in `.waiver-stamp.json`, read from **base** like `allowBumping`:
 | mismatch | not evaluated | COMMENT (caps the verdict — never APPROVE) | REQUEST_CHANGES |
 | toolchain-skew | not evaluated | COMMENT (remedy: align pnpm with the pin) | REQUEST_CHANGES |
 
-**The failure report contract** (required, not cosmetic — it replaces the triage tier):
+**The failure report contract** (required, not cosmetic — it carries the judgment a
+classifier would have automated):
 
 - a bounded **diff excerpt** of committed vs re-derived lockfile — a version delta reads
   as drift; a `tarball:` URL or a novel edge reads as an attack;
@@ -148,7 +146,8 @@ channel.
   range (`--check-resolutions`) and lockfile metadata to match the registry
   (`--refresh-lockfile`). Two gaps the firewall closes: it accepts **any** range-valid
   registry-true resolution, so version-choice games pass — that leniency is how it
-  bought drift immunity, the same trade our rejected triage tier would have made; and
+  bought drift immunity, the same trade the rejected triage-tier alternative (§3)
+  would have made; and
   it runs inside the PR's own install under PR-editable `.yarnrc.yml`, **default-on
   only for public GitHub PRs** — off exactly where the modern threat lives (private
   repos, compromised-maintainer and agent-authored PRs). The firewall's knob is read
@@ -187,10 +186,10 @@ References: [Yarn security features](https://yarnpkg.com/features/security) ·
    auth for every scope the lockfile resolves, and drift is demonstrably rare (the
    stability work has landed; warn-mode metrics are quiet).
 
-Enablement trusts the existing lockfile as the induction base — with the triage tier
-rejected there is no built-in whole-lockfile baseline audit; a repo that wants one can
-lean on pnpm ≥ 11's install-time checks or an external scanner as a compensating
-one-time baseline.
+Enablement trusts the existing lockfile as the induction base — the design has no
+built-in whole-lockfile baseline audit (the rejected triage machinery, §3, would have
+doubled as one); a repo that wants a baseline can lean on pnpm ≥ 11's install-time
+checks or an external scanner as a compensating one-time scan.
 
 Caveat for the automation layer: the firewall's anchor is only as strong as the CI
 wiring — a required check whose workflow the PR itself can edit needs protecting (org

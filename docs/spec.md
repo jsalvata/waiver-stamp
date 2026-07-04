@@ -453,24 +453,24 @@ becomes a gate as well as an approver. That posture is per-repo configuration in
 caps the PR verdict at **COMMENT** (never APPROVE) with the finding attached; `enforce`
 → **REQUEST_CHANGES**.
 
-**Tamper vs drift — one failure, no triage.** A byte-mismatch conflates two
-populations: **tampering** (the lockfile contains what re-resolution cannot derive) and
-honest **registry drift** (§9 — the registry moved between author time and stamp time).
-The firewall does **not** classify them. A registry-truth triage tier (validating each
-disagreeing entry against the registry) was considered and **rejected for this
-project**: it adds zero detection — byte-equality already fails closed on every
-deviation — and would only relabel failures (design doc, "Rejected: the triage tier").
-Both populations get the same knob-level verdict and the same remedy, **refresh**
-(re-run the package manager, amend) — and the remedy is self-healing: refreshing a
-tampered lockfile replaces the poison with the honest re-derivation. In place of a
-classification, the failure report owes the human: a bounded **diff excerpt** (a
-version delta reads as drift; a `tarball:` URL reads as an attack), a **per-package
-summary** of committed-vs-re-derived versions (pure lockfile parsing — no registry
-queries), and a distinct **toolchain-skew** failure when the effective pnpm version
-disagrees with the pin. A §6.3 step-5 failure shares this report contract. One
-consequence worth naming: exactness without drift-leniency also closes the
-**version-choice** channel — pinning a real but vulnerable range-satisfying version is
-a byte mismatch like any other, a channel every surveyed alternative leaves open.
+**Tamper vs drift.** A byte-mismatch conflates two populations: **tampering** (the
+lockfile contains what re-resolution cannot derive) and honest **registry drift** (§9 —
+the registry moved between author time and stamp time). The firewall treats them
+identically — same knob-level verdict, fail-closed — and deliberately does **not**
+classify them. Classification would add no detection (byte-equality already rejects
+every deviation); the only thing it could do is *soften* the verdict for mismatches
+whose entries are individually registry-true — and that is exactly the shape of a
+**version-choice** attack (pinning a real but vulnerable range-satisfying version), a
+channel this check closes and every surveyed alternative leaves open. (A
+registry-truth classification pass is recorded as a rejected alternative in the design
+doc.) Both populations share one remedy — **refresh**: re-run the package manager,
+amend — and the remedy is self-healing: refreshing a tampered lockfile replaces the
+poison with the honest re-derivation. The failure report carries the judgment a
+classifier would have automated: a bounded **diff excerpt** (a version delta reads as
+drift; a `tarball:` URL reads as an attack), a **per-package summary** of
+committed-vs-re-derived versions (pure lockfile parsing — no registry queries), and a
+distinct **toolchain-skew** failure when the effective pnpm version disagrees with the
+pin. A §6.3 step-5 failure shares this report contract.
 
 **Relation to §6.3.** The bump policy's step 5 *is* this check under stricter staging —
 base's config, which coincides with head's whenever the bump is covered (a config edit
@@ -722,8 +722,7 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
 - **Lockfile firewall (§6.4, proposed):** always-on honest-lockfile check over the net
   PR diff — staged from head's visible inputs, byte-compared, config-gated
   (`lockfileFirewall: off | warn | enforce`) — failing closed on any mismatch with a
-  diff-excerpt report (no triage tier; rejected). pnpm first; npm's `resolved`-URL
-  lockfile next. Design:
+  diff-excerpt report. pnpm first; npm's `resolved`-URL lockfile next. Design:
   `docs/superpowers/specs/2026-07-04-lockfile-firewall.md`.
 - Extend the token-economy benchmark (§19) with a `move-file` task (relocate a
   widely-imported file and rewire its importers) and regenerate the README table
