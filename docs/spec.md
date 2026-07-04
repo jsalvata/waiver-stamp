@@ -410,6 +410,76 @@ a `pnpm`/`overrides` manifest edit trips step 1). So `@myorg/*` resolves through
 registry base pins — a same-named public scope cannot be substituted. Determinism and the
 registry-drift residual are covered in §9.
 
+### 6.4 Lockfile firewall (proposed)
+
+> **Status: proposed — semantics under discussion, not in v0.** Full design (triage
+> algorithm, rollout, open questions):
+> `docs/superpowers/specs/2026-07-04-lockfile-firewall.md`.
+
+§6.3's honest-lockfile check exists because CI's frozen install *trusts* the lockfile.
+That trust is not specific to bumps — it holds on **every** PR — and the lockfile is the
+one changed file **no human reviews**: thousands of generated lines, collapsed by
+default. A frozen install verifies that the lockfile's *importers* match `package.json`
+specifiers, then trusts the rest wholesale — the transitive graph and every
+`resolution:` entry. The live poisoning shapes: swap a legit package's registry
+resolution for a `tarball:` URL (`require('lodash')` now runs attacker code), or inject
+phantom edges into a snapshot's dependency list. (Lying about *integrity* alone mostly
+self-destructs — the registry serves the real tarball and the hash check fails the
+install. The dangerous shapes are exactly the ones an honest re-resolution can never
+emit.) So "falls to human review", the fail-closed backstop everywhere else in this
+spec, is a real net for source files and a **fiction for this one**. Honesty must be
+checked, not reviewed.
+
+**The check.** Whenever the PR's **net base→head diff** touches the lockfile or any of
+its inputs — waiver or no waiver: stage base's lockfile plus **head's visible inputs**
+(`package.json`, `.npmrc`, `pnpm-workspace.yaml`, patches), re-resolve with the pinned
+package manager (§6.3 step 5's invocation), and require the result to **byte-match**
+head's lockfile. What byte-match proves: *the lockfile is exactly the derivation of
+files a reviewer can actually read.* Unlike §6.3 the staging takes **head's** config —
+an arbitrary PR may legitimately change `.npmrc` or workspace config, and a registry
+redirect through those files is a small, visible, reviewable diff. The firewall closes
+the invisible channel; the visible ones stay review's job.
+
+**Net diff, not per-commit.** Intermediate lockfile states inside a PR are installed by
+no one; only the merged result ships. Per-commit checking would veto the routine "fix
+the lockfile in a follow-up commit" pattern for no security gain.
+
+**Verdict semantics — a deliberate contract change.** Today only a commit that *claims*
+a waiver can produce REQUEST_CHANGES (§17.2); unwaivered commits are ABSTAIN material.
+The firewall is the first check that can flag a commit which never opted in — the stamp
+becomes a gate as well as an approver. That posture is per-repo configuration in
+`.waiver-stamp.json` (read from **base**, like `allowBumping`):
+`"lockfileFirewall": "off" | "warn" | "enforce"`, default **off**. `warn` → a mismatch
+caps the PR verdict at **COMMENT** (never APPROVE) with the finding attached; `enforce`
+→ **REQUEST_CHANGES**.
+
+**Tamper vs drift — triage before veto.** A byte-mismatch conflates two populations:
+**tampering** (the lockfile contains what re-resolution cannot derive) and honest
+**registry drift** (§9 — the registry moved between author time and stamp time). On
+mismatch the firewall validates each disagreeing entry against the registry directly:
+integrity equality for the exact `name@version` (time-invariant, unlike "highest
+satisfying now"), resolution shapes declared by some manifest, graph edges consistent
+with the real packages' own manifests, ranges satisfied. All-honest → **drift** →
+warn-tier outcome plus refresh guidance (and the same classification softens a §6.3
+step-5 failure from bare `invalid` to "drift — refresh"). Anything else → **tamper** →
+REQUEST_CHANGES naming the entry — proposed to apply at every knob level including
+`warn` (a detected attack should not be a comment; open question in the design doc).
+The residual the drift class tolerates — an attacker *choosing* among real,
+range-satisfying versions (e.g. pinning a vulnerable one) — is bounded by §6.3's
+up-moving gate on the auto-approve path and accepted (§1.1) on the review path, where
+the manifest diff is visible anyway.
+
+**Relation to §6.3.** The bump policy's step 5 *is* this check under stricter staging —
+base's config, which coincides with head's whenever the bump is covered (a config edit
+is an un-covered file) — plus gates 1–4. One evaluator serves both: the policy is the
+auto-approve envelope; the firewall is the always-on honesty gate.
+
+**Residuals.** The firewall does not vet what the registry *serves* (upstream trust
+stays with `allowBumping` and review of manifest diffs). Enablement trusts the existing
+lockfile as its induction base (the triage machinery doubles as an optional one-time
+baseline audit). v1 is pnpm-only; npm's `package-lock.json` — whose in-lockfile
+`resolved` URLs are the classic injection surface — is the natural next target (§13).
+
 ---
 
 ## 7. Comparison — by compiler emit
@@ -537,7 +607,9 @@ Given those, the rest is mechanical:
   stamp time than at author time — so a commit that stamps today can fail to re-stamp
   later. This is narrow (new edges only), **fail-closed** (drift → byte mismatch →
   review, never a false stamp), and the same bounded acceptance §1.1 makes elsewhere;
-  `--prefer-frozen-lockfile` shrinks it to its minimum.
+  `--prefer-frozen-lockfile` shrinks it to its minimum. The proposed lockfile firewall
+  (§6.4) inherits exactly this residual over a wider trigger surface; its triage tier
+  classifies drift apart from tampering rather than eliminating it.
 - `lint-fix` adds a **new assumption class**: that the external lint binary is
   deterministic given its pinned version (lockfile) and committed config. True in
   practice for Biome/ESLint safe fixes, but unlike the AST ops the engine performs
@@ -637,6 +709,12 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
   per-package version ceiling (`maxBump`), and an explicit per-package required-registry
   cross-check (natural on npm's JSON lockfile, which records `resolved` URLs). Plus
   cross-repo released-artifact verification.
+- **Lockfile firewall (§6.4, proposed):** always-on honest-lockfile check over the net
+  PR diff — staged from head's visible inputs, byte-compared, config-gated
+  (`lockfileFirewall: off | warn | enforce`) — with a registry-truth triage tier
+  separating tamper (veto) from drift (warn + refresh guidance). pnpm first; npm's
+  `resolved`-URL lockfile next. Design:
+  `docs/superpowers/specs/2026-07-04-lockfile-firewall.md`.
 - Extend the token-economy benchmark (§19) with a `move-file` task (relocate a
   widely-imported file and rewire its importers) and regenerate the README table
   from a real `pnpm bench` run.
