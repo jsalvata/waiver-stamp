@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/jsalvata/waiver-stamp/compare/v1.5.0...v1.6.0) (2026-07-04)
+
+
+### Features
+
+* delegate lockfile honesty to an external gate ([bd24ef3](https://github.com/jsalvata/waiver-stamp/commit/bd24ef3dd3ca8c87a6e6ed2dfef86f7d7d4e4cec))
+
 # [1.5.0](https://github.com/jsalvata/waiver-stamp/compare/v1.4.0...v1.5.0) (2026-07-04)
 
 
