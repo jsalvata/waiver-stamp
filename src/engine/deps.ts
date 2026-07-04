@@ -219,15 +219,11 @@ async function loadAllowlist(baseDir: string): Promise<readonly string[] | null>
   } catch {
     return [];
   }
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    return RepoConfigSchema.parse(JSON.parse(raw)).allowBumping ?? [];
   } catch {
     return null;
   }
-  const result = RepoConfigSchema.safeParse(parsed);
-  if (!result.success) return null;
-  return result.data.allowBumping ?? [];
 }
 
 async function readOrEmpty(path: string): Promise<Buffer> {
