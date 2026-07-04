@@ -647,6 +647,7 @@ aggregate verdict — the seam for the CI/automation layer.
 
 **v0 — single-project; transform + exclusion ops + the dependency-bump policy.**
 Ops: `rename`, `extract-function`, `move-to-new-file`, `move-file` (reproductive);
+`lint-fix` (tool-reproducible — the repo's own committed linter, safe fixes only);
 `change-test`, `change-docs` (confinement). Plus the standing **dependency-bump policy**
 (§6.3, no op). Reproductive ops single-project + app-internal (§8). Stamping principle,
 fold + emit compare (§7) + exclusions, static guards, JSON report. Covers the extract /
@@ -659,11 +660,9 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
   *impact report* where downstream repos are inspectable).
 - More reproductive ops: `inline-variable`, `extract-type`, convert-family, `revert`,
   codegen-regeneration.
-- `lint-fix` (tool-reproducible, §5.1/§6.1): fold the repo's own pinned linter's safe
-  fixes over the transformed base; import reordering accepted by policy (§6.1). Spec'd,
-  not yet implemented; motivated by dogfooding — a `move-file` sweep leaves rewritten
-  import specifiers unsorted, and the follow-up `organizeImports` fix is not
-  emit-neutral, so today it needs a separate reviewed commit.
+- ESLint support for `lint-fix` (v0 ships Biome only — the tool-reproducible op folds
+  the repo's own pinned linter's safe fixes over the transformed base, import reordering
+  accepted by policy per §6.1; the linter-resolution seam takes ESLint next).
 - An additive `add-export` op, if widening export visibility on its own proves common
   (other additive type/JSDoc edits already pass for free under emit comparison, §7).
 - Custom non-LS ops with mandatory tsc+tests gating.

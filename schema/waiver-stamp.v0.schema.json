@@ -207,6 +207,30 @@
             "additionalProperties": false
           },
           {
+            "description": "Run the repo's own committed linter (safe fixes only) over the named files.",
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "lint-fix"
+              },
+              "files": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?:(?!```)[\\s\\S])*$"
+                }
+              }
+            },
+            "required": [
+              "op",
+              "files"
+            ],
+            "additionalProperties": false
+          },
+          {
             "description": "Arbitrary edits to verified non-shipping test files.",
             "type": "object",
             "properties": {

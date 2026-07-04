@@ -182,8 +182,10 @@ waivered commits.
 
 ## Scope (v0)
 
-Implemented: the **`rename`** and **`move-file`** reproductive ops; **`change-test`** /
-**`change-docs`** exclusion ops; the standing **dependency-bump policy** (allowlisted,
+Implemented: the **`rename`** and **`move-file`** reproductive ops; the **`lint-fix`**
+tool-reproducible op (runs the repo's own committed linter — v0: Biome — over the named
+files, safe fixes only); **`change-test`** / **`change-docs`** exclusion ops; the standing
+**dependency-bump policy** (allowlisted,
 up-moving dependency bumps confined to `package.json` + `pnpm-lock.yaml`; lockfile
 honesty is delegated to the repo's required external check, e.g. lockfile-firewall —
 pnpm repos only, `allowBumping` in a committed `.waiver-stamp.json`, off by
@@ -211,6 +213,7 @@ the roadmap.
   "ops": [
     { "op": "rename", "target": { "file": "src/foo.ts", "symbol": "oldName" }, "to": "newName" },
     { "op": "move-file", "from": "src/foo.ts", "to": "src/util/foo.ts" },
+    { "op": "lint-fix", "files": ["src/bar.ts"] },
     { "op": "change-docs", "files": ["README.md"] }
   ]
 }

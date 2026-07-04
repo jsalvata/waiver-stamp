@@ -6,7 +6,14 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from './test-helpers.ts';
+import {
+  FIXTURE_BIOME_JSON,
+  FIXTURE_PACKAGE_JSON,
+  FIXTURE_TSCONFIG_JSON,
+  type GitRepoFixture,
+  REPO_ROOT,
+  makeGitRepo,
+} from './test-helpers.ts';
 import type { Waiver } from './types.ts';
 import { validateCommit } from './validate-commit.ts';
 
@@ -143,6 +150,77 @@ describe('validateCommit (engine integration, §3.1)', () => {
       ops: [{ op: 'move-file', from: 'src/orders.ts', to: 'src/billing/orders.ts' }],
     };
     const report = await validateCommit(waiver, { commit: head, cwd: g.repo });
+    expect(report.stamped).toBe(false);
+    expect(report.uncovered).toContain('src/usage.ts');
+  });
+
+  // A base whose importer's imports fall out of sort order *after* a move-file
+  // rewrites the moved specifier — the §6.1 dogfooding scenario (a move sweep
+  // leaves imports unsorted; the follow-up organize-imports fix isn't emit-neutral).
+  async function lintBaseCommit(): Promise<string> {
+    if (!g) throw new Error('repo not initialized');
+    return g.commit(
+      {
+        'tsconfig.json': FIXTURE_TSCONFIG_JSON,
+        'package.json': FIXTURE_PACKAGE_JSON,
+        'biome.json': FIXTURE_BIOME_JSON,
+        'src/orders.ts': ORDERS_BASE,
+        'src/rate.ts': 'export const rate = 3;\n',
+        // Unsorted only once './orders' becomes './billing/orders' (b < r).
+        'src/usage.ts':
+          "import { rate } from './rate';\nimport { calculateTotal } from './orders';\nexport const t = calculateTotal(21) * rate;\n",
+      },
+      'base',
+    );
+  }
+  const MOVE_AND_LINT: Waiver = {
+    schema: 'waiver-stamp/v0',
+    ops: [
+      { op: 'move-file', from: 'src/orders.ts', to: 'src/billing/orders.ts' },
+      { op: 'lint-fix', files: ['src/usage.ts'] },
+    ],
+  };
+
+  it('STAMPS a move-file + lint-fix commit whose imports were reordered by the fix', async () => {
+    g = await makeGitRepo();
+    await lintBaseCommit();
+    await rm(join(g.repo, 'src/orders.ts'));
+    const head = await g.commit(
+      {
+        'src/billing/orders.ts': ORDERS_BASE,
+        // Moved specifier + imports sorted — exactly what apply would produce.
+        'src/usage.ts':
+          "import { calculateTotal } from './billing/orders';\nimport { rate } from './rate';\nexport const t = calculateTotal(21) * rate;\n",
+      },
+      'move orders under billing/ and sort imports',
+    );
+    const report = await validateCommit(MOVE_AND_LINT, {
+      commit: head,
+      cwd: g.repo,
+      toolchainRoot: REPO_ROOT,
+    });
+    expect(report.failures).toEqual([]);
+    expect(report.stamped).toBe(true);
+  });
+
+  it('FAILS when a hand edit rides along with the lint fix (emit mismatches O)', async () => {
+    g = await makeGitRepo();
+    await lintBaseCommit();
+    await rm(join(g.repo, 'src/orders.ts'));
+    const head = await g.commit(
+      {
+        'src/billing/orders.ts': ORDERS_BASE,
+        // Sorted imports, but a smuggled 21 -> 22 change the lint fix can't account for.
+        'src/usage.ts':
+          "import { calculateTotal } from './billing/orders';\nimport { rate } from './rate';\nexport const t = calculateTotal(22) * rate;\n",
+      },
+      'move + sort + smuggle a value change',
+    );
+    const report = await validateCommit(MOVE_AND_LINT, {
+      commit: head,
+      cwd: g.repo,
+      toolchainRoot: REPO_ROOT,
+    });
     expect(report.stamped).toBe(false);
     expect(report.uncovered).toContain('src/usage.ts');
   });

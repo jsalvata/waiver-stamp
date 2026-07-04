@@ -7,8 +7,38 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runGit } from './git.ts';
 import type { Waiver } from './types.ts';
+
+/**
+ * The waiver-stamp repo root — its `node_modules/.bin` holds a real Biome the
+ * `lint-fix` op can resolve as a `toolchainRoot`, so `lint-fix` tests exercise the
+ * actual linter rather than a stub.
+ */
+export const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
+
+/**
+ * A committable `biome.json` for `lint-fix` fixtures: only import organizing is
+ * enabled, so `biome check --write` reorders imports (the §6.1 motivating fix)
+ * without formatter/linter noise muddying assertions.
+ */
+export const FIXTURE_BIOME_JSON = `${JSON.stringify(
+  {
+    organizeImports: { enabled: true },
+    formatter: { enabled: false },
+    linter: { enabled: false },
+  },
+  null,
+  2,
+)}\n`;
+
+/** A committable `package.json` declaring Biome so the `lint-fix` op's manifest check passes. */
+export const FIXTURE_PACKAGE_JSON = `${JSON.stringify(
+  { name: 'fixture', devDependencies: { '@biomejs/biome': '^1.9.4' } },
+  null,
+  2,
+)}\n`;
 
 export interface Fixture {
   /** Absolute path to the temp project root (holds tsconfig.json). */

@@ -17,6 +17,13 @@ export interface ValidateOptions {
   commit: string;
   /** Repo path where `commit` lives. Defaults to `process.cwd()`. */
   cwd?: string;
+  /**
+   * Where a `lint-fix` op resolves its linter binary from — an installed
+   * `node_modules` (spec §9). Defaults to `cwd`; override when the install is
+   * hoisted elsewhere (e.g. a monorepo workspace root), since the checked-out
+   * worktrees the fold runs over never carry an install.
+   */
+  toolchainRoot?: string;
 }
 
 type Project = ReturnType<typeof loadProject>;
@@ -38,6 +45,7 @@ export async function validateCommit(
   options: ValidateOptions,
 ): Promise<ValidationReport> {
   const cwd = options.cwd ?? process.cwd();
+  const toolchainRoot = options.toolchainRoot ?? cwd;
   const head = options.commit;
   const [base] = await parents(cwd, head);
   if (!base) throw new CommitParentError(head);
@@ -80,7 +88,8 @@ export async function validateCommit(
 
     for (const op of waiver.ops) {
       if (op.op !== 'change-test' && op.op !== 'change-docs') {
-        applyTransform(oProject, oWt.dir, op, opFindings, failures);
+        // The base worktree has no install; resolve the linter from `toolchainRoot`.
+        applyTransform(oProject, oWt.dir, op, toolchainRoot, opFindings, failures);
       }
     }
 
@@ -160,11 +169,12 @@ function applyTransform(
   oProject: Project,
   dir: string,
   op: Op,
+  toolchainRoot: string,
   opFindings: OpFinding[],
   failures: string[],
 ): void {
   try {
-    applyTransformOp(oProject, dir, op);
+    applyTransformOp(oProject, dir, op, toolchainRoot);
     opFindings.push({ op: op.op, ok: true });
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
