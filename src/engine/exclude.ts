@@ -11,8 +11,13 @@
  * deliberately conservative.
  */
 
+import type { DocPolicy } from './config.ts';
+
 const TEST_FILE = /(\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)__tests__\/)/;
-const DOC_FILE = /\.(md|mdx|markdown|txt)$/i;
+// The `change-docs` extension floor: inert text assets only. `.mdx` is
+// deliberately excluded — MDX compiles to executable JS/JSX, so it can reach
+// production behaviour and fails the "provably non-shipping" premise (§6.2).
+const DOC_FILE = /\.(md|markdown|txt)$/i;
 
 /**
  * Files that govern the test gate itself — never eligible for `change-test`
@@ -23,9 +28,14 @@ const BACKSTOP_INTEGRITY =
 
 export type ExclusionKind = 'change-test' | 'change-docs';
 
-/** Whether `file` satisfies the confinement predicate for an exclusion op (§6.2). */
-export function predicateOk(kind: ExclusionKind, file: string): boolean {
-  if (kind === 'change-docs') return DOC_FILE.test(file);
+/**
+ * Whether `file` satisfies the confinement predicate for an exclusion op (§6.2).
+ * `change-docs` requires both the extension floor and the project's {@link DocPolicy}
+ * (`allow` ∧ ¬`deny`); the policy can only narrow the floor, never widen it past
+ * inert text assets. `change-test` ignores the doc policy.
+ */
+export function predicateOk(kind: ExclusionKind, file: string, docPolicy: DocPolicy): boolean {
+  if (kind === 'change-docs') return DOC_FILE.test(file) && docPolicy.permits(file);
   if (BACKSTOP_INTEGRITY.test(file)) return false;
   return TEST_FILE.test(file);
 }

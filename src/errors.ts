@@ -19,6 +19,18 @@ export class WaiverValidationError extends Error {
   }
 }
 
+/** The project's `.waiver-stamp.json` could not be parsed or failed schema validation (§6.2). */
+export class WaiverConfigError extends Error {
+  override readonly name = 'WaiverConfigError';
+  constructor(
+    readonly path: string,
+    readonly detail: string,
+    options?: { cause?: unknown },
+  ) {
+    super('Project .waiver-stamp.json is invalid', options);
+  }
+}
+
 /** An engine operation that the v0 scaffold does not yet implement. */
 export class NotImplementedError extends Error {
   override readonly name = 'NotImplementedError';

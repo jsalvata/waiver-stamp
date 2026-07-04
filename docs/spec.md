@@ -214,7 +214,7 @@ divergent source. See §9 for how this grounds determinism.
 
 // ── Exclusion · confinement ─────────────────────────────────────────
 { "op": "change-test", "files": ["path", ...] }         // arbitrary edits; verified test files only
-{ "op": "change-docs", "files": ["path", ...] }         // verified doc files only
+{ "op": "change-docs", "files": ["path", ...] }         // inert doc files the .waiver-stamp.json policy allows (§6.5)
 ```
 
 There is **no `format` op and no comment op** — formatting-only and comment-only
@@ -347,7 +347,21 @@ then covers behaviour.
   weakening** (removed assertions): accepted by policy (no current production risk);
   residual erosion of the safety net is documented, not gated. The passing affected
   suite is part of the backstop.
-- **`change-docs`** — each file is a non-shipping doc asset (`*.md`, etc.).
+- **`change-docs`** — each file must clear **both** gates:
+  1. **Extension floor** — an inert text asset (`*.md`, `*.markdown`, `*.txt`). This
+     is a hard floor a project policy can only narrow, never widen: it stops a
+     shipping `.ts` (or any executable module) from being confined as a "doc" and
+     thereby dropped from the compare. `*.mdx` is **excluded** — MDX compiles to
+     JS/JSX, so it can reach production behaviour and fails the non-shipping premise.
+  2. **Project policy** — the file is matched by `changeDocs.allow` and **not** by
+     `changeDocs.deny` in the repo's `.waiver-stamp.json` (§6.5). Both lists are empty
+     by default, so **a repo with no config confines nothing**: an AI-instruction asset
+     like `.claude/**`, `CLAUDE.md`, `AGENTS.md`, or `.cursor/**` cannot be waived away
+     without an explicit, reviewable allow entry — and `deny` is a hard veto over `allow`.
+
+  The policy is read from **base** (§6.5), like `allowBumping` (§6.3) — a PR cannot widen
+  it for itself. And because `.waiver-stamp.json` is itself a non-excludable, byte-compared
+  file (§7), loosening the policy is always a visible, review-forcing diff.
 
 A file named by an exclusion op that **fails** its predicate → FAIL (it is not
 removed from the compare; a hand-edited production file then mismatches `O`).
@@ -407,6 +421,32 @@ otherwise they stay un-covered → the commit fails to stamp → review:
 
 Steps 1–4 are offline and deterministic; step 5 is deliberately someone else's load,
 delegated exactly the way tsc-clean and tests-green are (§3.1.6).
+
+### 6.5 `change-docs` policy — `.waiver-stamp.json`
+
+The `change-docs` confinement policy lives alongside the bump policy (§6.3) in
+`.waiver-stamp.json` at the repo root, under a `changeDocs` key:
+
+```json
+{
+  "changeDocs": {
+    "allow": ["docs/**", "**/README.md", "CHANGELOG.md"],
+    "deny": [".claude/**", "**/CLAUDE.md", "**/AGENTS.md", ".cursor/**"]
+  }
+}
+```
+
+- Both keys are gitignore-style glob lists over **repo-relative posix paths**, matched
+  with `picomatch` (`dot: true`, so leading-dot paths match).
+- Both default to `[]`. Empty `allow` ⇒ **nothing** is confinable — the safe default.
+- `deny` is a hard veto: `allow ∧ ¬deny`.
+- The policy only narrows the extension floor (§6.2); it can never widen `change-docs`
+  to executable files.
+- Read from **base**, like `allowBumping` (§6.3) — a PR cannot widen it for itself.
+  Belt-and-suspenders, a `.waiver-stamp.json` edit is itself a non-excludable,
+  byte-compared file (§7), so loosening the policy is a review-forcing diff.
+- A missing file yields the empty policy. Malformed JSON or an unknown key inside
+  `changeDocs` **fails closed** — the stamp fails with a `WaiverConfigError`.
 
 ---
 
@@ -586,7 +626,7 @@ aggregate verdict — the seam for the CI/automation layer.
 | refactor + hand-edited tests | `[rename, change-test]` | Stamps: `rename` reproduces source; test files excluded + predicate-passed; suite green. |
 | relocate a file into a subdirectory | `[move-file]` | Stamps: the move rewrites every static import/export and dynamic `import()` specifier; a `require('./x')` or `jest.mock` path → dynamic-reference guard → review. |
 | internal lib bump | `[]` (empty waiver) | Stamps: the dependency-bump policy (§6.3) covers manifest+lockfile — allowlisted, up-moving. No op. |
-| README typo / reformat | `[]` or `[change-docs]` | Reformat/comment-only → empty waiver. `*.md` edit → `change-docs`. |
+| README typo / reformat | `[]` or `[change-docs]` | Source reformat/comment-only → empty waiver. Any `*.md` content edit → `change-docs` (doc bytes are compared as-is, so even a typo fix is visible), if `changeDocs.allow` covers the path (§6.5). |
 
 ---
 
@@ -633,6 +673,9 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
 - Extend the token-economy benchmark (§19) with a `move-file` task (relocate a
   widely-imported file and rewire its importers) and regenerate the README table
   from a real `pnpm bench` run.
+- Publish a JSON Schema for `.waiver-stamp.json` (§6.3, §6.5) — generated from the Zod
+  config schema and drift-guarded by a test, the same way the waiver schema is —
+  so editors can validate the config file (today it is validated only at runtime).
 
 ---
 
