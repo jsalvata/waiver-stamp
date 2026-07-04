@@ -1,6 +1,6 @@
 ---
 name: refactor-with-waiver
-description: Use when planning or writing any change that ships no behaviour change — a pure/mechanical refactor (renaming a symbol across the codebase, moving a declaration to its own file, extracting a helper, reformatting, adding or removing comments), OR a docs-only change (editing a README, doc comments, or any non-shipping doc file), OR a tests-only change (adding or editing tests without touching source). Invoke it early, during planning, to split a mixed change into a waiverable mechanical commit and a separate behavioural one. Trigger on "rename X everywhere", "extract this into a function", "move X to its own file", "pure/mechanical refactor", "behaviour-preserving change", "docs-only change", "update the README", "fix a typo", "edit a comment", "tests-only change", "add tests for X", "make this PR stampable", "write/generate a waiver", "land a waivered commit".
+description: Use together with other planning skills when planning or writing any change that includes a refactor (renaming a symbol across the codebase, moving or renaming a whole file, reformatting or applying safe lint fixes, adding or removing comments), OR a docs change (editing a README, comments, or any non-shipping doc file), OR a tests-only change (adding or editing tests without touching source). Invoke it early, during planning, to split a mixed change into a waiverable mechanical commit and a separate behavioural one. Trigger on "refactor / reorganize / restructure code", "rename X everywhere", "move a file to another folder", "reformat / run the linter", "pure/mechanical refactor", "behaviour-preserving change", "edit doc", "update the README", "fix a typo", "edit a comment", "tests-only change", "add tests for X", "make this PR stampable", "rubberstamp PR", "write/generate a waiver", "waivered commit".
 ---
 
 # Refactoring with a waiver
@@ -124,14 +124,30 @@ Validate against it — never invent ops.
 - `{ "op": "lint-fix", "files": [...] }` — run the repo's own committed linter
   (v0: Biome) over exactly the named files, applying **safe fixes only**. List it
   **last**, after the ops whose output it cleans up (e.g. a `move-file` rewrites
-  import specifiers, then `lint-fix` sorts them). Works on any file, standalone or
-  alongside other ops. The repo must declare the linter in `package.json`.
+  import specifiers, then `lint-fix` sorts them). You never predict or match the
+  linter's output: `verify` reruns the same `lint-fix` in the fold, so whatever
+  reordering or reformatting it produces is reproduced on both sides of the emit
+  compare. So don't fear a resort you can't foresee — a `move-file` that leaves
+  imports out of order still stamps the moment a `lint-fix` follows it. Do **not**,
+  however, hand-apply the fixes yourself: a manual edit riding alongside `lint-fix`
+  mismatches the folded result and breaks the stamp. Works on any file, standalone
+  or alongside other ops. The repo must declare the linter in `package.json`.
 
 **Exclusion · confinement** (removed from the comparison; order-free):
 - `{ "op": "change-test", "files": [...] }` — verified non-shipping test files.
 - `{ "op": "change-docs", "files": [...] }` — inert doc files (`*.md`/`*.markdown`/`*.txt`,
   never `*.mdx`) that the repo's `.waiver-stamp.json` `changeDocs` policy allows
   (`allow` ∧ ¬`deny`; empty/absent config confines nothing). See `docs/spec.md` §6.5.
+
+**Standing config lands first, waivers rely on it later.** Every `.waiver-stamp.json`
+policy — `changeDocs`, `allowBumping`, any future one — is read from a commit's **base**,
+never the commit itself (spec §6.3), so a commit can never widen policy to waive its own
+change. A `.waiver-stamp.json` edit is also byte-compared and unwaivable, so it always
+falls to a human. Together that gives a clean workflow: **establish or widen the config in
+its own reviewed commit or PR, then rely on it from waivers in later commits or PRs.** So
+to `change-docs` a file the policy doesn't yet allow (or to `allowBumping` a new package),
+land the `.waiver-stamp.json` change first — an earlier commit in the same PR, or an
+already-merged one — and the waivered commit builds on the base that now carries it.
 
 > **Not yet implemented in this build:** `extract-function` and `move-to-new-file`.
 > The schema still lists them, but `apply` / `stamp` will FAIL with "not yet
