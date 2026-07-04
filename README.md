@@ -184,8 +184,9 @@ waivered commits.
 
 Implemented: the **`rename`** and **`move-file`** reproductive ops; **`change-test`** /
 **`change-docs`** exclusion ops; the standing **dependency-bump policy** (allowlisted,
-up-moving dependency bumps confined to `package.json` + `pnpm-lock.yaml`, re-derived by
-running pnpm — pnpm repos only, `allowBumping` in a committed `.waiver-stamp.json`, off by
+up-moving dependency bumps confined to `package.json` + `pnpm-lock.yaml`; lockfile
+honesty is delegated to the repo's required external check, e.g. lockfile-firewall —
+pnpm repos only, `allowBumping` in a committed `.waiver-stamp.json`, off by
 default); and the empty/minimal waiver (formatting-, comment-, and type-only changes are
 invisible to the emit comparison, so they need no op). Guards: dynamic-reference,
 published-API, emit-divergence (fail-closed). Single Nx project, app-internal.
@@ -244,9 +245,10 @@ diff. Absent file or absent key ⇒ that policy is **off**; nothing is auto-enab
 A version bump of an allowlisted dependency needs **no op**: a standing policy covers the
 `package.json` + lockfile change during the compare. Entries ending in `/*` are scope
 prefixes; others are exact names. Covered only when the change is an allowlisted,
-plain-semver **up-move** and the lockfile honestly re-resolves from the manifest —
-adding/removing a dependency, or any other manifest edit, still falls to review. Empty or
-absent ⇒ every `package.json`/lockfile change is reviewed. See
+plain-semver **up-move**; the lockfile bytes are vouched separately by the repo's
+external lockfile-honesty check (an always-on CI gate), not re-resolved by the stamp
+itself. Adding/removing a dependency, or any other manifest edit, still falls to review.
+Empty or absent ⇒ every `package.json`/lockfile change is reviewed. See
 [`docs/spec.md` §6.3](docs/spec.md).
 
 ### Confining docs — `changeDocs`

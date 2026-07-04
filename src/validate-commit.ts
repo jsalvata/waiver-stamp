@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { type DocPolicy, loadDocPolicy } from './engine/config.ts';
-import { coverDependencyBump, resolvePnpmLockfile } from './engine/deps.ts';
+import { coverDependencyBump } from './engine/deps.ts';
 import { emitForFile } from './engine/emit-compare.ts';
 import { predicateOk } from './engine/exclude.ts';
 import { applyTransformOp } from './engine/fold.ts';
@@ -17,11 +17,6 @@ export interface ValidateOptions {
   commit: string;
   /** Repo path where `commit` lives. Defaults to `process.cwd()`. */
   cwd?: string;
-  /**
-   * Lockfile re-resolution for the dependency-bump policy (§6.3, test seam). Defaults
-   * to the real pnpm subprocess; tests inject fakes so no network or pnpm binary runs.
-   */
-  resolveLockfile?: (dir: string) => Promise<void>;
 }
 
 type Project = ReturnType<typeof loadProject>;
@@ -111,11 +106,7 @@ export async function validateCommit(
     // Standing dependency-bump policy (§6.3): may cover package.json + lockfile.
     const claimed = await coverDependencyBump(
       compareSet,
-      {
-        oDir: oWt.dir,
-        headDir: headWt.dir,
-        resolveLockfile: options.resolveLockfile ?? resolvePnpmLockfile,
-      },
+      { oDir: oWt.dir, headDir: headWt.dir },
       fileFindings,
       failures,
     );
