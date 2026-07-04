@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/jsalvata/waiver-stamp/compare/v1.7.0...v1.8.0) (2026-07-04)
+
+
+### Features
+
+* implement the lint-fix op ([cb84c7a](https://github.com/jsalvata/waiver-stamp/commit/cb84c7a5e674eb60a9987d79006c12ef5c58a983))
+
 # [1.7.0](https://github.com/jsalvata/waiver-stamp/compare/v1.6.0...v1.7.0) (2026-07-04)
 
 
