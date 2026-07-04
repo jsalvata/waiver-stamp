@@ -1,3 +1,11 @@
+## [1.8.1](https://github.com/jsalvata/waiver-stamp/compare/v1.8.0...v1.8.1) (2026-07-04)
+
+
+### Bug Fixes
+
+* parse .waiver-stamp.json once via one schema ([742d309](https://github.com/jsalvata/waiver-stamp/commit/742d30921d3ce83a828f0ada030194c3433fe4eb))
+* tighten config module boundaries ([7bbbe46](https://github.com/jsalvata/waiver-stamp/commit/7bbbe460aedcf0ec128ad91348af3c477a71aa67))
+
 # [1.8.0](https://github.com/jsalvata/waiver-stamp/compare/v1.7.0...v1.8.0) (2026-07-04)
 
 
