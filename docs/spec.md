@@ -704,7 +704,7 @@ aggregate verdict — the seam for the CI/automation layer.
 | refactor + hand-edited tests | `[rename, change-test]` | Stamps: `rename` reproduces source; test files excluded + predicate-passed; suite green. |
 | relocate a file into a subdirectory | `[move-file]` | Stamps: the move rewrites every static import/export and dynamic `import()` specifier; a `require('./x')` or `jest.mock` path → dynamic-reference guard → review. |
 | internal lib bump | `[]` (empty waiver) | Stamps: the dependency-bump policy (§6.3) covers manifest+lockfile — allowlisted, up-moving, lockfile re-resolves to head. No op. |
-| README typo / reformat | `[]` or `[change-docs]` | Reformat/comment-only → empty waiver. Substantive `*.md` edit → `change-docs`, but only if `changeDocs.allow` covers the path (§6.5). |
+| README typo / reformat | `[]` or `[change-docs]` | Source reformat/comment-only → empty waiver. Any `*.md` content edit → `change-docs` (doc bytes are compared as-is, so even a typo fix is visible), if `changeDocs.allow` covers the path (§6.5). |
 
 ---
 
