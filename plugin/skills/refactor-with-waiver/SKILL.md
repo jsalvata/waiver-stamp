@@ -103,7 +103,11 @@ Validate against it — never invent ops.
 
 **Exclusion · confinement** (removed from the comparison; order-free):
 - `{ "op": "change-test", "files": [...] }` — verified non-shipping test files.
-- `{ "op": "change-docs", "files": [...] }` — verified non-shipping doc files.
+- `{ "op": "change-docs", "files": [...] }` — inert doc files (`*.md`/`*.markdown`/`*.txt`,
+  never `*.mdx`) that the repo's `.waiver-stamp.json` `changeDocs.allow` permits and
+  `deny` does not veto. **Empty/absent config confines nothing** — AI-instruction assets
+  (`.claude/**`, `CLAUDE.md`, agent/skill files) are not confinable unless explicitly
+  allowed. See `docs/spec.md` §6.3.
 
 > **Not yet implemented in this build:** `extract-function`, `move-to-new-file`,
 > and `bump`. The schema still lists them, but `apply` / `stamp` will FAIL with

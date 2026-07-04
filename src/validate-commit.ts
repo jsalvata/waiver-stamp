@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { type DocPolicy, loadDocPolicy } from './engine/config.ts';
 import { emitForFile } from './engine/emit-compare.ts';
 import { predicateOk } from './engine/exclude.ts';
 import { applyTransformOp } from './engine/fold.ts';
@@ -51,11 +52,23 @@ export async function validateCommit(
     const oProject = loadProject(oWt.dir);
     const headProject = loadProject(headWt.dir);
 
+    // The `change-docs` allow/deny policy, read from the commit under validation
+    // (spec §6.2). A malformed config fails closed: confine nothing, record the
+    // failure. The config file is itself a non-excludable, byte-compared diff,
+    // so a policy change forces human review of that very commit (spec §7).
+    let docPolicy: DocPolicy;
+    try {
+      docPolicy = await loadDocPolicy(headWt.dir);
+    } catch (err) {
+      docPolicy = { permits: () => false };
+      failures.push(`invalid config: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     // Exclusion ops first: the guards and the transform pass both need the
     // confined file set they produce (spec §6.2).
     for (const op of waiver.ops) {
       if (op.op === 'change-test' || op.op === 'change-docs') {
-        applyExclusionOp(op, excluded, fileFindings, failures, opFindings);
+        applyExclusionOp(op, excluded, fileFindings, failures, opFindings, docPolicy);
       }
     }
 
@@ -117,10 +130,11 @@ function applyExclusionOp(
   fileFindings: FileFinding[],
   failures: string[],
   opFindings: OpFinding[],
+  docPolicy: DocPolicy,
 ): void {
   let ok = true;
   for (const file of op.files) {
-    if (predicateOk(op.op, file)) {
+    if (predicateOk(op.op, file, docPolicy)) {
       excluded.add(file);
       fileFindings.push({ file, status: 'excluded' });
     } else {
