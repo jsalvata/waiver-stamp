@@ -184,8 +184,9 @@ waivered commits.
 
 Implemented: the **`rename`** and **`move-file`** reproductive ops; **`change-test`** /
 **`change-docs`** exclusion ops; the standing **dependency-bump policy** (allowlisted,
-up-moving dependency bumps confined to `package.json` + `pnpm-lock.yaml`, re-derived by
-running pnpm — pnpm repos only, `allowBumping` in a committed `.waiver-stamp.json`, off by
+up-moving dependency bumps confined to `package.json` + `pnpm-lock.yaml`; lockfile
+honesty is delegated to the repo's required external check, e.g. lockfile-firewall —
+pnpm repos only, `allowBumping` in a committed `.waiver-stamp.json`, off by
 default); and the empty/minimal waiver (formatting-, comment-, and type-only changes are
 invisible to the emit comparison, so they need no op). Guards: dynamic-reference,
 published-API, emit-divergence (fail-closed). Single Nx project, app-internal.
