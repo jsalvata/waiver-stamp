@@ -183,10 +183,12 @@ waivered commits.
 ## Scope (v0)
 
 Implemented: the **`rename`** and **`move-file`** reproductive ops; **`change-test`** /
-**`change-docs`** exclusion ops; and the empty/minimal waiver (formatting-, comment-,
-and type-only changes are invisible to the emit comparison, so they need no op). Guards:
-dynamic-reference, published-API, emit-divergence (fail-closed). Single Nx project,
-app-internal.
+**`change-docs`** exclusion ops; the standing **dependency-bump policy** (allowlisted,
+up-moving dependency bumps confined to `package.json` + `pnpm-lock.yaml`, re-derived by
+running pnpm — pnpm repos only, `allowBumping` in a committed `waiver-stamp.json`, off by
+default); and the empty/minimal waiver (formatting-, comment-, and type-only changes are
+invisible to the emit comparison, so they need no op). Guards: dynamic-reference,
+published-API, emit-divergence (fail-closed). Single Nx project, app-internal.
 
 Known shortcoming: the emit-divergence guard deliberately does **not** flag constructor
 parameter properties — mainstream transpilers all compile them the way tsc does, and
@@ -196,8 +198,9 @@ own CI/CD transpiler instead of tsc, which dissolves the whole tsc-vs-deploy
 enumeration. See [`docs/spec.md` §8](docs/spec.md) for the reasoning.
 
 Planned next (the vocabulary already lists them; authoring them errors today):
-`extract-function`, `move-to-new-file`, `bump`, and multi-project reproductive
-coverage. See [`docs/spec.md` §13/§21](docs/spec.md) for the roadmap.
+`extract-function`, `move-to-new-file`, npm/yarn support for the dependency-bump policy,
+and multi-project reproductive coverage. See [`docs/spec.md` §13/§21](docs/spec.md) for
+the roadmap.
 
 ## Waiver format
 
