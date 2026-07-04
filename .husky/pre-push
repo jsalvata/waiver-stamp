@@ -1,0 +1,4 @@
+# Dogfood the pre-push drift guard on waiver-stamp itself. Consumer repos wire this as
+# `pnpm exec waiver prepush` (the installed binary); here we run our own source directly,
+# since the package's bin isn't self-linked into node_modules.
+pnpm exec tsx src/cli.ts prepush

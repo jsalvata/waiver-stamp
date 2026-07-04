@@ -139,6 +139,7 @@ its only prerequisite.
 waiver apply <waiver>                             # apply a waiver's transform ops to the working tree (`-` for stdin)
 waiver verify [<commit>] [--json]                 # verify one commit's embedded waiver (default HEAD)
 waiver stamp  --base <ref> --head <ref> [--json]  # aggregate the PR verdict over base..head
+waiver prepush                                    # re-verify outgoing waivered dependency bumps (pre-push drift guard)
 waiver mcp                                        # run the stdio MCP server
 ```
 
@@ -179,6 +180,50 @@ a rebase-merge, so the verified commits land as-is (spec §17.5).
 printed waiver JSON can have lines longer than the default 100-char limit. Disable the
 rule (this repo does, in `commitlint.config.js`) so the `commit-msg` hook doesn't reject
 waivered commits.
+
+## Pre-push drift guard
+
+The dependency-bump policy re-derives the lockfile by resolving against the **live npm
+registry**, so its verdict is *time-varying*: a bump you authored days ago can fail in CI
+because a floating spec now resolves to a newer version than your committed lockfile
+records. It stays fail-closed — the commit just falls to normal human review — so the
+cost is CI *flakiness*, not a safety hole. **`waiver prepush`** shrinks that author→CI
+window to seconds by re-running the same check at push time, while you can still fix it.
+
+Wire it as a git **pre-push** hook. With [husky](https://typicode.github.io/husky/):
+
+```sh
+# .husky/pre-push
+pnpm exec waiver prepush
+```
+
+- **What it guards:** only *waivered* commits that touch `package.json` / `pnpm-lock.yaml`
+  — the sole commits whose verification is registry-dependent. Reproductive and exclusion
+  ops re-derive against the commit's own (unchanging) parent, so they can't drift.
+- **Cost on an ordinary push: ~0.** With no waivered bump outgoing it exits `0` in
+  milliseconds — no network, no pnpm. It reaches for the registry only when there *is* a
+  bump to re-check, and then it costs exactly what authoring the bump did, so it needs the
+  **same registry access / auth**.
+- **On failure** it names the drifted commit(s), prints the refresh recipe below, and
+  exits non-zero so the push aborts.
+- **Escape hatch:** it's a stock git hook, so `git push --no-verify` skips it. (The Claude
+  Code plugin runs the same check before an agent's `git push`; there, `WAIVER_SKIP_PREPUSH=1`
+  bypasses it.)
+
+Run it standalone too — with no ref lines on stdin it derives the outgoing range from
+`@{push}`, then `@{upstream}`, then commits not yet on any remote.
+
+### Refreshing a drifted bump
+
+Re-resolve the lockfile from the bump commit's **parent**. A plain `pnpm install` on an
+up-to-date worktree is a no-op and refreshes nothing, so restore the pre-bump lockfile
+first, then let the changed specs re-resolve:
+
+```sh
+git show <commit>^:pnpm-lock.yaml > pnpm-lock.yaml
+pnpm install --lockfile-only --ignore-scripts --prefer-frozen-lockfile
+git commit --amend --no-edit   # if <commit> is HEAD; otherwise rewrite that commit
+```
 
 ## Scope (v0)
 
