@@ -57,9 +57,10 @@ describe('manifestBumpViolations', () => {
     expect(manifestBumpViolations(base, head, allow)).toEqual(["dependencies: '@myorg/new' added"]);
   });
 
-  it('rejects a removed dependency', () => {
+  it('accepts a removed dependency, even a non-allowlisted one', () => {
+    // `left-pad` is not on the allowlist; removal still needs no allowlist entry.
     const head = { ...base, dependencies: { lodash: '^1.0.0' } };
-    expect(manifestBumpViolations(base, head, allow)).toEqual(["dependencies: 'left-pad' removed"]);
+    expect(manifestBumpViolations(base, head, allow)).toEqual([]);
   });
 
   it('rejects a change to a non-dependency field', () => {
@@ -315,6 +316,39 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     const report = await validate(head);
     expect(report.stamped).toBe(false);
     expect(report.uncovered).toContain('src/a.ts');
+  });
+
+  it('COVERS removing a dependency (any package, no allowlist entry needed)', async () => {
+    g = await makeGitRepo();
+    await baseCommit();
+    // Drop `left-pad` (never allowlisted); the lockfile re-resolves to head.
+    const head = await g.commit(
+      {
+        'package.json': pkgJson({ dependencies: { lodash: '^1.0.0' } }),
+        'pnpm-lock.yaml': HEAD_LOCK,
+      },
+      'remove left-pad',
+    );
+    const report = await validate(head);
+    expect(report.failures).toEqual([]);
+    expect(report.stamped).toBe(true);
+  });
+
+  it('FAILS when adding a dependency (additions stay out of the envelope)', async () => {
+    g = await makeGitRepo();
+    await baseCommit();
+    const head = await g.commit(
+      {
+        'package.json': pkgJson({
+          dependencies: { lodash: '^1.0.0', 'left-pad': '^1.0.0', '@myorg/new': '1.0.0' },
+        }),
+        'pnpm-lock.yaml': HEAD_LOCK,
+      },
+      'add @myorg/new',
+    );
+    const report = await validate(head);
+    expect(report.stamped).toBe(false);
+    expect(report.failures.join('\n')).toContain("'@myorg/new' added");
   });
 
   it('leaves package.json uncovered when it did not change (policy dormant)', async () => {

@@ -378,13 +378,16 @@ change falls to review. Nothing is auto-enabled.
 `{ "ops": [] }` is enough — `package.json` + the lockfile are **covered** iff *all* hold;
 otherwise they stay un-covered → the commit fails to stamp → review:
 
-1. **Confined manifest diff** — base and head `package.json` are identical except
-   **version-string** values in the dependency blocks (`dependencies`, `devDependencies`,
-   `optionalDependencies`, `peerDependencies`). Any added or removed dependency, or any
-   change to any other field (`scripts`, `pnpm`, `overrides`, `packageManager`, …) → not
-   covered.
+1. **Confined manifest diff** — base and head `package.json` are identical except within
+   the dependency blocks (`dependencies`, `devDependencies`, `optionalDependencies`,
+   `peerDependencies`). Any change to any other field (`scripts`, `pnpm`, `overrides`,
+   `packageManager`, …) → not covered. Within those blocks the three kinds of change
+   differ: an **addition** → not covered (adding is the supply-chain surface); a
+   **removal** → covered for *any* package (removing pulls in nothing, so it needs no
+   allowlist entry — step 5's re-resolve still guards any transitive churn); a **version
+   change** → covered only under steps 2–4.
 2. **Allowlisted** — every dependency whose version changed is on `allowBumping` and was
-   already a dependency in base.
+   already a dependency in base. (Removals need no allowlist entry; see step 1.)
 3. **Plain-semver shape** — each changed version string is a plain semver version or
    range. Anything else (`npm:` aliases, `git:`/`file:`/`link:`/`catalog:`/`workspace:`
    protocols, tarball URLs) → not covered. This is an **allowlist of the good form**, not
@@ -648,9 +651,11 @@ share / module-extraction cases plus test-only / docs-only / bump / mixed (§11)
 2. **Dependency bumps — a standing per-repo policy, not an op (§6.3).** A committed
    `.waiver-stamp.json` lists allowed packages under `allowBumping` (`@myorg/*` scope
    prefixes or exact names), read from **base** so a PR can't widen it for itself; absent
-   → the feature is off. A covered bump must be confined to dependency version strings,
-   allowlisted, plain-semver-shaped, **up-moving** (head admits no version below base's
-   floor), and its lockfile must **honestly re-resolve** to head's bytes — the check CI's
+   → the feature is off. Changes must be confined to the dependency blocks: a covered
+   **version change** must be allowlisted, plain-semver-shaped, and **up-moving** (head
+   admits no version below base's floor); a **removal** is covered for any package (it
+   pulls in nothing); an **addition** is never covered. In every case the lockfile must
+   **honestly re-resolve** to head's bytes — the check CI's
    frozen install does *not* perform. Registry pinning is structural (re-resolution under
    base's committed config, which the PR can't alter). A per-package version ceiling
    (`maxBump`) is roadmap; v0's trust is upstream review, not a version bound.

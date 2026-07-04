@@ -156,7 +156,9 @@ an empty `ops` array stamps clean.
 
 Bumping a dependency is **not** a waiver op. If the repo has a `.waiver-stamp.json` with
 an `allowBumping` list, an allowlisted, up-moving bump confined to `package.json` +
-`pnpm-lock.yaml` is covered automatically — like formatting. To land one:
+`pnpm-lock.yaml` is covered automatically — like formatting. **Removing** a dependency is
+also covered (any package — removing pulls in nothing), and **adding** one never is. To
+land a bump:
 
 1. Bump it with your package manager: `pnpm add <pkg>@latest` (or `@5.1.0` to pin).
 2. Commit `package.json` + `pnpm-lock.yaml` with an **empty** waiver embedded —
@@ -164,8 +166,9 @@ an `allowBumping` list, an allowlisted, up-moving bump confined to `package.json
 3. `waiver verify` — the policy re-resolves the lockfile and checks it matches.
 
 `apply` does **not** expand a bump (there is no op). pnpm repos only. Anything outside
-the envelope — a non-allowlisted package, a downward move, a `git:`/`npm:` specifier, any
-other manifest field — is not covered → the commit falls to review. Re-resolution re-runs
+the envelope — an added dependency, a non-allowlisted bump, a downward move, a
+`git:`/`npm:` specifier, any other manifest field — is not covered → the commit falls to
+review. Re-resolution re-runs
 on **every** check — local `waiver verify` and CI's `waiver stamp` alike — so **prefer
 exact pins** to minimize drift; a registry that publishes a newer transitive after you
 authored can FAIL a later re-check (fail-closed). Keep a bump in **its own commit** when

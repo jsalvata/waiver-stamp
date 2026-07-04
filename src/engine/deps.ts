@@ -66,10 +66,10 @@ function blockViolations(
     const a = base[pkg];
     const b = head[pkg];
     if (a === undefined) {
+      // Additions are the supply-chain surface — never covered.
       violations.push(`${block}: '${pkg}' added`);
-    } else if (b === undefined) {
-      violations.push(`${block}: '${pkg}' removed`);
-    } else if (a !== b) {
+    } else if (b !== undefined && a !== b) {
+      // A version change: allowlisted, plain-semver, up-moving.
       if (!matchesAllowlist(pkg, allowlist)) {
         violations.push(`${block}: '${pkg}' is not on allowBumping`);
       } else if (typeof a !== 'string' || typeof b !== 'string') {
@@ -79,6 +79,8 @@ function blockViolations(
         if (move) violations.push(`${block}: ${move}`);
       }
     }
+    // A removal (a defined, b undefined) falls through → covered: it pulls in nothing,
+    // so it needs no allowlist entry (the honest re-resolve still guards churn; §6.3).
   }
   return violations;
 }
