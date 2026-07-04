@@ -14,6 +14,9 @@ importers:
       commander:
         specifier: ^12.1.0
         version: 12.1.0
+      semver:
+        specifier: ^7.8.5
+        version: 7.8.5
       ts-morph:
         specifier: ^24.0.0
         version: 24.0.0
@@ -39,6 +42,9 @@ importers:
       '@types/node':
         specifier: ^22.7.0
         version: 22.20.0
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.7.1
       husky:
         specifier: ^9.1.6
         version: 9.1.7
@@ -774,6 +780,9 @@ packages:
 
   '@types/normalize-package-data@2.4.4':
     resolution: {integrity: sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@vitest/expect@2.1.9':
     resolution: {integrity: sha512-UJCIkTBenHeKT1TTlKMJWy1laZewsRIzYighyYiJKZreqtdxSos/S1t+ktRMQWu2CKqaarrkeszJx1cgC5tGZw==}
@@ -3168,6 +3177,8 @@ snapshots:
       undici-types: 6.21.0
 
   '@types/normalize-package-data@2.4.4': {}
+
+  '@types/semver@7.7.1': {}
 
   '@vitest/expect@2.1.9':
     dependencies:

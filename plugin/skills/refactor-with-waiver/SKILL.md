@@ -124,11 +124,11 @@ Validate against it — never invent ops.
 - `{ "op": "change-test", "files": [...] }` — verified non-shipping test files.
 - `{ "op": "change-docs", "files": [...] }` — verified non-shipping doc files.
 
-> **Not yet implemented in this build:** `extract-function`, `move-to-new-file`,
-> and `bump`. The schema still lists them, but `apply` / `stamp` will FAIL with
-> "not yet implemented in v0" if a waiver uses them. They are planned next — do
-> **not** author waivers using them yet. For v0, stick to `rename` / `move-file`,
-> the `change-test` / `change-docs` exclusions, and empty/minimal waivers.
+> **Not yet implemented in this build:** `extract-function` and `move-to-new-file`.
+> The schema still lists them, but `apply` / `stamp` will FAIL with "not yet
+> implemented in v0" if a waiver uses them. They are planned next — do **not** author
+> waivers using them yet. For v0, stick to `rename` / `move-file`, the
+> `change-test` / `change-docs` exclusions, and empty/minimal waivers.
 
 ## Selector cookbook for `rename` (§5.2)
 
@@ -151,6 +151,28 @@ waiver — do not add ops for them:
 
 A commit whose only changes are invisible to emit needs no transform op at all —
 an empty `ops` array stamps clean.
+
+## Dependency bumps need no op (standing policy, §6.3)
+
+Bumping a dependency is **not** a waiver op. If the repo has a `.waiver-stamp.json` with
+an `allowBumping` list, an allowlisted, up-moving bump confined to `package.json` +
+`pnpm-lock.yaml` is covered automatically — like formatting. **Removing** a dependency is
+also covered (any package — removing pulls in nothing), and **adding** one never is. To
+land a bump:
+
+1. Bump it with your package manager: `pnpm add <pkg>@latest` (or `@5.1.0` to pin).
+2. Commit `package.json` + `pnpm-lock.yaml` with an **empty** waiver embedded —
+   `{ "schema": "waiver-stamp/v0", "ops": [] }` — which opts the commit into stamping.
+3. `waiver verify` — the policy re-resolves the lockfile and checks it matches.
+
+`apply` does **not** expand a bump (there is no op). pnpm repos only. Anything outside
+the envelope — an added dependency, a non-allowlisted bump, a downward move, a
+`git:`/`npm:` specifier, any other manifest field — is not covered → the commit falls to
+review. Re-resolution re-runs
+on **every** check — local `waiver verify` and CI's `waiver stamp` alike — so **prefer
+exact pins** to minimize drift; a registry that publishes a newer transitive after you
+authored can FAIL a later re-check (fail-closed). Keep a bump in **its own commit** when
+bundling with a `rename`/`move-file`, so a registry hiccup can't un-stamp the refactor.
 
 ## What is out of scope (let it fall to review)
 
