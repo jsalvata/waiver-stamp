@@ -80,8 +80,7 @@ function blockViolations(
       }
     }
     // A removal (a defined, b undefined) falls through → covered: it pulls in nothing,
-    // so it needs no allowlist entry (the external honesty check still guards the
-    // lockfile churn; §6.3).
+    // so it needs no allowlist entry (§6.3).
   }
   return violations;
 }

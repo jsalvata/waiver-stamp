@@ -164,17 +164,12 @@ land a bump:
 2. Commit `package.json` + `pnpm-lock.yaml` with an **empty** waiver embedded —
    `{ "schema": "waiver-stamp/v0", "ops": [] }` — which opts the commit into stamping.
 3. `waiver verify` — the policy checks the manifest envelope (allowlisted, up-moving,
-   confined); the lockfile bytes are vouched by the repo's external lockfile-honesty
-   check in CI, not re-resolved here.
+   confined).
 
 `apply` does **not** expand a bump (there is no op). pnpm repos only. Anything outside
 the envelope — an added dependency, a non-allowlisted bump, a downward move, a
 `git:`/`npm:` specifier, any other manifest field — is not covered → the commit falls to
-review. waiver-stamp does **not** re-resolve the lockfile: honesty is **delegated** to
-the repo's required lockfile-honesty check (e.g. `lockfile-firewall`), the way tsc and
-tests are delegated to CI. The policy is only sound in repos where that check is
-required on merges — without one, leave `allowBumping` unset. Keeping a bump in **its
-own commit** is still good hygiene when bundling with a `rename`/`move-file`.
+review. Keep a bump in **its own commit** when bundling with a `rename`/`move-file`.
 
 ## What is out of scope (let it fall to review)
 
@@ -202,12 +197,6 @@ After committing, always confirm the commit stamps and report the result:
 
 ```bash
 waiver verify --json
-```
-
-If a target repo and base/head refs are available, also preview the PR verdict:
-
-```bash
-waiver stamp --base <ref> --head <ref> --json
 ```
 
 See `docs/spec.md` for the full model, guards, and worked examples (§11).

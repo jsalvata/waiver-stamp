@@ -92,7 +92,6 @@ export async function validateCommit(
     }
 
     // Standing dependency-bump policy (§6.3): may cover package.json + lockfile.
-    // Lockfile honesty is the repo's external check's job (§6.3 step 5), not re-run here.
     const claimed = await coverDependencyBump(
       compareSet,
       { oDir: oWt.dir, headDir: headWt.dir },

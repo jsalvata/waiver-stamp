@@ -171,9 +171,7 @@ The tool is **waiver-stamp**; its CLI binary is `waiver`.
   these per-commit verdicts over a PR range (§17.2). No separate trusted code — the
   verifier *is* the runner's verification mode. It does **not** run `tsc` or tests: the
   backstop (§3.1.6) is the host CI's existing gate, confirmed by the automation layer. So
-  the tool's only deps are ts-morph and git — the dependency-bump policy (§6.3) reads
-  manifests and delegates lockfile honesty to an external gate, so not even the package
-  manager is invoked.
+  the tool's only deps are ts-morph and git.
 
 The **op vocabulary** has a single source of truth: the **Zod schema**
 (`src/schema.ts`). The TypeScript types are inferred from it and the **JSON Schema**
@@ -385,8 +383,7 @@ otherwise they stay un-covered → the commit fails to stamp → review:
    `packageManager`, …) → not covered. Within those blocks the three kinds of change
    differ: an **addition** → not covered (adding is the supply-chain surface); a
    **removal** → covered for *any* package (removing pulls in nothing, so it needs no
-   allowlist entry — step 5's honesty gate still guards the lockfile churn); a **version
-   change** → covered only under steps 2–4.
+   allowlist entry); a **version change** → covered only under steps 2–4.
 2. **Allowlisted** — every dependency whose version changed is on `allowBumping` and was
    already a dependency in base. (Removals need no allowlist entry; see step 1.)
 3. **Plain-semver shape** — each changed version string is a plain semver version or
@@ -404,18 +401,12 @@ otherwise they stay un-covered → the commit fails to stamp → review:
    inputs and byte-compares. Like the §3.1.6 backstop, it is **not re-run by
    `waiver stamp`** — the automation layer confirms the check is required on the repo
    and green on the exact head SHA alongside the stamp. A repo without such a check
-   must leave `allowBumping` empty: gates 1–4 alone would accept a tampered lockfile
-   inside an allowlisted bump.
+   must not set `allowBumping` without taking into account that gates 1–4 alone would
+   accept a tampered lockfile inside an allowlisted bump (as any human reviewer would
+   probably do, admittedly).
 
-Steps 1–4 are offline and deterministic; step 5 is the load-bearing one — and it is
-deliberately someone else's load, delegated exactly the way tsc-clean and tests-green
-are (§3.1.6).
-
-**Registry pinning is structural.** The external check re-derives under the PR's
-committed `.npmrc`/config, and for a covered bump that config equals base's — an
-`.npmrc` edit is an un-covered file (→ review) and a `pnpm`/`overrides` manifest edit
-trips step 1. So `@myorg/*` resolves through whatever registry base pins — a same-named
-public scope cannot be substituted. Determinism is covered in §9.
+Steps 1–4 are offline and deterministic; step 5 is deliberately someone else's load,
+delegated exactly the way tsc-clean and tests-green are (§3.1.6).
 
 ---
 
@@ -594,7 +585,7 @@ aggregate verdict — the seam for the CI/automation layer.
 | change a string constant's value | — | Out of scope: string-value change, not behaviour-preserving; nothing reproduces it → mismatch → review. |
 | refactor + hand-edited tests | `[rename, change-test]` | Stamps: `rename` reproduces source; test files excluded + predicate-passed; suite green. |
 | relocate a file into a subdirectory | `[move-file]` | Stamps: the move rewrites every static import/export and dynamic `import()` specifier; a `require('./x')` or `jest.mock` path → dynamic-reference guard → review. |
-| internal lib bump | `[]` (empty waiver) | Stamps: the dependency-bump policy (§6.3) covers manifest+lockfile — allowlisted, up-moving, lockfile vouched by the external honesty check. No op. |
+| internal lib bump | `[]` (empty waiver) | Stamps: the dependency-bump policy (§6.3) covers manifest+lockfile — allowlisted, up-moving. No op. |
 | README typo / reformat | `[]` or `[change-docs]` | Reformat/comment-only → empty waiver. `*.md` edit → `change-docs`. |
 
 ---
