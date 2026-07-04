@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/jsalvata/waiver-stamp/compare/v1.6.0...v1.7.0) (2026-07-04)
+
+
+### Features
+
+* gate change-docs behind allow/deny policy ([5df6cb9](https://github.com/jsalvata/waiver-stamp/commit/5df6cb959299150aa6950622d3045ddf488561d0))
+
 # [1.6.0](https://github.com/jsalvata/waiver-stamp/compare/v1.5.0...v1.6.0) (2026-07-04)
 
 
