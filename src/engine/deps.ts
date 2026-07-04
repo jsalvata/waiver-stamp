@@ -1,15 +1,15 @@
 /**
  * The standing dependency-bump policy (spec §6.3). Not a waiver op: when a waivered
  * commit changes `package.json`/lockfile, these gates decide whether the change is a
- * covered bump — allowlisted, plain-semver, up-moving, confined — and the lockfile
- * honestly re-resolves. Trusts upstream review of the bumped package; not
+ * covered bump — allowlisted, plain-semver, up-moving, confined. Lockfile honesty is a
+ * delegated precondition (§6.3 step 5): the repo's external always-on check (e.g.
+ * lockfile-firewall) vouches the bytes, like CI vouches tsc/tests (§3.1.6) — this
+ * module never re-resolves. Trusts upstream review of the bumped package; not
  * behaviour-preserving.
  */
 
-import { execFile } from 'node:child_process';
-import { access, copyFile, readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import semver from 'semver';
 import { z } from 'zod/v4';
 import type { FileFinding } from '../report.ts';
@@ -80,7 +80,8 @@ function blockViolations(
       }
     }
     // A removal (a defined, b undefined) falls through → covered: it pulls in nothing,
-    // so it needs no allowlist entry (the honest re-resolve still guards churn; §6.3).
+    // so it needs no allowlist entry (the external honesty check still guards the
+    // lockfile churn; §6.3).
   }
   return violations;
 }
@@ -119,18 +120,18 @@ const RepoConfigSchema = z.looseObject({
 
 /** What the standing policy needs from `validateCommit`. */
 export interface DependencyContext {
-  /** O's worktree (base = the commit's parent); the re-resolve writes here. */
+  /** O's worktree (base = the commit's parent) — read for base's manifest + config. */
   oDir: string;
-  /** The commit's worktree — read for head's manifest + lockfile, never mutated. */
+  /** The commit's worktree — read for head's manifest, never mutated. */
   headDir: string;
-  /** Re-derive `oDir`'s lockfile from its manifest (pnpm subprocess; tests inject fakes). */
-  resolveLockfile: (dir: string) => Promise<void>;
 }
 
 /**
  * If `package.json` is among the changed files, decide whether the manifest+lockfile
  * change is a covered bump (spec §6.3) and record findings. Returns the set of files
- * the policy claimed, so the caller's byte-compare skips them.
+ * the policy claimed, so the caller's byte-compare skips them. Only the manifest
+ * envelope is checked here — the lockfile bytes are vouched by the repo's external
+ * lockfile-honesty check (§6.3 step 5), never re-derived by this tool.
  */
 export async function coverDependencyBump(
   compareSet: readonly string[],
@@ -177,32 +178,7 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
 
   const violations = manifestBumpViolations(baseManifest, headManifest, allowlist);
   if (violations.length > 0) return violations.join('; ');
-
-  // Adopt head's manifest, then re-derive the lockfile from base's committed config.
-  await copyFile(join(ctx.headDir, MANIFEST), join(ctx.oDir, MANIFEST));
-  try {
-    await ctx.resolveLockfile(ctx.oDir);
-  } catch (err) {
-    return err instanceof Error ? err.message : String(err);
-  }
-
-  const [reResolved, headLock] = await Promise.all([
-    readOrEmpty(join(ctx.oDir, LOCKFILE)),
-    readOrEmpty(join(ctx.headDir, LOCKFILE)),
-  ]);
-  if (!reResolved.equals(headLock)) return `${LOCKFILE} does not re-resolve to head`;
   return null;
-}
-
-const exec = promisify(execFile);
-
-/** The real resolver: lockfile-only, scripts inert, prefer existing pins to bound drift. */
-export async function resolvePnpmLockfile(dir: string): Promise<void> {
-  await exec(
-    'pnpm',
-    ['install', '--lockfile-only', '--ignore-scripts', '--prefer-frozen-lockfile'],
-    { cwd: dir },
-  );
 }
 
 async function readManifest(dir: string): Promise<Record<string, unknown> | null> {
@@ -225,13 +201,5 @@ async function loadAllowlist(baseDir: string): Promise<readonly string[] | null>
     return RepoConfigSchema.parse(JSON.parse(raw)).allowBumping ?? [];
   } catch {
     return null;
-  }
-}
-
-async function readOrEmpty(path: string): Promise<Buffer> {
-  try {
-    return await readFile(path);
-  } catch {
-    return Buffer.alloc(0);
   }
 }
