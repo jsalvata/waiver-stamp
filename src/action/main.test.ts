@@ -79,4 +79,27 @@ describe('run', () => {
     await run(deps as never);
     expect(deps.postOutcome).not.toHaveBeenCalled();
   });
+  it('forged artifact.base (≠ pr.base) → no-op (pr.base is authoritative, not the artifact)', async () => {
+    // Exploit shape: producer-writable artifact.base is set to the head SHA itself, which would
+    // make commitsInRange(head, head) empty and fabricate a clean guard pass if ever trusted.
+    const deps = {
+      ...baseDeps,
+      fetchArtifact: vi.fn(async () => ({
+        verdict: 'APPROVE' as const,
+        base: 'a'.repeat(40), // forged: equals headSha, not the real pr.base ('b'.repeat(40))
+        head: 'a'.repeat(40),
+        toolVersion: '1',
+        commits: [],
+      })),
+      postOutcome: vi.fn(async () => {}),
+    };
+    await run(deps as never);
+    expect(deps.postOutcome).not.toHaveBeenCalled();
+  });
+  it('happy path: guards are called with pr.base, not artifact.base', async () => {
+    const deps = { ...baseDeps, g1: vi.fn(async () => []), g2: vi.fn(async () => []) };
+    await run(deps as never);
+    expect(deps.g1).toHaveBeenCalledWith(expect.anything(), 'b'.repeat(40), 'a'.repeat(40));
+    expect(deps.g2).toHaveBeenCalledWith(expect.anything(), 'b'.repeat(40), 'a'.repeat(40));
+  });
 });

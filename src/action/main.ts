@@ -67,13 +67,16 @@ export async function run(deps: RunDeps): Promise<void> {
       );
 
     const artifact = await deps.fetchArtifact(octokit, owner, repo, headSha);
-    if (!artifact || artifact.head !== headSha)
-      return core.info('artifact missing or head mismatch — fail-closed');
+    // pr.base is authoritative (GitHub API); artifact.head/base are attacker-influenceable.
+    if (!artifact || artifact.head !== headSha || artifact.base !== pr.base)
+      return core.info('artifact missing or SHA mismatch — fail-closed');
 
+    // Guards run base..head off pr.base, never artifact.base. If pr.base isn't reachable from
+    // the checked-out default branch, g1/g2 throw and the outer catch fails closed — acceptable.
     const dir = deps.repoDir ?? process.cwd();
     const guardsPass =
-      (await deps.g1(dir, artifact.base, headSha)).length === 0 &&
-      (await deps.g2(dir, artifact.base, headSha)).length === 0;
+      (await deps.g1(dir, pr.base, headSha)).length === 0 &&
+      (await deps.g2(dir, pr.base, headSha)).length === 0;
 
     const outcome = decideReview({
       verdict: artifact.verdict,
