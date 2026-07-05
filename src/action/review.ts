@@ -1,3 +1,4 @@
+import * as core from '@actions/core';
 import type { Outcome } from './decide.ts';
 
 type Octokit = ReturnType<typeof import('@actions/github').getOctokit>;
@@ -15,13 +16,21 @@ export async function postOutcome(
     const reviews = (await octokit.rest.pulls.listReviews({ owner, repo, pull_number })).data;
     for (const r of reviews) {
       if (r.user?.login === me && r.state === 'CHANGES_REQUESTED') {
-        await octokit.rest.pulls.dismissReview({
-          owner,
-          repo,
-          pull_number,
-          review_id: r.id,
-          message: 'superseded — re-verified',
-        });
+        // Isolate dismiss failures: a transient rejection here must not skip the createReview
+        // below and silently drop a legitimate APPROVE/COMMENT.
+        try {
+          await octokit.rest.pulls.dismissReview({
+            owner,
+            repo,
+            pull_number,
+            review_id: r.id,
+            message: 'superseded — re-verified',
+          });
+        } catch (err) {
+          core.warning(
+            `waiver-stamp-review: failed to dismiss stale review ${r.id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
       }
     }
   }

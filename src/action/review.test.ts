@@ -49,4 +49,22 @@ describe('postOutcome', () => {
     await postOutcome(s.octokit, { ...args, outcome: { action: 'NONE', body: '' } });
     expect(s.createReview).not.toHaveBeenCalled();
   });
+  it("does not dismiss a human's CHANGES_REQUESTED review", async () => {
+    const s = octokitSpy([
+      { id: 99, user: { login: 'a-human-reviewer' }, state: 'CHANGES_REQUESTED' },
+    ]);
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
+    expect(s.dismissReview).not.toHaveBeenCalled();
+  });
+  it('a dismiss failure is isolated: still submits the new review', async () => {
+    const s = octokitSpy([
+      { id: 42, user: { login: 'github-actions[bot]' }, state: 'CHANGES_REQUESTED' },
+    ]);
+    s.dismissReview.mockRejectedValueOnce(new Error('transient API error'));
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
+    expect(s.dismissReview).toHaveBeenCalledWith(expect.objectContaining({ review_id: 42 }));
+    expect(s.createReview).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'APPROVE', commit_id: args.headSha }),
+    );
+  });
 });
