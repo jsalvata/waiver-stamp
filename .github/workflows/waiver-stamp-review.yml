@@ -25,7 +25,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Fetch the PR head commits (data for G1/G2 — never executed)
-        run: git fetch --no-tags --force origin ${{ github.event.workflow_run.head_sha }}
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: git fetch --no-tags --force origin "$HEAD_SHA"
       - uses: ./.github/actions/waiver-stamp-review   # trusted default-branch action code
         with:
           ci-checks: build          # the backstop only; NOT the waiver-stamp check (its verdict is the artifact, §4.2)

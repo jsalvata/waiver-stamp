@@ -1,0 +1,18 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # This repo tag-pins third-party actions (see ci.yml/release.yml's `@v4`/`@v2`
+        # etc.) rather than SHA-pinning; zizmor's default policy requires hash-pin for
+        # everything. Accept the existing convention repo-wide instead of unilaterally
+        # SHA-pinning every workflow for this task.
+        "*": ref-pin
+
+  dangerous-triggers:
+    ignore:
+      # waiver-stamp-review.yml's `workflow_run` is the deliberate pwn-request mitigation
+      # (see the file's own SECURITY comment): the privileged job checks out the TRUSTED
+      # default-branch action code and only ever treats the PR head as inert data (fetched,
+      # never executed/uses'd). That checkout-default-branch pattern is exactly zizmor's
+      # own recommended mitigation for workflow_run, so this is a false positive here.
+      - waiver-stamp-review.yml

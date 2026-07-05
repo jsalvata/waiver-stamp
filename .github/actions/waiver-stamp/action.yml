@@ -9,14 +9,16 @@ runs:
   using: composite
   steps:
     - id: stamp
+      env:
+        BASE: ${{ github.event.pull_request.base.sha }}
+        HEAD: ${{ github.event.pull_request.head.sha }}
+        WAIVER_VERSION: ${{ inputs.waiver-version }}
       shell: bash
       run: |
         set -euo pipefail
-        BASE="${{ github.event.pull_request.base.sha }}"
-        HEAD="${{ github.event.pull_request.head.sha }}"
-        VER="$(npx --yes waiver-stamp@${{ inputs.waiver-version }} --version)"
+        VER="$(npx --yes waiver-stamp@"$WAIVER_VERSION" --version)"
         set +e
-        npx --yes waiver-stamp@${{ inputs.waiver-version }} stamp --base "$BASE" --head "$HEAD" --json > report.raw.json
+        npx --yes waiver-stamp@"$WAIVER_VERSION" stamp --base "$BASE" --head "$HEAD" --json > report.raw.json
         CODE=$?
         set -e
         # Wrap with toolVersion; the report already carries verdict/base/head (Task 1).

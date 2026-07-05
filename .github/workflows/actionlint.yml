@@ -1,0 +1,24 @@
+name: workflow-lint
+on:
+  pull_request:
+    paths: ['.github/**']
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: actionlint
+        uses: raven-actions/actionlint@v2
+      - name: zizmor
+        # NOTE: the brief's `@v0` doesn't resolve — zizmorcore/zizmor-action has no bare `v0`
+        # major tag (only v0.0.1..v0.5.7 point releases) — pinned to latest instead.
+        uses: zizmorcore/zizmor-action@v0.5.7
+        with:
+          # keep this job's permissions to contents: read only; advanced-security's default
+          # SARIF upload needs security-events: write, which this job doesn't otherwise need.
+          advanced-security: false
+          config: .github/zizmor.yml
