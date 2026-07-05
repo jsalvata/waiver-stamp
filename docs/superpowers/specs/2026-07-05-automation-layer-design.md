@@ -38,39 +38,24 @@ note, never a fabricated verdict. Worst case = today's normal review.
 The layer is split across the **trust boundary** GitHub gives us, not bundled into one
 job. This is the load-bearing decision (security rationale in §3).
 
-```
- PR push
-   │
-   ▼
-PR push
-  │
-  ▼  UNPRIVILEGED — the PR's own context (read-only token on forks); normal CI, on `pull_request`
-  ├─ waiver-stamp action (composite):
-  │    waiver stamp --base <PR base> --head <PR head> --json
-  │    → job summary (instant per-push feedback)
-  │    → upload the report as a run artifact   ← the interface contract (§4.3)
-  │    → set the check conclusion (fail iff REQUEST_CHANGES)
-  │
-  ▼  (a backstop workflow completes → wakes the reviewer)
-  │
-  ▼  PRIVILEGED — default-branch definition, base-repo context, write token; trigger `workflow_run`
-  └─ waiver-stamp-review action (JavaScript):
-       resolve PR + head_sha from the event
-       confirm ci-checks + lockfile-honesty-checks green on head_sha   (else no-op)
-       locate the waiver-stamp producer run for head_sha; download + zod-validate its artifact
-       G1: no commit in base..head touches .github/**
-       G2: manifest/lockfile changes stay within the §6.3 envelope
-       map verdict → GitHub review (decision table §5)
-```
+**The sequence, end to end:**
 
-- **The unprivileged half computes the verdict** as an ordinary CI check. It reuses the
-  build job's already-installed dependencies, so `waiver stamp` emits with the repo's own
-  TypeScript (§9) at no extra cost. Its check becomes a **named required status** the repo
-  can gate merges on.
-- **The privileged half only submits a review.** It never runs the repo's toolchain, so
-  the write token never sits next to attacker-influenceable code execution. It trusts the
-  unprivileged artifact **only after** two guards (§3) independently re-establish, from git
-  data alone, that the artifact could not have been forged.
+1. **Stage 1 — the `waiver-stamp` check (unprivileged), computes the verdict.** A PR push
+   runs it as ordinary CI (`on: pull_request`; a read-only token on forks). It runs
+   `waiver stamp --json` over the PR range, writes the verdict to the job summary (instant
+   per-push feedback), uploads the report as a run artifact — the interface contract (§4.3)
+   — and sets its check conclusion (fail iff `REQUEST_CHANGES`). It reuses the build job's
+   already-installed dependencies, so it emits with the repo's own TypeScript (§9) at no
+   extra cost, and its check becomes a **named required status** the repo can gate on.
+2. **Stage 2 — the `waiver-stamp-review` action (privileged), only submits a review.** When
+   a backstop workflow completes it wakes via `workflow_run`, running from the
+   **default-branch** definition in base-repo context with a write token. It resolves the PR
+   + head SHA from the event, confirms `ci-checks` + `lockfile-honesty-checks` are green on
+   that SHA (else no-op), locates the `waiver-stamp` producer run for the SHA and downloads +
+   zod-validates its artifact, runs the G1/G2 trust guards (§3), and posts the mapped GitHub
+   review (§5). It **never runs the repo's toolchain**, so the write token never sits next to
+   attacker-influenceable code execution, and it trusts the artifact **only after** the
+   guards re-establish, from git data alone, that it could not have been forged.
 
 The two halves communicate through **one artifact** (`waiver-stamp-report`, schema in §4.3)
 scoped to the triggering run — the only coupling between them.
