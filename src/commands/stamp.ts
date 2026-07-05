@@ -22,7 +22,7 @@ export async function stamp(options: StampRangeOptions): Promise<VerifyReport> {
   const shas = await commitsInRange(cwd, base, head);
   const commits: PerCommitResult[] = [];
   for (const sha of shas) commits.push(await classifyCommit(cwd, sha));
-  return { verdict: aggregate(commits), commits };
+  return { verdict: aggregate(commits), base, head, commits };
 }
 
 /** Highest-severity verdict present: REQUEST_CHANGES > COMMENT > APPROVE > ABSTAIN (§17.2). */
