@@ -152,8 +152,11 @@ product).
   native *"dismiss stale approvals when new commits are pushed"* branch-protection toggle
   (documented as a required setting), not reimplemented.
 - **Reviewer hygiene** — minimal `permissions:` (`pull-requests: write`; `checks`,
-  `contents`, `actions: read`), `persist-credentials: false`, SHA-pinned third-party
-  actions, dependency-light bundle. `zizmor` + `actionlint` run on our own workflows in CI.
+  `contents`, `actions: read`), `persist-credentials: false`, third-party actions pinned per a
+  committed `.github/zizmor.yml` policy (the dogfood accepts the repo's tag-pin convention;
+  SHA-pinning is the stricter option an adopter can adopt), dependency-light bundle. `zizmor`
+  + `actionlint` run green on our workflows in CI (template-injection, credential-persistence,
+  and excessive-permissions all fixed in code, not configured away).
 - **Trusted action code, PR content as data (pwn-request).** The privileged reviewer job must
   execute **its own default-branch (or externally-pinned) action code**, never the PR head's
   version of `dist/index.js` — running head-authored action code with the write token would be
