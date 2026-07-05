@@ -1302,10 +1302,17 @@ git commit -m "feat: wire waiver-stamp into this repo's ci"
 
 ---
 
-### Task 14: Workflow security lint (`zizmor` + `actionlint`)
+### Task 14: Workflow security lint (`zizmor` + `actionlint`) — add and make green
+
+Add the linters **and resolve their findings**, so the new lint job is green — not red on the
+SHA-into-`run` patterns Tasks 11/13 deliberately left for here.
 
 **Files:**
 - Create: `.github/workflows/actionlint.yml`
+- Possibly create: `.github/zizmor.yml` (only if needed to set a sane audit policy)
+- Possibly modify: any workflow/action the tools flag — expected: `.github/actions/waiver-stamp/action.yml`,
+  `.github/workflows/ci.yml`, `.github/workflows/waiver-stamp-review.yml` (the `${{ …sha }}`
+  interpolations).
 
 - [ ] **Step 1: Add the lint workflow**
 
@@ -1327,13 +1334,49 @@ jobs:
         uses: zizmorcore/zizmor-action@v0
 ```
 
-- [ ] **Step 2: Run actionlint locally if available** (`actionlint` binary) over `.github/`;
-  fix any findings (quote expansions, pin actions). Expected: clean.
+- [ ] **Step 2: Run both locally (best effort) and record findings**
 
-- [ ] **Step 3: Commit**
+Install + run `actionlint` over `.github/` and `zizmor .github/`. Record every finding. (If
+neither can be installed in the environment, skip to Step 3's defensive refactor and report
+DONE_WITH_CONCERNS — CI validates post-merge.)
+
+- [ ] **Step 3: Resolve each finding so both tools pass**
+
+- **Template-injection** — if the tools flag `${{ github.event.*.sha }}` (or any `${{ }}`)
+  interpolated into a `run:` script, move the expansion into a step-level `env:` block and
+  reference `"$VAR"` in bash. Apply in the three files above. Example (`ci.yml` producer job):
+
+  ```yaml
+        - id: stamp
+          env:
+            BASE: ${{ github.event.pull_request.base.sha }}
+            HEAD: ${{ github.event.pull_request.head.sha }}
+          shell: bash
+          run: |
+            set -euo pipefail
+            node dist/cli.js stamp --base "$BASE" --head "$HEAD" --json > report.raw.json
+            # …rest unchanged, using "$BASE"/"$HEAD"…
+  ```
+
+  Do the same for the composite action's `BASE`/`HEAD` and the reviewer caller's
+  `git fetch … "$HEAD_SHA"`.
+- **Unpinned `uses:`** — if flagged, SHA-pin the third-party actions **in the new files**, or
+  add a `.github/zizmor.yml` recording the accepted policy. Match the existing repo convention
+  (the current `ci.yml`/`release.yml` tag-pin) — do **not** unilaterally churn every existing
+  workflow; scope to the new files and/or a config threshold.
+- Fix any `actionlint` syntax finding.
+
+- [ ] **Step 4: Verify**
+
+`actionlint` clean; `zizmor` green under the chosen config; the workflows still
+`python3 -c "import yaml; yaml.safe_load(...)"`; `pnpm test`/`pnpm lint` unaffected.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add .github/workflows/actionlint.yml
+git add .github/workflows/actionlint.yml .github/actions/waiver-stamp/action.yml \
+  .github/workflows/ci.yml .github/workflows/waiver-stamp-review.yml
+# plus .github/zizmor.yml if created
 git commit -m "feat: lint workflows with actionlint and zizmor"
 ```
 
