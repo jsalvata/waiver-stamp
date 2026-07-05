@@ -1264,13 +1264,32 @@ jobs:
       group: waiver-stamp-review-${{ github.event.workflow_run.head_branch }}
       cancel-in-progress: false
     steps:
+      # SECURITY (pwn-request): this job has a write token. It must run the TRUSTED
+      # default-branch action code, NEVER the PR head's version of dist/index.js (which a
+      # malicious PR could rewrite to exfiltrate the token or neuter G1 from inside). So check
+      # out the default branch for the action + engine, and bring the PR head in only as DATA.
       - uses: actions/checkout@v4
-        with: { ref: ${{ github.event.workflow_run.head_sha }}, fetch-depth: 0, persist-credentials: false }
-      - uses: ./.github/actions/waiver-stamp-review
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch the PR head commits (data for G1/G2 — never executed)
+        run: git fetch --no-tags --force origin ${{ github.event.workflow_run.head_sha }}
+      - uses: ./.github/actions/waiver-stamp-review   # trusted default-branch action code
         with:
           ci-checks: build          # the backstop only; NOT the waiver-stamp check (its verdict is the artifact, §4.2)
           lockfile-honesty-checks: ''
 ```
+
+> **Security note (why the checkout looks unusual).** For `workflow_run` the *workflow file*
+> is taken from the default branch, but a local `uses: ./…` action runs whatever code is in
+> the **workspace**. Checking out `head_sha` would put the PR's `dist/index.js` in the
+> workspace and execute it with the write token — a pwn-request, and G1 (which lives *inside*
+> the action) can't defend against a compromised action. So we check out the default branch
+> (trusted code) and `git fetch` the head SHA's commits into the object store; G1/G2 read them
+> as data via `commitsInRange`/`worktreeAt`, never executing head's tree. Adopters avoid this
+> by pinning the action to an external ref (`jsalvata/waiver-stamp/…@<sha>`), §8. The exact
+> `git fetch` incantation is validated post-merge by the e2e (Task 16), like the real adapters.
 
 - [ ] **Step 3: Syntax-check both** (actionlint runs in Task 14).
 

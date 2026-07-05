@@ -154,6 +154,14 @@ product).
 - **Reviewer hygiene** — minimal `permissions:` (`pull-requests: write`; `checks`,
   `contents`, `actions: read`), `persist-credentials: false`, SHA-pinned third-party
   actions, dependency-light bundle. `zizmor` + `actionlint` run on our own workflows in CI.
+- **Trusted action code, PR content as data (pwn-request).** The privileged reviewer job must
+  execute **its own default-branch (or externally-pinned) action code**, never the PR head's
+  version of `dist/index.js` — running head-authored action code with the write token would be
+  a pwn-request, and G1 (which runs *inside* the action) cannot defend against a compromised
+  action. Adopters pin the action to `jsalvata/waiver-stamp/…@<sha>` (§8), so the workspace
+  checkout of the PR head is pure data. The dogfood's local `uses: ./…` achieves the same by
+  checking out the **default branch** for the code and `git fetch`-ing the head SHA's commits
+  into the object store as G1/G2 data (never checking out or executing the head tree).
 - **Fork edges** — first-time-contributor workflow-approval gates mean no run / no artifact
   → reviewer no-ops. Every guard failure, missing check, or API error is fail-closed.
 - **Our own supply chain** — a consumer's reviewer runs **our** code with **their** write
