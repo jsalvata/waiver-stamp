@@ -2,7 +2,7 @@
  * PR-level rubber-stamp (§17.2): walk base..head, classify each commit by its embedded
  * waiver, and aggregate to a single verdict. Only APPROVE removes review.
  */
-import { commitsInRange, resolveCommit } from './git.ts';
+import { commitsInRange, resolveCommit } from '../git.ts';
 import type { PerCommitResult, Verdict, VerifyReport } from './report.ts';
 import { classifyCommit } from './verify.ts';
 

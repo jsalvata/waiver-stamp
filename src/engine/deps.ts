@@ -11,7 +11,7 @@
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import semver from 'semver';
-import type { FileFinding } from '../report.ts';
+import type { FileFinding } from '../commands/report.ts';
 import { CONFIG_FILENAME, loadConfig } from './config.ts';
 
 /** Dependency blocks whose version-string values a bump may change. */

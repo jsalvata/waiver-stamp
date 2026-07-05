@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
-import { apply } from './apply.ts';
+import { apply } from './commands/apply.ts';
+import { EXIT, type ExitCode } from './commands/report.ts';
+import { stamp } from './commands/stamp.ts';
+import { verify } from './commands/verify.ts';
 import {
   CommitResolutionError,
   NotImplementedError,
@@ -11,9 +14,6 @@ import {
   WaiverValidationError,
 } from './errors.ts';
 import { startMcpServer } from './mcp.ts';
-import { EXIT, type ExitCode } from './report.ts';
-import { stamp } from './stamp.ts';
-import { verify } from './verify.ts';
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
 

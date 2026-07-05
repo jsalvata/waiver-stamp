@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runGit } from './git.ts';
-import type { Waiver } from './types.ts';
+import type { Waiver } from './waiver/types.ts';
 
 /**
  * The waiver-stamp repo root — its `node_modules/.bin` holds a real Biome the

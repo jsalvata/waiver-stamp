@@ -7,7 +7,7 @@
 import { isAbsolute, join } from 'node:path';
 import { type Node, Project, type SourceFile } from 'ts-morph';
 import { SelectorResolutionError } from '../errors.ts';
-import type { Selector } from '../types.ts';
+import type { Selector } from '../waiver/types.ts';
 
 /**
  * Load the project at `cwd` from its `tsconfig.json` (the repo's own config).

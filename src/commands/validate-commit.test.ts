@@ -13,8 +13,8 @@ import {
   type GitRepoFixture,
   REPO_ROOT,
   makeGitRepo,
-} from './test-helpers.ts';
-import type { Waiver } from './types.ts';
+} from '../test-helpers.ts';
+import type { Waiver } from '../waiver/types.ts';
 import { validateCommit } from './validate-commit.ts';
 
 let g: GitRepoFixture | undefined;

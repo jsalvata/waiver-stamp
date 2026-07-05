@@ -9,11 +9,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod/v4';
-import { applyWaiver } from './apply.ts';
-import { loadWaiverFromObject } from './load.ts';
-import { InlineWaiverSchema } from './schema.ts';
-import { stamp } from './stamp.ts';
-import { verify } from './verify.ts';
+import { applyWaiver } from './commands/apply.ts';
+import { stamp } from './commands/stamp.ts';
+import { verify } from './commands/verify.ts';
+import { loadWaiverFromObject } from './waiver/load.ts';
+import { InlineWaiverSchema } from './waiver/schema.ts';
 
 type ToolResult = {
   content: { type: 'text'; text: string }[];

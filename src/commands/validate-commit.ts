@@ -1,15 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { coverDependencyBump } from './engine/deps.ts';
-import { emitForFile } from './engine/emit-compare.ts';
-import { type DocPolicy, loadDocPolicy, predicateOk } from './engine/exclude.ts';
-import { applyTransformOp } from './engine/fold.ts';
-import { baseChecks, emitDivergenceGuard, headChecks } from './engine/guards.ts';
-import { loadProject } from './engine/project.ts';
-import { CommitParentError } from './errors.ts';
-import { changedFiles, parents, worktreeAt } from './git.ts';
+import { coverDependencyBump } from '../engine/deps.ts';
+import { emitForFile } from '../engine/emit-compare.ts';
+import { type DocPolicy, loadDocPolicy, predicateOk } from '../engine/exclude.ts';
+import { applyTransformOp } from '../engine/fold.ts';
+import { baseChecks, emitDivergenceGuard, headChecks } from '../engine/guards.ts';
+import { loadProject } from '../engine/project.ts';
+import { CommitParentError } from '../errors.ts';
+import { changedFiles, parents, worktreeAt } from '../git.ts';
+import type { Op, Waiver } from '../waiver/types.ts';
 import type { FileFinding, OpFinding, ValidationReport } from './report.ts';
-import type { Op, Waiver } from './types.ts';
 
 export interface ValidateOptions {
   /** The commit whose diff against its parent is validated. */

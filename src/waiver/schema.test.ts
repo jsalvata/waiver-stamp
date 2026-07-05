@@ -3,7 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { WaiverSchema, serializeJsonSchema } from './schema.ts';
 
-const committed = fileURLToPath(new URL('../schema/waiver-stamp.v0.schema.json', import.meta.url));
+const committed = fileURLToPath(
+  new URL('../../schema/waiver-stamp.v0.schema.json', import.meta.url),
+);
 
 describe('JSON Schema generation', () => {
   it('the committed schema/ file matches the Zod-generated output (run `pnpm gen:schema`)', async () => {

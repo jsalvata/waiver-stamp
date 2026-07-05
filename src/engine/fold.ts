@@ -6,7 +6,7 @@
 
 import type { Project } from 'ts-morph';
 import { OpApplicationError } from '../errors.ts';
-import type { Op } from '../types.ts';
+import type { Op } from '../waiver/types.ts';
 import { applyLintFix } from './ops/lint-fix.ts';
 import { applyMoveFile } from './ops/move-file.ts';
 import { applyRename } from './ops/rename.ts';

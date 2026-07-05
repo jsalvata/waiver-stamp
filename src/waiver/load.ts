@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { WaiverParseError, WaiverValidationError } from './errors.ts';
+import { WaiverParseError, WaiverValidationError } from '../errors.ts';
 import { WaiverSchema } from './schema.ts';
 import type { Waiver } from './types.ts';
 

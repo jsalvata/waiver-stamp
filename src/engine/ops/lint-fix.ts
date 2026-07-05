@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { FileSystemRefreshResult, type Project, type SourceFile } from 'ts-morph';
 import { OpApplicationError } from '../../errors.ts';
-import type { LintFixOp } from '../../types.ts';
+import type { LintFixOp } from '../../waiver/types.ts';
 
 /**
  * Run the repo's linter over `op.files`, returning the files (relative to `cwd`)
