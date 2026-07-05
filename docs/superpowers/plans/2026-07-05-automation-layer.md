@@ -4,7 +4,7 @@
 
 **Goal:** Ship the §18.3 automation layer — a reusable GitHub asset that turns a
 `waiver stamp` verdict into a real GitHub review, correctly gated on the backstop, plus the
-adoption docs and dogfooding — per `docs/superpowers/specs/2026-07-05-automation-layer-design.md`.
+adoption docs and dogfooding — per `docs/automation-layer.md`.
 
 **Architecture:** Two GitHub actions split across the privilege boundary. An **unprivileged
 composite `waiver-stamp` action** runs `waiver stamp --json` as ordinary CI, writes a job

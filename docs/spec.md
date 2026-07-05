@@ -4,8 +4,9 @@
 > mechanically. A **waiver** is a JSON recipe describing a change; **stamping** is
 > validating a PR's diff against its waiver. Status: **draft (v0 design)**.
 > Scope here: the **runner** (applies waivers) and the **stamper** (validates them).
-> CI/automation-layer integration is out of scope — the stamper is a standalone
-> deterministic CLI an automation layer will call later.
+> CI/automation-layer integration is out of scope *here* — the stamper is a standalone
+> deterministic CLI. That layer is specified separately in
+> [`docs/automation-layer.md`](automation-layer.md).
 
 ---
 
@@ -639,7 +640,8 @@ aggregate verdict — the seam for the CI/automation layer.
   (JSDoc and type-only declarations need no op — they're erased from emit, §7.)
 - Custom (non-LS) reproductive ops (e.g. hand-rolled `inline-function`) — lower trust
   tier requiring the §3.1 backstop as a hard gate (→ later).
-- CI/automation-layer integration (`stamp --json` is the seam).
+- CI/automation-layer integration (`stamp --json` is the seam) — **not part of the tool**,
+  now specified as a separate layer in [`automation-layer.md`](automation-layer.md).
 
 ---
 
@@ -1117,12 +1119,13 @@ selector examples** for the fiddly cases (overload index, `:static`/`:instance`,
 fan-out is high; a one-or-two-reference change may be just as cheap to hand-edit) — so the
 selector-iteration failure mode (§16) is taught against, not discovered in the field.
 
-### 18.3 Automation layer (out of scope, named seam)
+### 18.3 Automation layer (separate layer, named seam)
 
 Turning a `waiver stamp --json` verdict into an actual GitHub review (approve / comment /
-request-changes via the API) is the **automation layer** — still out of scope per §12,
-but §17.3 fixes its input contract. A reference GitHub Action is a §20 README example,
-not part of the tool.
+request-changes via the API) is the **automation layer**. It is **not part of the tool**
+(the `waiver` binary) — that is what keeps its trust boundary separate — but §17.3 fixes its
+input contract, and it is now specified and built as its own layer in
+[`automation-layer.md`](automation-layer.md) (a two-layer, fail-closed GitHub Action design).
 
 ---
 
@@ -1214,5 +1217,6 @@ The README is the project's front door and must do four jobs, in order:
 **v0 also ships:** commit-embedded waivers + `waiver verify` (one commit) / `waiver stamp`
 (per-commit PR aggregation) (§17), the stdio MCP server (§18.1), the `refactor-with-waiver`
 skill (§18.2), the `bench/` token-economy harness (§19), and a README that leads with the
-problem and publishes the benchmark (§20). The GitHub-review automation layer (§18.3)
-remains out of scope — `waiver stamp --json` is its contract.
+problem and publishes the benchmark (§20). The GitHub-review automation layer (§18.3) is
+**not part of the tool** but is specified separately in
+[`automation-layer.md`](automation-layer.md) — `waiver stamp --json` is its contract.
