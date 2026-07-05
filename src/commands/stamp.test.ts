@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { CommitResolutionError } from './errors.ts';
-import type { PerCommitResult } from './report.ts';
-import { aggregate, stamp } from './stamp.ts';
+import { CommitResolutionError } from '../errors.ts';
 import {
   FIXTURE_TSCONFIG_JSON,
   type GitRepoFixture,
   makeGitRepo,
   waiverCommitMessage,
-} from './test-helpers.ts';
-import type { Waiver } from './types.ts';
+} from '../test-helpers.ts';
+import type { Waiver } from '../waiver/types.ts';
+import type { PerCommitResult } from './report.ts';
+import { aggregate, stamp } from './stamp.ts';
 
 const ORDERS_BASE = 'export function calculateTotal(n: number): number {\n  return n * 2;\n}\n';
 const USAGE_BASE =

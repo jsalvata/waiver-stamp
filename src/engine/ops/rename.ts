@@ -5,7 +5,7 @@
 
 import type { Node, Project } from 'ts-morph';
 import { OpApplicationError } from '../../errors.ts';
-import type { RenameOp } from '../../types.ts';
+import type { RenameOp } from '../../waiver/types.ts';
 import { findDeclarations, resolveSelector } from '../project.ts';
 
 interface Renameable {

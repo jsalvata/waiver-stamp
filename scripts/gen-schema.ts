@@ -8,7 +8,7 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { serializeJsonSchema } from '../src/schema.ts';
+import { serializeJsonSchema } from '../src/waiver/schema.ts';
 
 const OUT = join(
   dirname(fileURLToPath(import.meta.url)),

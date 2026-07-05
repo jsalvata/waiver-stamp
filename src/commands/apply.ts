@@ -1,8 +1,8 @@
 import { relative } from 'node:path';
-import { foldOps } from './engine/fold.ts';
-import { loadProject } from './engine/project.ts';
-import { loadWaiver } from './load.ts';
-import type { Waiver } from './types.ts';
+import { foldOps } from '../engine/fold.ts';
+import { loadProject } from '../engine/project.ts';
+import { loadWaiver } from '../waiver/load.ts';
+import type { Waiver } from '../waiver/types.ts';
 
 export interface ApplyOptions {
   /** Working tree to apply the waiver's transform ops to. */

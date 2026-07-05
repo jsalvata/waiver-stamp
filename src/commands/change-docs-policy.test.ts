@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from './test-helpers.ts';
-import type { Waiver } from './types.ts';
+import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from '../test-helpers.ts';
+import type { Waiver } from '../waiver/types.ts';
 import { verify } from './verify.ts';
 
 const ORDERS = 'export function total(n: number): number {\n  return n * 2;\n}\n';

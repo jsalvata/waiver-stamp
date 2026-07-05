@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { validateCommit } from '../commands/validate-commit.ts';
 import { FIXTURE_TSCONFIG_JSON, type GitRepoFixture, makeGitRepo } from '../test-helpers.ts';
-import type { Waiver } from '../types.ts';
-import { validateCommit } from '../validate-commit.ts';
+import type { Waiver } from '../waiver/types.ts';
 import { manifestBumpViolations, matchesAllowlist } from './deps.ts';
 
 describe('matchesAllowlist', () => {

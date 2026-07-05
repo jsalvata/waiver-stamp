@@ -8,7 +8,7 @@ import {
   makeGitRepo,
   waiverCommitMessage,
 } from './test-helpers.ts';
-import type { Waiver } from './types.ts';
+import type { Waiver } from './waiver/types.ts';
 
 async function connectClient(): Promise<Client> {
   const server = createServer('0.1.0');

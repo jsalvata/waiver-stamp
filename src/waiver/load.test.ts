@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { WaiverParseError, WaiverValidationError } from './errors.ts';
+import { WaiverParseError, WaiverValidationError } from '../errors.ts';
 import { loadWaiver, loadWaiverFromObject } from './load.ts';
 
-const validExample = fileURLToPath(new URL('../examples/valid.waiver.json', import.meta.url));
+const validExample = fileURLToPath(new URL('../../examples/valid.waiver.json', import.meta.url));
 
 async function writeTemp(name: string, content: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'waiver-'));

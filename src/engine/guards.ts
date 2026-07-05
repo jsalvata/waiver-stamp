@@ -12,7 +12,7 @@
 
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { Node, type Project, SyntaxKind } from 'ts-morph';
-import type { Op } from '../types.ts';
+import type { Op } from '../waiver/types.ts';
 
 export interface GuardFinding {
   guard: string;

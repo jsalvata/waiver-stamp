@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { waiverCommitMessage } from '../test-helpers.ts';
 import { extractWaiverBlock } from './commit-waiver.ts';
-import { waiverCommitMessage } from './test-helpers.ts';
 import type { Waiver } from './types.ts';
 
 const W: Waiver = { schema: 'waiver-stamp/v0', ops: [] };

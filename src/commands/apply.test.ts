@@ -1,15 +1,15 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { apply, applyWaiver } from './apply.ts';
-import { WaiverValidationError } from './errors.ts';
+import { WaiverValidationError } from '../errors.ts';
 import {
   FIXTURE_BIOME_JSON,
   FIXTURE_PACKAGE_JSON,
   type Fixture,
   REPO_ROOT,
   scaffoldProject,
-} from './test-helpers.ts';
+} from '../test-helpers.ts';
+import { apply, applyWaiver } from './apply.ts';
 
 let fix: Fixture | undefined;
 afterEach(async () => {
