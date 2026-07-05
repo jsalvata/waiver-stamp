@@ -210,8 +210,8 @@ from the engine, and it is unit-testable with vitest against a mocked Octokit.
   run for `head_sha`** (the triggering run may be CI, not the producer) and download +
   zod-validate its `waiver-stamp-report` artifact; **independently derive** `base` and
   cross-check the artifact's SHAs (`head` must equal the event `head_sha`; mismatch → neutral
-  no-op); run **G1** and **G2**; map the verdict to a review per §5; manage the sticky
-  comment; dismiss its own stale reviews (§6).
+  no-op); run **G1** and **G2**; map the verdict to a review per §5; dismiss its own stale
+  reviews (§6).
 - **Dependencies:** `@actions/core`, `@actions/github`, `zod` (artifact validation),
   `semver` (via the reused `deps.ts` gates). Bundle kept in sync by a CI drift-guard that
   rebuilds and diffs `dist/` (mirrors the existing schema drift-guard).
@@ -287,8 +287,9 @@ required" as a prerequisite regardless.
   completion where the full `ci-checks` + `lockfile-honesty-checks` set is green — the last workflow to
   finish is the wake-up on which the set is finally green. No polling, no waiting.
 - **Idempotency.** A `concurrency` group keyed on the PR serializes review mutations; the
-  reviewer maintains a **single** sticky comment (rewritten, not stacked) and a single
-  active review, so simultaneous wake-ups collapse to one outcome.
+  reviewer keeps a **single** active review (re-submitting or dismissing its own, never
+  stacking), so simultaneous wake-ups collapse to one outcome. Running status is the
+  producer's job summary — the reviewer posts no bot comment (formal reviews only).
 
 ---
 
@@ -363,7 +364,7 @@ end-to-end test bed (§10).
   of §5); G1 per-commit detection (including change-and-revert); G2 envelope re-run
   (in/out of envelope) reusing `deps.ts`; backstop confirmation over `ci-checks` +
   `lockfile-honesty-checks`; idempotent
-  sticky-comment/review update; self-heal dismissal; every fail-closed path (missing
+  idempotent review update; self-heal dismissal; every fail-closed path (missing
   artifact, SHA mismatch, API error, head-moved TOCTOU).
 - **End-to-end, real PRs (the ultimate dogfood):** an acceptance harness (`gh`-driven,
   against a sandbox branch in this repo, since it needs the deployed workflow) that opens a

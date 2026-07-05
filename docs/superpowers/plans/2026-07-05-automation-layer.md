@@ -79,7 +79,7 @@ justified prep — not yet, one consumer doesn't warrant it.
 - `src/action/guards.ts` — **create**: `g1WorkflowIntegrity`, `g2ManifestEnvelope` (git-only).
 - `src/action/backstop.ts` — **create**: `confirmChecksGreen` (Octokit check-runs).
 - `src/action/decide.ts` — **create**: `decideReview` — the pure §5 verdict→output matrix.
-- `src/action/review.ts` — **create**: `postOutcome` — review/sticky-comment side effects +
+- `src/action/review.ts` — **create**: `postOutcome` — review submit/self-heal side effects +
   self-heal (Octokit).
 - `src/action/main.ts` — **create**: the orchestrator (`run()`), fail-closed.
 - `src/action/*.test.ts` — **create**: one test file per module above.
@@ -779,10 +779,10 @@ git commit -m "feat: map the verdict to a review decision"
 
 ---
 
-### Task 8: Post the outcome (review + sticky comment + self-heal)
+### Task 8: Post the outcome (review + self-heal)
 
-Side effects: submit/dismiss reviews and maintain one sticky comment idempotently (spec §5,
-§6). Octokit mocked.
+Side effects: submit/dismiss reviews idempotently — **formal reviews only**, no sticky
+comment; running status is the producer's job summary (spec §5, §6). Octokit mocked.
 
 **Files:**
 - Create: `src/action/review.ts`
@@ -791,9 +791,8 @@ Side effects: submit/dismiss reviews and maintain one sticky comment idempotentl
 **Interfaces:**
 - Consumes: `Outcome` (Task 7).
 - Produces: `postOutcome(octokit, { owner, repo, prNumber, headSha, outcome }): Promise<void>`
-  — submits the review when `action !== 'NONE'`, sets `commit_id: headSha`, upserts the
-  sticky comment, and dismisses its own prior `REQUEST_CHANGES` when the new outcome is not
-  one. Task 9 consumes it.
+  — submits the review when `action !== 'NONE'`, sets `commit_id: headSha`, and dismisses
+  its own prior `REQUEST_CHANGES` when the new outcome is not one. Task 9 consumes it.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -856,7 +855,7 @@ import type { Outcome } from './decide.ts';
 
 type Octokit = ReturnType<typeof import('@actions/github').getOctokit>;
 
-/** Submit the review (if any), bind it to headSha, upsert the sticky comment, self-heal. */
+/** Submit the review (if any), bind it to headSha, self-heal our own stale REQUEST_CHANGES. */
 export async function postOutcome(
   octokit: Octokit,
   args: { owner: string; repo: string; prNumber: number; headSha: string; outcome: Outcome },
@@ -1192,11 +1191,15 @@ git commit -m "feat: add dogfood .waiver-stamp.json"
 - Modify: `.github/workflows/ci.yml`
 - Create: `.github/workflows/waiver-stamp-review.yml`
 
-- [ ] **Step 1: Add the producer job to CI**
+- [ ] **Step 1: Add the producer job to CI (local build, not the composite action)**
 
-Append a job to `.github/workflows/ci.yml` that runs on `pull_request`, checks out with
-`fetch-depth: 0`, installs deps, then `uses: ./.github/actions/waiver-stamp`. The job's name
-becomes the `waiver-stamp` check.
+Append a `waiver-stamp` job to `.github/workflows/ci.yml` (on `pull_request`) that stamps
+with **this repo's own local CLI** (`node dist/cli.js`) — so the dogfood tests the PR's code,
+not the published npm version. It wraps the report with `toolVersion`, writes the job
+summary, uploads the artifact (`if: always()`, spec §4.1), and fails only on
+`REQUEST_CHANGES`. The job's name becomes the `waiver-stamp` check. (The composite
+`waiver-stamp` action from Task 11 is for adopters and is exercised by the e2e harness, not
+this job — per the chosen dogfood approach.)
 
 ```yaml
   waiver-stamp:
@@ -1210,7 +1213,28 @@ becomes the `waiver-stamp` check.
         with: { node-version: 20, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - uses: ./.github/actions/waiver-stamp
+      - id: stamp
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='${{ github.event.pull_request.base.sha }}'
+          HEAD='${{ github.event.pull_request.head.sha }}'
+          VER="$(node dist/cli.js --version)"
+          set +e
+          node dist/cli.js stamp --base "$BASE" --head "$HEAD" --json > report.raw.json
+          set -e
+          node -e "const r=require('./report.raw.json');process.stdout.write(JSON.stringify({...r,toolVersion:'$VER'}))" > waiver-stamp-report.json
+          {
+            echo '### waiver-stamp'
+            node -e "const r=require('./waiver-stamp-report.json');console.log('Verdict: **'+r.verdict+'**')"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "verdict=$(node -e "process.stdout.write(require('./waiver-stamp-report.json').verdict)")" >> "$GITHUB_OUTPUT"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: waiver-stamp-report, path: waiver-stamp-report.json, retention-days: 3 }
+      - if: steps.stamp.outputs.verdict == 'REQUEST_CHANGES'
+        shell: bash
+        run: 'echo "waiver claim failed — see the job summary"; exit 1'
 ```
 
 - [ ] **Step 2: Add the reviewer caller**
@@ -1239,9 +1263,7 @@ jobs:
         with: { ref: ${{ github.event.workflow_run.head_sha }}, fetch-depth: 0, persist-credentials: false }
       - uses: ./.github/actions/waiver-stamp-review
         with:
-          ci-checks: |
-            build
-            waiver-stamp
+          ci-checks: build          # the backstop only; NOT the waiver-stamp check (its verdict is the artifact, §4.2)
           lockfile-honesty-checks: ''
 ```
 
