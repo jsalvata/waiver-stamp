@@ -39,6 +39,7 @@ import { E2eHarnessError } from './errors.ts';
 import { abstainFixture } from './fixtures/abstain.ts';
 import { approveFixture } from './fixtures/approve.ts';
 import { commentFixture } from './fixtures/comment.ts';
+import { forgedApproveFixture } from './fixtures/forged-approve.ts';
 import { g1ForgeryFixture } from './fixtures/g1-forgery.ts';
 import { invalidFixture } from './fixtures/invalid.ts';
 import { SANDBOX_BASE_FILES } from './fixtures/seed.ts';
@@ -60,6 +61,7 @@ const FIXTURES: readonly Fixture[] = [
   invalidFixture,
   abstainFixture,
   g1ForgeryFixture,
+  forgedApproveFixture,
 ];
 
 /** Run a command, returning trimmed stdout; throws with stderr attached on non-zero exit. */
