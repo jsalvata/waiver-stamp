@@ -12,8 +12,8 @@ export interface Outcome {
 }
 
 const LOCKFILE_WARNING =
-  '\n\n> ⚠️ waiver-stamp assumes the lockfile is honest; wire a lockfile-honesty check into ' +
-  '`lockfile-honesty-checks` to remove this caveat.';
+  '\n\n> ⚠️ waiver-stamp assumes the lockfile is honest. ' +
+  '[Learn how to remove this message.](https://github.com/jsalvata/waiver-stamp/blob/main/docs/auto-approval-setup.md#adopter-checklist)';
 
 /** The spec §5 decision table. Pure — no I/O. */
 export function decideReview(i: DecideInput): Outcome {
