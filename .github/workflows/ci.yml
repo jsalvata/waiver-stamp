@@ -43,6 +43,13 @@ jobs:
           node dist/cli.js --help | grep -q ' stamp '
           node dist/cli.js verify --help >/dev/null
 
+  # Dogfood producer. This intentionally does NOT reuse the published composite action
+  # (.github/actions/waiver-stamp) the way examples/waiver-stamp-ci.yml does — because this
+  # repo *is* the tool. An adopter runs a pinned, released `npx waiver-stamp@<version>`; we
+  # must instead stamp with the exact source under test (`node dist/cli.js` from this PR's
+  # own build), so a change that breaks stamping fails its own CI. The published artifact
+  # contract (name `waiver-stamp-report`, verdict/base/head + toolVersion) is kept identical
+  # so the same privileged reviewer consumes both.
   waiver-stamp:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'

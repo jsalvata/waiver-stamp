@@ -2,8 +2,8 @@
 #
 # This workflow holds a pull-requests: write token — the credential that removes human
 # review by posting an APPROVE. Its integrity is the whole system's integrity, so this
-# file reproduces a specific, security-reviewed shape. Read this comment block before
-# editing anything beyond the two marked EDIT points.
+# file reproduces a specific, security-reviewed shape. **Read this comment block before
+# editing anything beyond the two marked EDIT points.**
 #
 # WHY THIS SHAPE (the pwn-request defense, design doc §3.4):
 #
@@ -31,7 +31,7 @@
 #   vulnerability class GitHub Actions is famous for: a PR author's code running with a
 #   write token that can approve their own PR.
 #
-# See docs/adoption.md for the full checklist this template is step 2 of.
+# See docs/auto-approval-setup.md for the full checklist this template is step 2 of.
 
 name: waiver-stamp-review
 

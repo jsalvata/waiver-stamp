@@ -99,8 +99,9 @@ tamper-proof from a PR. On top of that fixed point, the reviewer re-establishes 
   forgeries.
 - **G2 — manifest envelope.** If any commit touches `package.json` / the lockfile, the
   reviewer **independently re-runs §6.3 gates 1–4** over the range (reusing the engine's
-  own `deps.ts` gates, reading both manifests and base's `.waiver-stamp.json` via
-  `git show` — pure data, no execution). The bump must be confined, allowlisted,
+  own `deps.ts` gates, reading both manifests and base's `.waiver-stamp.json` from
+  throwaway detached-worktree checkouts of the two refs — pure data, no execution). The bump
+  must be confined, allowlisted,
   plain-semver, and up-moving, exactly as an honest engine-level APPROVE required. Out of
   envelope → the artifact's APPROVE could not have been honestly computed → **never
   APPROVE**.
@@ -330,7 +331,7 @@ required" as a prerequisite regardless.
   empty** — an exact condition on a dedicated input, replacing the earlier ≤1-entry
   heuristic.
 - **`.waiver-stamp.json`** — unchanged from §6.3/§6.5 (`allowBumping`, `changeDocs`), read
-  from base. The reviewer reads base's copy via `git show` for G2.
+  from base. The reviewer reads base's copy from a throwaway worktree checkout for G2.
 
 ---
 

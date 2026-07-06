@@ -640,22 +640,27 @@ aggregate verdict — the seam for the CI/automation layer.
   (JSDoc and type-only declarations need no op — they're erased from emit, §7.)
 - Custom (non-LS) reproductive ops (e.g. hand-rolled `inline-function`) — lower trust
   tier requiring the §3.1 backstop as a hard gate (→ later).
-- CI/automation-layer integration (`stamp --json` is the seam) — **not part of the tool**,
-  now specified as a separate layer in [`automation-layer.md`](automation-layer.md).
+- CI/automation-layer integration (`stamp --json` is the seam).
 
 ---
 
 ## 13. Roadmap
 
-**v0 — single-project; transform + exclusion ops + the dependency-bump policy.**
+**Available now.** Single-project transform + exclusion ops plus the dependency-bump policy.
 Ops: `rename`, `extract-function`, `move-to-new-file`, `move-file` (reproductive);
 `lint-fix` (tool-reproducible — the repo's own committed linter, safe fixes only);
 `change-test`, `change-docs` (confinement). Plus the standing **dependency-bump policy**
 (§6.3, no op). Reproductive ops single-project + app-internal (§8). Stamping principle,
 fold + emit compare (§7) + exclusions, static guards, JSON report. Covers the extract /
-share / module-extraction cases plus test-only / docs-only / bump / mixed (§11).
+share / module-extraction cases plus test-only / docs-only / bump / mixed (§11). Also
+available: commit-embedded waivers + `waiver verify` (one commit) / `waiver stamp`
+(per-commit PR aggregation) (§17), the stdio MCP server (§18.1), the `refactor-with-waiver`
+skill (§18.2), the `bench/` token-economy harness (§19), and a README that leads with the
+problem and publishes the benchmark (§20). The GitHub-review automation layer (§18.3) is
+specified separately in [`automation-layer.md`](automation-layer.md) — `waiver stamp --json`
+is its contract.
 
-**Later.**
+**Not yet.**
 - Multi-project reproductive ops: Nx project-graph-aware program set covering all
   dependents; rename/move across project boundaries; relax the single-project guard to
   "all consumers covered"; principled `libs/*` handling (public-API guard → cross-repo
@@ -1122,8 +1127,8 @@ selector-iteration failure mode (§16) is taught against, not discovered in the 
 ### 18.3 Automation layer (separate layer, named seam)
 
 Turning a `waiver stamp --json` verdict into an actual GitHub review (approve / comment /
-request-changes via the API) is the **automation layer**. It is **not part of the tool**
-(the `waiver` binary) — that is what keeps its trust boundary separate — but §17.3 fixes its
+request-changes via the API) is the **automation layer**. It is not part of
+the `waiver` binary — that is what keeps its trust boundary separate — but §17.3 fixes its
 input contract, and it is now specified and built as its own layer in
 [`automation-layer.md`](automation-layer.md) (a two-layer, fail-closed GitHub Action design).
 
@@ -1208,15 +1213,4 @@ The README is the project's front door and must do four jobs, in order:
    no hand-edit can hide), is **fail-closed** (any doubt → human review) and
    **downside-bounded** (worst case = today's review) — "very likely safe and cheaply
    re-verifiable," not a formal proof (§1.1). Link `docs/spec.md` §1.1 (trust posture),
-   §3 (stamping principle), and §13/§21 (roadmap).
-
----
-
-## 21. Roadmap delta (additions to §13)
-
-**v0 also ships:** commit-embedded waivers + `waiver verify` (one commit) / `waiver stamp`
-(per-commit PR aggregation) (§17), the stdio MCP server (§18.1), the `refactor-with-waiver`
-skill (§18.2), the `bench/` token-economy harness (§19), and a README that leads with the
-problem and publishes the benchmark (§20). The GitHub-review automation layer (§18.3) is
-**not part of the tool** but is specified separately in
-[`automation-layer.md`](automation-layer.md) — `waiver stamp --json` is its contract.
+   §3 (stamping principle), and §13 (roadmap).

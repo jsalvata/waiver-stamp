@@ -135,12 +135,9 @@ its only prerequisite.
 
 ### Automate PR review (CI/CD)
 
-To turn a fully-stamped PR into an auto-approved one, wire `waiver stamp --json` into
+To turn a correctly waivered PR into an auto-approved one, wire `waiver stamp --json` into
 your CI and add a privileged reviewer workflow that posts the mapped GitHub review. See
-[`docs/adoption.md`](docs/adoption.md) for the adopter checklist and trust model, and
-copy the two templates in [`examples/`](examples/) —
-[`waiver-stamp-ci.yml`](examples/waiver-stamp-ci.yml) and
-[`waiver-stamp-review.yml`](examples/waiver-stamp-review.yml) — into your `.github/workflows/`.
+[`docs/auto-approval-setup.md`](docs/auto-approval-setup.md) for full instructions.
 
 ## CLI
 

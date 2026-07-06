@@ -6,7 +6,7 @@
 # waiver-stamp-review.yml in this directory) later consumes. It never needs a write
 # token — forks get the default read-only GITHUB_TOKEN, which is all this job uses.
 #
-# See docs/adoption.md for the full checklist this template is step 1 of.
+# See docs/auto-approval-setup.md for the full checklist this template is step 1 of.
 
 name: CI  # <-- EDIT: your existing CI workflow name. The reviewer caller's `workflows:`
           #     list (in waiver-stamp-review.yml) must name this workflow exactly.
@@ -18,20 +18,14 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  # ── Your existing CI job(s) — lint / typecheck / test / build / … — stay here, unchanged.
+  #    Shown only so it's clear that `waiver-stamp` (below) is a sibling job at this same
+  #    `jobs:` level: keep your own jobs, just add `waiver-stamp` alongside them. waiver-stamp
+  #    needs none of your deps installed — it runs in its own npx sandbox.
+  build:                     # <-- EDIT: your existing job(s); replace with your real pipeline
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      # <-- EDIT: your own install steps go here (setup-node, pnpm/yarn/npm install,
-      #     whatever your repo already does before running tests). waiver-stamp doesn't
-      #     need your deps installed — it runs in its own npx sandbox below — but your
-      #     other CI steps (lint/typecheck/test/build) presumably do.
-
-      - name: Lint / typecheck / test / build
-        run: echo "REPLACE with your existing pipeline steps"
+      - run: "..."           # <-- your lint / typecheck / test / build steps
 
   waiver-stamp:
     runs-on: ubuntu-latest

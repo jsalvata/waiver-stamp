@@ -1,10 +1,18 @@
 # Real-PR e2e acceptance harness
 
-Spec §17.2/§18.3, design §5/§10 (task-16). A `gh`-driven acceptance harness that opens real
-PRs against a sandbox branch of this repo and asserts the `waiver-stamp-review` action posts
-exactly the outcome each fixture is designed to produce.
+[Spec](../../docs/spec.md) §17.2/§18.3, [design](../../docs/automation-layer.md) §5/§10
+(task-16). A `gh`-driven acceptance harness that opens real PRs against a sandbox branch of
+this repo and asserts the `waiver-stamp-review` action posts exactly the outcome each fixture
+is designed to produce.
 
 ## This is a POST-MERGE acceptance step
+
+> **Maintainer note (revisit after the first live run).** This section is written for the
+> pre-merge state, when the harness has never executed against live GitHub Actions. Once it
+> *has* — i.e. once the automation is on `main` and a real run has passed — rewrite this
+> section into a durable *warning*: keep the "always execute the default-branch workflow
+> definition" caveat (it stays true and bites anyone testing workflow changes from a branch),
+> but drop the "has never been run / do not fake a passing run" framing, which will be stale.
 
 `bench/e2e/run.ts` is committed now, but **cannot be run until this whole automation-layer
 feature (PRs 1–3, task-16 included) has been merged to `main`.** This is not a limitation of
@@ -50,7 +58,7 @@ The script:
    repo's default branch and seeded with a tiny loadable TypeScript project
    (`bench/e2e/fixtures/seed.ts`) so a `rename` waiver has something real to fold over.
 2. For each fixture in `bench/e2e/fixtures/` (in order: `approve`, `comment`, `invalid`,
-   `abstain`, `g1-forgery`): creates a uniquely-named branch off the sandbox base, applies the
+   `abstain`, `g1-forgery`, `forged-approve`): creates a uniquely-named branch off the sandbox base, applies the
    fixture's commits (each may embed a fenced ` ```waiver ` block per spec §17.1), pushes, and
    opens a real PR via `gh pr create`.
 3. Polls `gh pr checks` until the `waiver-stamp` producer check (the `waiver-stamp` job in
@@ -89,6 +97,7 @@ verdict aggregation, realized against an **honest** producer (this repo's own, u
 | 3 | `invalid` | one commit whose waiver claims a pure rename but the diff also changes behaviour (a smuggled edit) | **failure** (verdict REQUEST_CHANGES) | **NOTHING** |
 | 4 | `abstain` | one plain commit, no `waiver` block at all | success (verdict ABSTAIN) | **NOTHING** |
 | 5 | `g1-forgery` | one commit: a stamped rename plus an edit under `.github/**`, still claiming only the rename | **failure** (verdict REQUEST_CHANGES) | **NOTHING** |
+| 6 | `forged-approve` | one commit: a stamped rename plus a `.github/workflows/ci.yml` overwrite that forges an APPROVE artifact (simulated compromised producer) | success (forged green) | **REQUEST_CHANGES** |
 
 Fixtures 3 and 5 both land on "check goes red, reviewer posts nothing" — see the note below on
 why fixture 5 does **not** exercise the review-level G1 path, and why that's fine.
@@ -121,9 +130,14 @@ fixture 3, just triggered by a different uncovered file.
 
 The **guard-refuted REQUEST_CHANGES review** path — an artifact that dishonestly claims
 `APPROVE` while a fresh G1/G2 re-run fails — requires a producer whose engine-level coverage
-check has been bypassed or forged. Opening a real PR through this repo's own honest CI cannot
-produce that state, so it is **not** e2e-covered here. It is covered by the unit test suite,
-which mocks the artifact directly instead of deriving it from a real commit:
+check has been bypassed or forged. An honest producer can't reach it, so **fixture 6
+(`forged-approve`) simulates a compromised producer** to cover it e2e: its commit overwrites
+`.github/workflows/ci.yml` with a minimal CI that keeps a green `build` job but replaces the
+honest `waiver-stamp` job with one that *forges* an APPROVE `waiver-stamp-report` (carrying the
+real base/head SHAs, so the C1 cross-check passes). Overwriting ci.yml is the `.github/**` change
+the reviewer's own trusted G1 catches → `guardsPass=false` while the artifact claims APPROVE → a
+genuine REQUEST_CHANGES review on a live PR. It is *also* covered by fast, deterministic unit
+tests that mock the artifact directly instead of standing up a forging workflow:
 
 - `src/action/guards.test.ts` — `g1WorkflowIntegrity` itself (Task 4), including the
   change-and-revert case.
@@ -132,7 +146,7 @@ which mocks the artifact directly instead of deriving it from a real commit:
 - `src/action/main.test.ts` — the orchestrator wiring a failing G1/G2 into that outcome and
   posting it (Task 9).
 
-Between the five e2e fixtures here and those three unit-test files, every reachable
+Between the six e2e fixtures here and those three unit-test files, every reachable
 `(verdict, guards, backstop)` combination in design §5's table is exercised somewhere.
 
 ## Validation performed on this harness
