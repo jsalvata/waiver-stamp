@@ -74,9 +74,16 @@ export async function run(deps: RunDeps): Promise<void> {
     // Guards run base..head off pr.base, never artifact.base. If pr.base isn't reachable from
     // the checked-out default branch, g1/g2 throw and the outer catch fails closed — acceptable.
     const dir = deps.repoDir ?? process.cwd();
-    const guardsPass =
-      (await deps.g1(dir, pr.base, headSha)).length === 0 &&
-      (await deps.g2(dir, pr.base, headSha)).length === 0;
+    // Guards return the offending items (commit SHAs / envelope violations), not a bool — so a
+    // refuted APPROVE can log *what* it refuted to the Actions log before the outcome is decided.
+    // (Offenders never reach the review body; §3.4 keeps PR-sourced content out of what reviewers read.)
+    const g1Offenders = await deps.g1(dir, pr.base, headSha);
+    const g2Offenders = await deps.g2(dir, pr.base, headSha);
+    if (g1Offenders.length > 0)
+      core.warning(`G1 refused: commit(s) touch .github/**: ${g1Offenders.join(', ')}`);
+    if (g2Offenders.length > 0)
+      core.warning(`G2 refused: manifest change out of envelope: ${g2Offenders.join('; ')}`);
+    const guardsPass = g1Offenders.length === 0 && g2Offenders.length === 0;
 
     const outcome = decideReview({
       verdict: artifact.verdict,

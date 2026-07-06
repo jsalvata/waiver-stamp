@@ -1,5 +1,15 @@
+import * as core from '@actions/core';
 import { describe, expect, it, vi } from 'vitest';
 import { run } from './main.ts';
+
+// main.ts calls core.info/core.warning directly; mock the module so the guard-offender logging
+// is assertable (vi.spyOn can't redefine @actions/core's read-only exports).
+vi.mock('@actions/core', () => ({
+  info: vi.fn(),
+  warning: vi.fn(),
+  setFailed: vi.fn(),
+  getInput: vi.fn(() => ''),
+}));
 
 const baseDeps = {
   context: {
@@ -101,5 +111,21 @@ describe('run', () => {
     await run(deps as never);
     expect(deps.g1).toHaveBeenCalledWith(expect.anything(), 'b'.repeat(40), 'a'.repeat(40));
     expect(deps.g2).toHaveBeenCalledWith(expect.anything(), 'b'.repeat(40), 'a'.repeat(40));
+  });
+  it('logs the guard offenders via core.warning when a guard refuses', async () => {
+    vi.mocked(core.warning).mockClear();
+    const offender = 'd'.repeat(40);
+    const deps = {
+      ...baseDeps,
+      g1: vi.fn(async () => [offender]),
+      postOutcome: vi.fn(async () => {}),
+    };
+    await run(deps as never);
+    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining(offender));
+    // guard-refuted APPROVE → REQUEST_CHANGES, not silently dropped
+    expect(deps.postOutcome).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ outcome: expect.objectContaining({ action: 'REQUEST_CHANGES' }) }),
+    );
   });
 });
