@@ -17,7 +17,7 @@ Invoke the `refactor-with-waiver` skill and follow it to:
    anything that can't be proven safe out of the waiver — it falls to human
    review (fail-closed). Do not use `extract-function` / `move-to-new-file` /
    `bump` — they are not implemented in this build.
-3. Write the waiver JSON conforming to `schema/waiver-stamp.v0.schema.json`.
+3. Write the waiver JSON conforming to [`schema/waiver-stamp.v0.schema.json`](https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp.v0.schema.json).
 4. Apply and land it:
    - `waiver apply <waiver>` (or the `waiver_apply` MCP tool) — expand the
      transform ops into the working tree; hand-edit only the test/doc files

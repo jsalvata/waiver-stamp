@@ -111,7 +111,7 @@ waiver stamp --base main --head my-branch --json
 
 ## Op vocabulary (v0)
 
-The JSON Schema at `schema/waiver-stamp.v0.schema.json` is the source of truth.
+The JSON Schema at `https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp.v0.schema.json` is the source of truth.
 Validate against it — never invent ops.
 
 **Transform · reproductive** (behaviour-preserving; folded over base, in order):
@@ -150,10 +150,7 @@ land the `.waiver-stamp.json` change first — an earlier commit in the same PR,
 already-merged one — and the waivered commit builds on the base that now carries it.
 
 When you author or edit `.waiver-stamp.json`, conform it to
-`schema/waiver-stamp-config.v0.schema.json` (the source of truth, generated from the Zod
-config schema). To give a human's editor live validation, add its `$id` as a `"$schema"`
-pointer at the top of the file — the loader recognises and ignores that key:
-`"$schema": "https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json"`.
+[`schema/waiver-stamp-config.v0.schema.json`](https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json).
 
 > **Not yet implemented in this build:** `extract-function` and `move-to-new-file`.
 > The schema still lists them, but `apply` / `stamp` will FAIL with "not yet
