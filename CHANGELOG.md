@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/jsalvata/waiver-stamp/compare/v1.9.0...v1.10.0) (2026-07-07)
+
+
+### Features
+
+* support ESLint in lint-fix ([a8d9ac1](https://github.com/jsalvata/waiver-stamp/commit/a8d9ac1eaeeef919030103e0f4970c58a3276d97))
+
 # [1.9.0](https://github.com/jsalvata/waiver-stamp/compare/v1.8.2...v1.9.0) (2026-07-07)
 
 
