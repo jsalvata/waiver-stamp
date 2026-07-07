@@ -323,7 +323,11 @@ against the **same pinned base**, every form is deterministic; the choice of
   just ones other ops touched (a standalone repo-wide lint-fix commit is a legitimate
   waiver). This is **tool-reproducible, not engine-performed**: the
   transform is delegated to an external binary resolved from the commit's own
-  dependency tree (§9). And it is **not strictly behaviour-preserving**:
+  dependency tree (§9). The linter is resolved from the checked-out manifest — v0
+  supports Biome (`biome check --write`) and ESLint (`eslint --fix`), safe fixes
+  only. A tree that declares **both** is ambiguous and FAILs closed (§9): the op
+  assumes a single committed linter, and there is no per-op selector to disambiguate.
+  And it is **not strictly behaviour-preserving**:
   `organizeImports`-class fixes reorder **module evaluation order**. This is accepted
   by policy, not guarded — reordering is a property of the whole import sequence, so
   no per-import check can isolate a "dangerous" subset (a bare `import './x.js'`
@@ -667,9 +671,6 @@ is its contract.
   *impact report* where downstream repos are inspectable).
 - More reproductive ops: `inline-variable`, `extract-type`, convert-family, `revert`,
   codegen-regeneration.
-- ESLint support for `lint-fix` (v0 ships Biome only — the tool-reproducible op folds
-  the repo's own pinned linter's safe fixes over the transformed base, import reordering
-  accepted by policy per §6.1; the linter-resolution seam takes ESLint next).
 - An additive `add-export` op, if widening export visibility on its own proves common
   (other additive type/JSDoc edits already pass for free under emit comparison, §7).
 - Custom non-LS ops with mandatory tsc+tests gating.
