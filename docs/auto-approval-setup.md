@@ -38,7 +38,7 @@ PR. On top of that, it re-derives trust from git data alone, via two guards:
 Concretely: the reviewer job checks out **your default branch** (trusted code) and pulls
 the PR's head commit in with a plain `git fetch` — never a checkout, never an execution —
 so the guards above can read it as data. This is the load-bearing property of the two
-templates below; see the inline comments in
+templates; see the inline comments in
 [`examples/waiver-stamp-review.yml`](../examples/waiver-stamp-review.yml) for the full
 reasoning, the design doc §3.4 for the threat model this defends against (the classic
 GitHub Actions "pwn request"), and [`automation-layer.md`](automation-layer.md) for the
@@ -47,8 +47,7 @@ complete design rationale.
 ## Adopter checklist
 
 Each step is one action; the indented note under it is the *why*, there only if you want
-it. The two workflow files it refers to are in [`examples/`](../examples/) and reproduced
-under [Templates](#templates) below.
+it. The two workflow files it refers to are in [`examples/`](../examples/).
 
 1. **Run the `waiver-stamp` job on every PR.** Add the `waiver-stamp` job from
    [`examples/waiver-stamp-ci.yml`](../examples/waiver-stamp-ci.yml) to your CI (it's shown
@@ -98,18 +97,3 @@ under [Templates](#templates) below.
    > The reviewer's APPROVE body names this caveat whenever `lockfile-honesty-checks` is empty —
    > not silent, but a real gap until a lockfile-honesty tool (e.g. a lockfile-firewall product)
    > is wired in as a required check.
-
-## Templates
-
-Both templates live in [`examples/`](../examples/):
-
-- [`examples/waiver-stamp-ci.yml`](../examples/waiver-stamp-ci.yml) — the producer, shown as
-  a **complete `pull_request` workflow** so you can see where the `waiver-stamp` job sits next
-  to a normal build. If you already have a CI workflow, lift just the `waiver-stamp` job into
-  it; the rest is a stand-in for what you already have. It runs unprivileged and publishes the
-  check + artifact.
-- [`examples/waiver-stamp-review.yml`](../examples/waiver-stamp-review.yml) — the privileged
-  reviewer caller, meant to be **copied in whole** and edited only at the marked `# <-- EDIT`
-  points. It reproduces the exact security-reviewed checkout/fetch pattern; read its header
-  comment before changing anything else — the checkout target (your default branch, never the
-  PR head) is what keeps a PR from ever running code with the reviewer's write token.
