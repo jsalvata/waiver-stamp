@@ -16,3 +16,13 @@ rules:
       # never executed/uses'd). That checkout-default-branch pattern is exactly zizmor's
       # own recommended mitigation for workflow_run, so this is a false positive here.
       - waiver-stamp-review.yml
+
+  adhoc-packages:
+    ignore:
+      # release.yml's `npm install -g npm@latest` is a deliberate, unavoidable bootstrap:
+      # OIDC trusted publishing (semantic-release v25 / @semantic-release/npm v13) requires
+      # npm >= 11.5.1, but the setup-node Node 22 toolchain ships npm 10.x. Nothing in a
+      # lockfile can upgrade the global npm that runs the publish, so the ad-hoc install of
+      # npm itself (from the official registry) is intentional here — the step already
+      # carries an inline comment saying as much. Audit added in zizmor v1.26.
+      - release.yml
