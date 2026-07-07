@@ -1,3 +1,35 @@
+# [1.9.0](https://github.com/jsalvata/waiver-stamp/compare/v1.8.2...v1.9.0) (2026-07-07)
+
+
+### Bug Fixes
+
+* derive the guard range from the trusted pr base ([e714ba0](https://github.com/jsalvata/waiver-stamp/commit/e714ba0a6959875350c5a9dc086b1467c7d4772d))
+* fold resolution inputs into the g2 guard ([4ff1c66](https://github.com/jsalvata/waiver-stamp/commit/4ff1c663b26c1c712dea853863ee912de8e554c0))
+* isolate reviewer self-heal dismiss failures ([51d0a14](https://github.com/jsalvata/waiver-stamp/commit/51d0a14301f8e2de00fac91a3702aa7dcb812e97))
+* keep the action out of the published package ([4f9f592](https://github.com/jsalvata/waiver-stamp/commit/4f9f592c2328e09029c3a9082435c442c7553517))
+* point lockfile-honesty warning at setup docs ([5332d5e](https://github.com/jsalvata/waiver-stamp/commit/5332d5ee6e9aee57790013b53ea45c6f368e8d59))
+* read g2 manifests as blobs, widen pnpmfile ([ecef84b](https://github.com/jsalvata/waiver-stamp/commit/ecef84bc391c8fc823c6bbfab1320803b5b3943b))
+
+
+### Features
+
+* add dogfood .waiver-stamp.json ([5d65b7b](https://github.com/jsalvata/waiver-stamp/commit/5d65b7b4ec6c7db4ad7f6138b49936310418a3b9))
+* add forged-approve e2e fixture ([ff6a9c6](https://github.com/jsalvata/waiver-stamp/commit/ff6a9c627faa1ff7d8c41fb5a4049f554bb28bf4))
+* add real-pr e2e acceptance harness ([0ad1cbb](https://github.com/jsalvata/waiver-stamp/commit/0ad1cbb113b8240791d724552059bc461afd9fba))
+* add the g1 workflow-integrity guard ([d5c34dc](https://github.com/jsalvata/waiver-stamp/commit/d5c34dc6ac822b525eb306fa10d4ec708f5111f8))
+* add the g2 manifest-envelope guard ([9f4f453](https://github.com/jsalvata/waiver-stamp/commit/9f4f4530da1a11526ff6f0cc063d0ed34e717cdb))
+* add the waiver-stamp producer action ([6896dbe](https://github.com/jsalvata/waiver-stamp/commit/6896dbe854ca55e5e236afb7c5245ae97226e32a))
+* confirm backstop checks green on the head sha ([968a989](https://github.com/jsalvata/waiver-stamp/commit/968a9891342d292624ec95368dc0537b7e8a874b))
+* lint workflows with actionlint and zizmor ([596af05](https://github.com/jsalvata/waiver-stamp/commit/596af054a18f16be3e8456e3e8f115c96730ddb5))
+* log guard offenders before deciding review outcome ([ce68795](https://github.com/jsalvata/waiver-stamp/commit/ce68795f7fe9abbfdd56b9d6c55cebcda8a7843d))
+* map the verdict to a review decision ([16453a3](https://github.com/jsalvata/waiver-stamp/commit/16453a3f6fcda2a815df7671862bc3614874850f))
+* orchestrate the reviewer, fail-closed ([3f30c19](https://github.com/jsalvata/waiver-stamp/commit/3f30c19ebd2b350149013ea8946b0e9f748ecdd9))
+* post the review outcome with self-heal ([e58905e](https://github.com/jsalvata/waiver-stamp/commit/e58905e2e6b3c697093eca1f88f824e623061e40))
+* scaffold the waiver-stamp-review action ([2c2a7c4](https://github.com/jsalvata/waiver-stamp/commit/2c2a7c448e85e3bdfe3ecef24f57585bf14262ed))
+* surface base/head shas in the stamp report ([63c277d](https://github.com/jsalvata/waiver-stamp/commit/63c277dfe19d0b51c521ebe4d4c27be145db4244))
+* validate the reviewer artifact with zod ([66d7606](https://github.com/jsalvata/waiver-stamp/commit/66d7606ba12f19f24ec878bf80a72a56831c1492))
+* wire waiver-stamp into this repo's ci ([cf231ff](https://github.com/jsalvata/waiver-stamp/commit/cf231ff3194b4b11a8248a4c58d76f9ac59de1a2))
+
 ## [1.8.2](https://github.com/jsalvata/waiver-stamp/compare/v1.8.1...v1.8.2) (2026-07-04)
 
 
