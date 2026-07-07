@@ -108,10 +108,10 @@ tamper-proof from a PR. On top of that fixed point, the reviewer re-establishes 
     resolution-input analogue of G1, per-commit for the same change-and-revert reason.
   - **Manifest envelope (net diff).** If any commit touches `package.json` / the lockfile, the
     reviewer **independently re-runs §6.3 gates 1–4** over the range (reusing the engine's own
-    `deps.ts` gates, reading both manifests and base's `.waiver-stamp.json` from throwaway
-    detached-worktree checkouts of the two refs — pure data, no execution). The bump must be
-    confined, allowlisted, plain-semver, and up-moving, exactly as an honest engine-level
-    APPROVE required.
+    `deps.ts` gates, reading base+head `package.json` and base's `.waiver-stamp.json` as blobs
+    via `git show <ref>:<path>` — no worktree, so the untrusted head tree is never materialized
+    on disk). The bump must be confined, allowlisted, plain-semver, and up-moving, exactly as an
+    honest engine-level APPROVE required.
   - Any violation from either check → the artifact's APPROVE could not have been honestly
     computed → **never APPROVE**.
 
@@ -150,6 +150,13 @@ product).
   executes during the stamp install, and could forge the report. This is §6.3.5's warning,
   extended to the automation layer — the **accepted residual** the APPROVE warning banner
   covers (§5, §7).
+- **Resolution inputs are a superset, not a re-implementation of lockfile-assay.** lockfile-assay
+  *adjudicates* install inputs (it can allow a visible registry redirect or a hashed-only patch);
+  G2 has no safe way to run that analysis and no need to — a resolution-input change is never a
+  mechanical refactor, so it refuses the whole category (`RESOLUTION_INPUTS` in `guards.ts`). The
+  guard only has to stay *at least as strict* as lockfile-assay's input list; once the firewall is
+  wired in as a `lockfile-honesty-checks` gate, the precise adjudication lives there and this guard
+  is a pure backstop.
 
 ### 3.4 Other surfaces & mitigations
 
