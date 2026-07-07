@@ -97,28 +97,41 @@ tamper-proof from a PR. On top of that fixed point, the reviewer re-establishes 
   workflow the stamp ran under, and the job graph that produced the checks, are not the
   reviewed ones → **never APPROVE**. Kills both the workflow-edit and check-name-minting
   forgeries.
-- **G2 — manifest envelope.** If any commit touches `package.json` / the lockfile, the
-  reviewer **independently re-runs §6.3 gates 1–4** over the range (reusing the engine's
-  own `deps.ts` gates, reading both manifests and base's `.waiver-stamp.json` from
-  throwaway detached-worktree checkouts of the two refs — pure data, no execution). The bump
-  must be confined, allowlisted,
-  plain-semver, and up-moving, exactly as an honest engine-level APPROVE required. Out of
-  envelope → the artifact's APPROVE could not have been honestly computed → **never
-  APPROVE**.
+- **G2 — dependency integrity.** Two independent re-derivations over the range:
+  - **Resolution inputs (fail-closed, per-commit).** Any commit touching a file that changes
+    what `pnpm install` executes — `.pnpmfile.cjs`, `.npmrc`, `patches/**` / `*.patch` /
+    `*.diff`, `pnpm-workspace.yaml`, `package.yaml`, `package.json5` (matched by basename, at
+    any depth) — is refused outright. These have no "honest bump" envelope: the engine
+    already treats every one as uncovered (they clear no `change-*` op), so a stamped commit
+    never touches them. Because the *producer* runs `pnpm install`, a poisoned `.pnpmfile.cjs`
+    is exactly how a forged APPROVE gets computed in the first place — so this is the
+    resolution-input analogue of G1, per-commit for the same change-and-revert reason.
+  - **Manifest envelope (net diff).** If any commit touches `package.json` / the lockfile, the
+    reviewer **independently re-runs §6.3 gates 1–4** over the range (reusing the engine's own
+    `deps.ts` gates, reading both manifests and base's `.waiver-stamp.json` from throwaway
+    detached-worktree checkouts of the two refs — pure data, no execution). The bump must be
+    confined, allowlisted, plain-semver, and up-moving, exactly as an honest engine-level
+    APPROVE required.
+  - Any violation from either check → the artifact's APPROVE could not have been honestly
+    computed → **never APPROVE**.
 
 **Why the guards suffice.** With G1 clean, the workflow files are the reviewed ones. With
 G2 clean, the toolchain that executed during stamp is base's (already default-branch
-reviewed) — head *source* is only *emitted* by `waiver stamp` (ts-morph/tsc emit does not
-run user code), never executed. A malicious `tsconfig` transformer can't ride along either:
+reviewed): no PR-introduced resolution input (`.pnpmfile.cjs`, `.npmrc`, patches, alt
+manifests) rode along in the producer's `pnpm install`, and any allowlisted manifest bump
+stayed in envelope. Head *source* is only *emitted* by `waiver stamp` (ts-morph/tsc emit
+does not run user code), never executed. A malicious `tsconfig` transformer can't ride
+along either:
 `tsconfig` is a non-excludable byte-compared file (§7), so any change makes the stamp
 itself not-APPROVE. Once G1+G2 pass, the artifact is exactly as trustworthy as the honest
 run that produced it.
 
 **Trust invariant that powers §5:** *an honestly-computed APPROVE implies G1 and G2 pass.*
-A stamped commit cannot touch `.github/**` (yaml is uncovered by every op — the
-`change-docs` extension floor and the `change-test` backstop-integrity exclusion both
-refuse it), and a manifest-touching commit only stamps if the engine already ran gates
-1–4. So **guards-fail + artifact-says-APPROVE ⇒ the artifact was not honestly computed** —
+A stamped commit cannot touch `.github/**` or any resolution input (all are uncovered by
+every op — the `change-docs` extension floor and the `change-test` backstop-integrity
+exclusion both refuse them), and a manifest-touching commit only stamps if the engine
+already ran gates 1–4. So **guards-fail + artifact-says-APPROVE ⇒ the artifact was not
+honestly computed** —
 a forgery, a bypass attempt, or engine-version skew between the two halves. That is the one
 case worth actively flagging.
 
@@ -129,8 +142,9 @@ lockfile-honesty tool wired in yet; the firewall is a separate, not-yet-integrat
 product).
 
 - **Default config (`allowBumping` absent/empty):** G2 reduces to "no manifest/lockfile
-  change at all," so the toolchain-trust chain is **closed** — no honesty check is needed
-  for the APPROVE path to be sound.
+  change *and* no resolution-input change at all" — the resolution-input check runs
+  regardless of `allowBumping`, so the toolchain-trust chain is **closed**: no honesty check
+  is needed for the APPROVE path to be sound.
 - **With `allowBumping` set and no honesty check:** a lockfile entry for an allowlisted
   package that keeps the version string but points at a poisoned tarball passes gates 1–4,
   executes during the stamp install, and could forge the report. This is §6.3.5's warning,
@@ -373,11 +387,11 @@ end-to-end test bed (§10).
 ## 10. Testing
 
 - **Unit (vitest, mocked Octokit/`@actions/github`):** verdict → review mapping (every row
-  of §5); G1 per-commit detection (including change-and-revert); G2 envelope re-run
-  (in/out of envelope) reusing `deps.ts`; backstop confirmation over `ci-checks` +
-  `lockfile-honesty-checks`; idempotent
-  idempotent review update; self-heal dismissal; every fail-closed path (missing
-  artifact, SHA mismatch, API error, head-moved TOCTOU).
+  of §5); G1 per-commit detection (including change-and-revert); G2 dependency integrity —
+  resolution-input detection (per file type, nested, change-and-revert) and the envelope
+  re-run (in/out of envelope) reusing `deps.ts`; backstop confirmation over `ci-checks` +
+  `lockfile-honesty-checks`; idempotent review update; self-heal dismissal; every
+  fail-closed path (missing artifact, SHA mismatch, API error, head-moved TOCTOU).
 - **End-to-end, real PRs (the ultimate dogfood):** an acceptance harness (`gh`-driven,
   against a sandbox branch in this repo, since it needs the deployed workflow) that opens a
   real PR for **each** verdict and asserts the posted outcome —
