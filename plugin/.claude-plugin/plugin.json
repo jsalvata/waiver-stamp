@@ -2,7 +2,7 @@
   "name": "waiver-stamp",
   "description": "Author waiver-stamp waivers from a code change and validate them with the `waiver` CLI.",
   "author": {
-    "name": "Jordi Salvat"
+    "name": "Jordi Salvat i Alabart"
   },
   "homepage": "https://github.com/jsalvata/waiver-stamp",
   "keywords": ["waiver-stamp", "refactor", "code-review", "pull-request"],
