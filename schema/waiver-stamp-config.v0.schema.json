@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json",
+  "title": "waiver-stamp config",
+  "description": "Project config at .waiver-stamp.json (repo root); each key is a standing policy.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "Optional pointer to the published JSON Schema.",
+      "type": "string"
+    },
+    "changeDocs": {
+      "description": "The change-docs confinement policy (§6.5).",
+      "default": {
+        "allow": [],
+        "deny": []
+      },
+      "type": "object",
+      "properties": {
+        "allow": {
+          "description": "Glob allow-list for the change-docs op (§6.5).",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "description": "Glob deny-list; a hard veto over allow (§6.5).",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "allowBumping": {
+      "description": "The dependency-bump allow-list: scope prefixes or exact names (§6.3).",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "additionalProperties": false
+}

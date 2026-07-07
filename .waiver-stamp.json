@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json",
   "allowBumping": [],
   "changeDocs": {
     "allow": ["docs/**", "**/README.md", "CHANGELOG.md"],

@@ -111,7 +111,7 @@ waiver stamp --base main --head my-branch --json
 
 ## Op vocabulary (v0)
 
-The JSON Schema at `schema/waiver-stamp.v0.schema.json` is the source of truth.
+The JSON Schema at `https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp.v0.schema.json` is the source of truth.
 Validate against it — never invent ops.
 
 **Transform · reproductive** (behaviour-preserving; folded over base, in order):
@@ -137,7 +137,7 @@ Validate against it — never invent ops.
 - `{ "op": "change-test", "files": [...] }` — verified non-shipping test files.
 - `{ "op": "change-docs", "files": [...] }` — inert doc files (`*.md`/`*.markdown`/`*.txt`,
   never `*.mdx`) that the repo's `.waiver-stamp.json` `changeDocs` policy allows
-  (`allow` ∧ ¬`deny`; empty/absent config confines nothing). See `docs/spec.md` §6.5.
+  (`allow` ∧ ¬`deny`; empty/absent config confines nothing).
 
 **Standing config lands first, waivers rely on it later.** Every `.waiver-stamp.json`
 policy — `changeDocs`, `allowBumping`, any future one — is read from a commit's **base**,
@@ -148,6 +148,9 @@ its own reviewed commit or PR, then rely on it from waivers in later commits or 
 to `change-docs` a file the policy doesn't yet allow (or to `allowBumping` a new package),
 land the `.waiver-stamp.json` change first — an earlier commit in the same PR, or an
 already-merged one — and the waivered commit builds on the base that now carries it.
+
+When you author or edit `.waiver-stamp.json`, conform it to
+[`schema/waiver-stamp-config.v0.schema.json`](https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json).
 
 > **Not yet implemented in this build:** `extract-function` and `move-to-new-file`.
 > The schema still lists them, but `apply` / `stamp` will FAIL with "not yet
@@ -224,4 +227,4 @@ After committing, always confirm the commit stamps and report the result:
 waiver verify --json
 ```
 
-See `docs/spec.md` for the full model, guards, and worked examples (§11).
+See [the waiver-stamp repo](https://github.com/jsalvata/waiver-stamp) for the full model, guards, and worked examples.

@@ -11,7 +11,8 @@
 import { z } from 'zod/v4';
 
 export const SCHEMA_VERSION = 'waiver-stamp/v0';
-export const SCHEMA_ID = 'https://waiver-stamp.dev/schema/waiver-stamp.v0.schema.json';
+export const SCHEMA_ID =
+  'https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp.v0.schema.json';
 
 /**
  * Shared string type. Forbids triple backticks so an embedded waiver can never
