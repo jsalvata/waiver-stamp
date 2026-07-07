@@ -4,7 +4,7 @@ import { fetchArtifact, makeResolvePr } from './adapters.ts';
 import { confirmChecksGreen } from './backstop.ts';
 import { decideReview } from './decide.ts';
 import type { Outcome } from './decide.ts';
-import { g1WorkflowIntegrity, g2ManifestEnvelope } from './guards.ts';
+import { g1WorkflowIntegrity, g2DependencyIntegrity } from './guards.ts';
 import { parseList } from './inputs.ts';
 import { postOutcome } from './review.ts';
 import type { ArtifactReport } from './schema.ts';
@@ -74,15 +74,16 @@ export async function run(deps: RunDeps): Promise<void> {
     // Guards run base..head off pr.base, never artifact.base. If pr.base isn't reachable from
     // the checked-out default branch, g1/g2 throw and the outer catch fails closed — acceptable.
     const dir = deps.repoDir ?? process.cwd();
-    // Guards return the offending items (commit SHAs / envelope violations), not a bool — so a
-    // refuted APPROVE can log *what* it refuted to the Actions log before the outcome is decided.
-    // (Offenders never reach the review body; §3.4 keeps PR-sourced content out of what reviewers read.)
+    // Guards return the offending items (commit SHAs / envelope violations / resolution-input
+    // touches), not a bool — so a refuted APPROVE can log *what* it refuted to the Actions log
+    // before the outcome is decided. (Offenders never reach the review body; §3.4 keeps
+    // PR-sourced content out of what reviewers read.)
     const g1Offenders = await deps.g1(dir, pr.base, headSha);
     const g2Offenders = await deps.g2(dir, pr.base, headSha);
     if (g1Offenders.length > 0)
       core.warning(`G1 refused: commit(s) touch .github/**: ${g1Offenders.join(', ')}`);
     if (g2Offenders.length > 0)
-      core.warning(`G2 refused: manifest change out of envelope: ${g2Offenders.join('; ')}`);
+      core.warning(`G2 refused: dependency integrity violation: ${g2Offenders.join('; ')}`);
     const guardsPass = g1Offenders.length === 0 && g2Offenders.length === 0;
 
     const outcome = decideReview({
@@ -118,7 +119,7 @@ if (process.env.VITEST === undefined) {
     confirmChecksGreen,
     fetchArtifact,
     g1: g1WorkflowIntegrity,
-    g2: g2ManifestEnvelope,
+    g2: g2DependencyIntegrity,
     postOutcome,
     inputs,
   }).catch((err) => core.setFailed(err instanceof Error ? err.message : String(err)));
