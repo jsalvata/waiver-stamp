@@ -137,7 +137,7 @@ Validate against it — never invent ops.
 - `{ "op": "change-test", "files": [...] }` — verified non-shipping test files.
 - `{ "op": "change-docs", "files": [...] }` — inert doc files (`*.md`/`*.markdown`/`*.txt`,
   never `*.mdx`) that the repo's `.waiver-stamp.json` `changeDocs` policy allows
-  (`allow` ∧ ¬`deny`; empty/absent config confines nothing). See `docs/spec.md` §6.5.
+  (`allow` ∧ ¬`deny`; empty/absent config confines nothing).
 
 **Standing config lands first, waivers rely on it later.** Every `.waiver-stamp.json`
 policy — `changeDocs`, `allowBumping`, any future one — is read from a commit's **base**,
@@ -227,4 +227,4 @@ After committing, always confirm the commit stamps and report the result:
 waiver verify --json
 ```
 
-See `docs/spec.md` for the full model, guards, and worked examples (§11).
+See [the waiver-stamp repo](https://github.com/jsalvata/waiver-stamp) for the full model, guards, and worked examples.
