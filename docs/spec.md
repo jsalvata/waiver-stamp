@@ -448,6 +448,16 @@ The `change-docs` confinement policy lives alongside the bump policy (§6.3) in
   byte-compared file (§7), so loosening the policy is a review-forcing diff.
 - A missing file yields the empty policy. Malformed JSON or an unknown key inside
   `changeDocs` **fails closed** — the stamp fails with a `WaiverConfigError`.
+- Like the waiver vocabulary (§4), the config has a single source of truth — the Zod
+  schema (`src/engine/config.ts`) — from which a **published JSON Schema** is *generated*
+  (`schema/waiver-stamp-config.v0.schema.json`, `pnpm gen:schema`, kept honest by a
+  drift-guard test). It is emitted in *input* mode: every key is optional (an empty `{}`
+  is valid), matching how the loader treats a missing or partial file. Its `$id` is the
+  fetchable raw-GitHub URL of the committed schema, so an author gets editor validation
+  just by adding the conventional inline pointer — no local install of the tool required:
+  `"$schema": ".../jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json"`.
+  The loader recognises and ignores a `"$schema"` key so the pointer doesn't trip the
+  strict outer object.
 
 ---
 
@@ -679,9 +689,6 @@ is its contract.
 - Extend the token-economy benchmark (§19) with a `move-file` task (relocate a
   widely-imported file and rewire its importers) and regenerate the README table
   from a real `pnpm bench` run.
-- Publish a JSON Schema for `.waiver-stamp.json` (§6.3, §6.5) — generated from the Zod
-  config schema and drift-guarded by a test, the same way the waiver schema is —
-  so editors can validate the config file (today it is validated only at runtime).
 
 ---
 

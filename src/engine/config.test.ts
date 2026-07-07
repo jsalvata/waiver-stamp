@@ -1,9 +1,21 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { WaiverConfigError } from '../errors.ts';
-import { CONFIG_FILENAME, loadConfig, parseConfig } from './config.ts';
+import { CONFIG_FILENAME, loadConfig, parseConfig, serializeConfigJsonSchema } from './config.ts';
+
+const committedSchema = fileURLToPath(
+  new URL('../../schema/waiver-stamp-config.v0.schema.json', import.meta.url),
+);
+
+describe('config JSON Schema generation', () => {
+  it('the committed schema/ file matches the Zod-generated output (run `pnpm gen:schema`)', async () => {
+    const onDisk = await readFile(committedSchema, 'utf8');
+    expect(onDisk).toBe(serializeConfigJsonSchema());
+  });
+});
 
 async function repoWith(config?: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'waiver-cfg-'));
@@ -16,6 +28,15 @@ describe('loadConfig', () => {
     const config = await loadConfig(await repoWith());
     expect(config.changeDocs).toEqual({ allow: [], deny: [] });
     expect(config.allowBumping).toEqual([]);
+  });
+
+  it('accepts an inline $schema pointer (recognised and ignored)', async () => {
+    const config = await loadConfig(
+      await repoWith(
+        '{"$schema":"https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json","allowBumping":["lodash"]}',
+      ),
+    );
+    expect(config.allowBumping).toEqual(['lodash']);
   });
 
   it('parses the known keys and defaults the rest', async () => {

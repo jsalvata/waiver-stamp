@@ -149,6 +149,12 @@ to `change-docs` a file the policy doesn't yet allow (or to `allowBumping` a new
 land the `.waiver-stamp.json` change first — an earlier commit in the same PR, or an
 already-merged one — and the waivered commit builds on the base that now carries it.
 
+When you author or edit `.waiver-stamp.json`, conform it to
+`schema/waiver-stamp-config.v0.schema.json` (the source of truth, generated from the Zod
+config schema). To give a human's editor live validation, add its `$id` as a `"$schema"`
+pointer at the top of the file — the loader recognises and ignores that key:
+`"$schema": "https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json"`.
+
 > **Not yet implemented in this build:** `extract-function` and `move-to-new-file`.
 > The schema still lists them, but `apply` / `stamp` will FAIL with "not yet
 > implemented in v0" if a waiver uses them. They are planned next — do **not** author
