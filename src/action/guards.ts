@@ -1,6 +1,6 @@
-import { loadConfig } from '../engine/config.ts';
+import { CONFIG_FILENAME, parseConfig } from '../engine/config.ts';
 import { manifestBumpViolations } from '../engine/deps.ts';
-import { changedFiles, commitsInRange, parents, worktreeAt } from '../git.ts';
+import { changedFiles, commitsInRange, fileAtRef, parents } from '../git.ts';
 
 /** SHAs in base..head whose own diff touches .github/** (per-commit, not net). */
 export async function g1WorkflowIntegrity(
@@ -23,17 +23,22 @@ const MANIFESTS = ['package.json', 'pnpm-lock.yaml'];
  * Resolution/install inputs — files that change what `pnpm install` executes
  * (hooks, registries, patches, alternative manifests). Unlike MANIFESTS these have
  * no "honest bump" envelope: any PR commit touching one is refused, fail-closed,
- * mirroring G1's per-commit scan. Matched by basename so nested copies count too.
- * Kept in sync with lockfile-assay's isResolutionInput.
+ * mirroring G1's per-commit scan. Basename-anchored; the pnpmfile hook matches at any
+ * extension (`.pnpmfile.*`) and patch files by suffix anywhere. Deliberately a *superset*
+ * of lockfile-assay's isResolutionInput — we refuse the whole category rather than
+ * adjudicate it; keep the two in sync as pnpm's input surface grows.
  */
+const RESOLUTION_INPUTS: RegExp[] = [
+  /(^|\/)\.pnpmfile\./, // the hook, at any extension (.cjs/.mjs/.js/…)
+  /(^|\/)\.npmrc$/,
+  /(^|\/)pnpm-workspace\.yaml$/,
+  /(^|\/)package\.(yaml|json5)$/,
+  /\.(patch|diff)$/,
+  /(^|\/)patches\//, // pnpm's default patchedDependencies dir, at any depth
+];
+
 function isResolutionInput(f: string): boolean {
-  const base = f.slice(f.lastIndexOf('/') + 1);
-  if (base === '.pnpmfile.cjs' || base === '.npmrc') return true;
-  if (base === 'pnpm-workspace.yaml') return true;
-  if (base === 'package.yaml' || base === 'package.json5') return true;
-  if (base.endsWith('.patch') || base.endsWith('.diff')) return true;
-  // pnpm's default patchedDependencies location, at any depth
-  return f.startsWith('patches/') || f.includes('/patches/');
+  return RESOLUTION_INPUTS.some((re) => re.test(f));
 }
 
 export async function g2DependencyIntegrity(
@@ -53,27 +58,20 @@ export async function g2DependencyIntegrity(
     }
   }
 
-  // (b) Net-diff envelope for package.json/pnpm-lock.yaml (unchanged behaviour). The
-  //     MANIFESTS short-circuit still skips the (expensive) worktree checkout when no
-  //     manifest moved — safe now that (a) independently covers the resolution inputs.
+  // (b) Net-diff envelope for package.json/pnpm-lock.yaml. Read only the 3 blobs the
+  //     bump gates need via `git show` — no worktree, so the untrusted head tree is never
+  //     materialized on disk. manifestBumpViolations deliberately never reads the lockfile.
   if ((await changedFiles(repo, base, head)).some((f) => MANIFESTS.includes(f))) {
-    const baseTree = await worktreeAt(repo, base);
-    const headTree = await worktreeAt(repo, head);
-    try {
-      const cfg = await loadConfig(baseTree.dir);
-      const basePkg = await readJson(`${baseTree.dir}/package.json`);
-      const headPkg = await readJson(`${headTree.dir}/package.json`);
-      violations.push(...manifestBumpViolations(basePkg, headPkg, cfg.allowBumping ?? []));
-    } finally {
-      await baseTree.cleanup();
-      await headTree.cleanup();
-    }
+    const cfg = parseConfig(await fileAtRef(repo, base, CONFIG_FILENAME)); // policy from BASE
+    const basePkg = parsePackageJson(await fileAtRef(repo, base, 'package.json'));
+    const headPkg = parsePackageJson(await fileAtRef(repo, head, 'package.json'));
+    violations.push(...manifestBumpViolations(basePkg, headPkg, cfg.allowBumping ?? []));
   }
 
   return violations;
 }
 
-async function readJson(path: string): Promise<Record<string, unknown>> {
-  const { readFile } = await import('node:fs/promises');
-  return JSON.parse(await readFile(path, 'utf8'));
+function parsePackageJson(raw: string | null): Record<string, unknown> {
+  if (raw === null) throw new Error('package.json not found at ref'); // fail closed, as before
+  return JSON.parse(raw);
 }

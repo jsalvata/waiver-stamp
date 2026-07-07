@@ -49,8 +49,11 @@ describe('g2DependencyIntegrity', () => {
     expect((await g2DependencyIntegrity(g.repo, base, head)).length).toBeGreaterThan(0);
   });
 
+  // The resolution-input catalog — one case per pnpm install-input type. Keep in sync with
+  // lockfile-assay's isResolutionInput; narrowing RESOLUTION_INPUTS fails these loudly.
   it.each([
     '.pnpmfile.cjs',
+    '.pnpmfile.mjs', // any pnpmfile extension, not just .cjs
     '.npmrc',
     'pnpm-workspace.yaml',
     'package.yaml',
@@ -65,6 +68,20 @@ describe('g2DependencyIntegrity', () => {
     const offenders = await g2DependencyIntegrity(g.repo, base, head);
     expect(offenders.length).toBeGreaterThan(0);
     expect(offenders.some((o) => o.includes(file))).toBe(true);
+  });
+
+  it('does not flag basename-lookalikes (anchoring must not become a substring match)', async () => {
+    const g = await makeGitRepo();
+    const base = await g.commit({ 'src/a.ts': 'export const a = 1;' }, 'init');
+    const head = await g.commit(
+      {
+        'foo.npmrc': 'not actually an .npmrc\n',
+        'notpackage.yaml': 'not actually package.yaml\n',
+        'mypnpm-workspace.yaml': 'not actually pnpm-workspace.yaml\n',
+      },
+      'add basename lookalikes',
+    );
+    expect(await g2DependencyIntegrity(g.repo, base, head)).toEqual([]);
   });
 
   it('flags a nested resolution input by basename, at any depth', async () => {
@@ -104,6 +121,29 @@ describe('g2DependencyIntegrity', () => {
       'unrelated change',
     );
     expect(await g2DependencyIntegrity(g.repo, base, head)).toEqual([]);
+  });
+
+  it('honors an allowlisted bump from BASE config (config read via git show, not worktree)', async () => {
+    const g = await makeGitRepo();
+    const base = await g.commit(
+      {
+        '.waiver-stamp.json': '{"allowBumping":["left-pad"]}',
+        'package.json': '{"dependencies":{"left-pad":"^1.0.0"}}',
+      },
+      'init',
+    );
+    const head = await g.commit(
+      { 'package.json': '{"dependencies":{"left-pad":"^2.0.0"}}' },
+      'bump left-pad',
+    );
+    expect(await g2DependencyIntegrity(g.repo, base, head)).toEqual([]);
+  });
+
+  it('fails closed when package.json is missing at a ref (blob absent, not silently {})', async () => {
+    const g = await makeGitRepo();
+    const base = await g.commit({ 'src/a.ts': 'export const a = 1;' }, 'init'); // no package.json
+    const head = await g.commit({ 'package.json': '{"dependencies":{}}' }, 'add package.json');
+    await expect(g2DependencyIntegrity(g.repo, base, head)).rejects.toThrow();
   });
 
   it('flags both a resolution-input touch and an out-of-envelope bump in the same commit', async () => {

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { WaiverConfigError } from '../errors.ts';
-import { CONFIG_FILENAME, loadConfig } from './config.ts';
+import { CONFIG_FILENAME, loadConfig, parseConfig } from './config.ts';
 
 async function repoWith(config?: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'waiver-cfg-'));
@@ -49,5 +49,27 @@ describe('loadConfig', () => {
     await expect(loadConfig(await repoWith('{"allowBumping":"lodash"}'))).rejects.toBeInstanceOf(
       WaiverConfigError,
     );
+  });
+});
+
+describe('parseConfig', () => {
+  it('yields the empty config for a null (missing-file) input', () => {
+    const config = parseConfig(null);
+    expect(config.changeDocs).toEqual({ allow: [], deny: [] });
+    expect(config.allowBumping).toEqual([]);
+  });
+
+  it('parses the known keys and defaults the rest', () => {
+    const config = parseConfig('{"allowBumping":["lodash"],"changeDocs":{"allow":["docs/**"]}}');
+    expect(config.allowBumping).toEqual(['lodash']);
+    expect(config.changeDocs).toEqual({ allow: ['docs/**'], deny: [] });
+  });
+
+  it('throws WaiverConfigError on malformed JSON', () => {
+    expect(() => parseConfig('not json {')).toThrow(WaiverConfigError);
+  });
+
+  it('throws WaiverConfigError on a schema violation', () => {
+    expect(() => parseConfig('{"allowBumping":"lodash"}')).toThrow(WaiverConfigError);
   });
 });
