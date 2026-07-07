@@ -107,6 +107,15 @@ describe('stamp aggregation (the verdict matrix, §17.2)', () => {
     const report = await stamp({ base: b, head, cwd: g.repo });
     expect(report.verdict).toBe('ABSTAIN');
   });
+
+  it('reports the resolved base and head SHAs it walked', async () => {
+    const g = await makeGitRepo();
+    const base = await g.commit({ 'a.txt': '1' }, 'init');
+    const head = await g.commit({ 'a.txt': '2' }, 'change');
+    const report = await stamp({ cwd: g.repo, base, head });
+    expect(report.base).toBe(base);
+    expect(report.head).toBe(head);
+  });
 });
 
 describe('aggregate (unit)', () => {

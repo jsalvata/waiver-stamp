@@ -44,6 +44,7 @@
   "scripts": {
     "gen:schema": "tsx scripts/gen-schema.ts",
     "build": "pnpm gen:schema && tsc -p tsconfig.build.json",
+    "build:action": "ncc build src/action/main.ts -o .github/actions/waiver-stamp-review/dist --minify",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -62,6 +63,8 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1",
     "@biomejs/biome": "^1.9.4",
     "@commitlint/cli": "^19.5.0",
     "@commitlint/config-conventional": "^19.5.0",
@@ -70,6 +73,8 @@
     "@types/node": "^22.7.0",
     "@types/picomatch": "^4.0.3",
     "@types/semver": "^7.7.1",
+    "@vercel/ncc": "^0.44.1",
+    "fflate": "^0.8.3",
     "husky": "^9.1.6",
     "semantic-release": "^25.0.0",
     "tsx": "^4.19.1",

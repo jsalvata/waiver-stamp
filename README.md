@@ -133,6 +133,12 @@ server (so an agent can call `waiver_apply` / `waiver_verify` / `waiver_stamp`) 
 The plugin's MCP server runs `npx -y waiver-stamp mcp`, so the npm package above is
 its only prerequisite.
 
+### Automate PR review (CI/CD)
+
+To turn a correctly waivered PR into an auto-approved one, wire `waiver stamp --json` into
+your CI and add a privileged reviewer workflow that posts the mapped GitHub review. See
+[`docs/auto-approval-setup.md`](docs/auto-approval-setup.md) for full instructions.
+
 ## CLI
 
 ```bash

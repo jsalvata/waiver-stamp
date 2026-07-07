@@ -40,6 +40,28 @@ const ConfigSchema = z
 /** The parsed project config; each policy reads the slice it owns. */
 export type WaiverConfig = z.infer<typeof ConfigSchema>;
 
+/** Parse raw `.waiver-stamp.json` contents (or null for a missing file). */
+export function parseConfig(
+  raw: string | null,
+  pathForErrors: string = CONFIG_FILENAME,
+): WaiverConfig {
+  if (raw === null) return ConfigSchema.parse({});
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (cause) {
+    throw new WaiverConfigError(pathForErrors, 'not valid JSON', { cause });
+  }
+  const result = ConfigSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new WaiverConfigError(
+      pathForErrors,
+      result.error.issues.map((i) => i.message).join('; '),
+    );
+  }
+  return result.data;
+}
+
 /**
  * Parse `<dir>/.waiver-stamp.json` against the single project schema. A missing
  * file yields the empty config (every policy off). Malformed JSON, an unknown
@@ -47,25 +69,11 @@ export type WaiverConfig = z.infer<typeof ConfigSchema>;
  */
 export async function loadConfig(dir: string): Promise<WaiverConfig> {
   const path = join(dir, CONFIG_FILENAME);
-
-  let raw: string;
+  let raw: string | null;
   try {
     raw = await readFile(path, 'utf8');
   } catch {
-    return ConfigSchema.parse({});
+    raw = null;
   }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (cause) {
-    throw new WaiverConfigError(path, 'not valid JSON', { cause });
-  }
-
-  const result = ConfigSchema.safeParse(parsed);
-  if (!result.success) {
-    throw new WaiverConfigError(path, result.error.issues.map((i) => i.message).join('; '));
-  }
-
-  return result.data;
+  return parseConfig(raw, path);
 }

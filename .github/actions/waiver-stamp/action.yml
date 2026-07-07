@@ -1,0 +1,39 @@
+name: waiver-stamp
+description: Run waiver stamp over the PR range, publish a report artifact, and gate on the verdict.
+inputs:
+  waiver-version:
+    description: Version of the waiver-stamp CLI to run.
+    required: false
+    default: latest
+runs:
+  using: composite
+  steps:
+    - id: stamp
+      env:
+        BASE: ${{ github.event.pull_request.base.sha }}
+        HEAD: ${{ github.event.pull_request.head.sha }}
+        WAIVER_VERSION: ${{ inputs.waiver-version }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        VER="$(npx --yes waiver-stamp@"$WAIVER_VERSION" --version)"
+        set +e
+        npx --yes waiver-stamp@"$WAIVER_VERSION" stamp --base "$BASE" --head "$HEAD" --json > report.raw.json
+        CODE=$?
+        set -e
+        # Wrap with toolVersion; the report already carries verdict/base/head (Task 1).
+        node -e "const r=require('./report.raw.json');process.stdout.write(JSON.stringify({...r,toolVersion:'$VER'}))" > waiver-stamp-report.json
+        {
+          echo "### waiver-stamp"
+          node -e "const r=require('./waiver-stamp-report.json');console.log('Verdict: **'+r.verdict+'**  (',r.commits.length,'commits )')"
+        } >> "$GITHUB_STEP_SUMMARY"
+        echo "verdict=$(node -e "process.stdout.write(require('./waiver-stamp-report.json').verdict)")" >> "$GITHUB_OUTPUT"
+    - if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: waiver-stamp-report
+        path: waiver-stamp-report.json
+        retention-days: 3
+    - if: steps.stamp.outputs.verdict == 'REQUEST_CHANGES'
+      shell: bash
+      run: 'echo "waiver claim failed — see the job summary"; exit 1'

@@ -1,0 +1,34 @@
+name: waiver-stamp-review
+on:
+  workflow_run:
+    workflows: [CI]           # every backstop-producing workflow (here: CI carries build + waiver-stamp)
+    types: [completed]
+permissions:
+  pull-requests: write
+  checks: read
+  contents: read
+  actions: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: waiver-stamp-review-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    steps:
+      # SECURITY (pwn-request): this job has a write token. It must run the TRUSTED
+      # default-branch action code, NEVER the PR head's version of dist/index.js (which a
+      # malicious PR could rewrite to exfiltrate the token or neuter G1 from inside). So check
+      # out the default branch for the action + engine, and bring the PR head in only as DATA.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch the PR head commits (data for G1/G2 — never executed)
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: git fetch --no-tags --force origin "$HEAD_SHA"
+      - uses: ./.github/actions/waiver-stamp-review   # trusted default-branch action code
+        with:
+          ci-checks: build          # the backstop only; NOT the waiver-stamp check (its verdict is the artifact, §4.2)
+          lockfile-honesty-checks: ''

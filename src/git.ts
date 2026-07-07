@@ -76,3 +76,12 @@ export async function worktreeAt(repo: string, ref: string): Promise<Worktree> {
     },
   };
 }
+
+/** Contents of `path` at `ref`, or null if the path does not exist at that ref. */
+export async function fileAtRef(repo: string, ref: string, path: string): Promise<string | null> {
+  try {
+    return await runGit(repo, ['show', `${ref}:${path}`]);
+  } catch {
+    return null; // path absent at ref (or unreadable) — callers treat as missing
+  }
+}

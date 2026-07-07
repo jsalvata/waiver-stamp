@@ -1,0 +1,47 @@
+# Copy-paste template: the adopter's producer workflow.
+#
+# This job runs waiver-stamp as ordinary, unprivileged pull_request CI. It computes the
+# verdict over the PR range and publishes it as a named check ("waiver-stamp") plus a
+# run artifact ("waiver-stamp-report") that the privileged reviewer caller (see
+# waiver-stamp-review.yml in this directory) later consumes. It never needs a write
+# token — forks get the default read-only GITHUB_TOKEN, which is all this job uses.
+#
+# See docs/auto-approval-setup.md for the full checklist this template is step 1 of.
+
+name: CI  # <-- EDIT: your existing CI workflow name. The reviewer caller's `workflows:`
+          #     list (in waiver-stamp-review.yml) must name this workflow exactly.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Your existing CI job(s) — lint / typecheck / test / build / … — stay here, unchanged.
+  #    Shown only so it's clear that `waiver-stamp` (below) is a sibling job at this same
+  #    `jobs:` level: keep your own jobs, just add `waiver-stamp` alongside them. waiver-stamp
+  #    needs none of your deps installed — it runs in its own npx sandbox.
+  build:                     # <-- EDIT: your existing job(s); replace with your real pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - run: "..."           # <-- your lint / typecheck / test / build steps
+
+  waiver-stamp:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # required: waiver-stamp walks the full base..head commit range
+          persist-credentials: false
+
+      - name: waiver-stamp
+        # Pin to a full commit SHA of jsalvata/waiver-stamp, not a branch or tag — this
+        # action's code runs unprivileged (read-only token on forks), so SHA-pinning
+        # here is about supply-chain hygiene, not the trust boundary itself (that's the
+        # reviewer caller's job, see waiver-stamp-review.yml).
+        uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@<COMMIT_SHA>  # <-- EDIT: full SHA
+        with:
+          waiver-version: latest  # <-- EDIT: pin to a specific waiver-stamp release if you want
+                                   #     reproducible verdicts independent of new tool releases.

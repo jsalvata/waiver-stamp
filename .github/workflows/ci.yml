@@ -5,11 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
@@ -37,3 +42,45 @@ jobs:
           node dist/cli.js --help | grep -q ' verify '
           node dist/cli.js --help | grep -q ' stamp '
           node dist/cli.js verify --help >/dev/null
+
+  # Dogfood producer. This intentionally does NOT reuse the published composite action
+  # (.github/actions/waiver-stamp) the way examples/waiver-stamp-ci.yml does — because this
+  # repo *is* the tool. An adopter runs a pinned, released `npx waiver-stamp@<version>`; we
+  # must instead stamp with the exact source under test (`node dist/cli.js` from this PR's
+  # own build), so a change that breaks stamping fails its own CI. The published artifact
+  # contract (name `waiver-stamp-report`, verdict/base/head + toolVersion) is kept identical
+  # so the same privileged reviewer consumes both.
+  waiver-stamp:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - id: stamp
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="$(node dist/cli.js --version)"
+          set +e
+          node dist/cli.js stamp --base "$BASE" --head "$HEAD" --json > report.raw.json
+          set -e
+          node -e "const r=require('./report.raw.json');process.stdout.write(JSON.stringify({...r,toolVersion:'$VER'}))" > waiver-stamp-report.json
+          {
+            echo '### waiver-stamp'
+            node -e "const r=require('./waiver-stamp-report.json');console.log('Verdict: **'+r.verdict+'**')"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "verdict=$(node -e "process.stdout.write(require('./waiver-stamp-report.json').verdict)")" >> "$GITHUB_OUTPUT"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: waiver-stamp-report, path: waiver-stamp-report.json, retention-days: 3 }
+      - if: steps.stamp.outputs.verdict == 'REQUEST_CHANGES'
+        shell: bash
+        run: 'echo "waiver claim failed — see the job summary"; exit 1'

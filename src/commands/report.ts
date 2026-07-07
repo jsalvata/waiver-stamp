@@ -53,6 +53,10 @@ export interface PerCommitResult {
 export interface VerifyReport {
   /** The highest-severity verdict present (REQUEST_CHANGES > COMMENT > APPROVE > ABSTAIN). */
   verdict: Verdict;
+  /** Resolved SHA the range was walked from (git first-parent floor). */
+  base: string;
+  /** Resolved SHA the range was walked to (the stamped head). */
+  head: string;
   commits: PerCommitResult[];
 }
 
