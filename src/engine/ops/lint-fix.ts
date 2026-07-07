@@ -71,29 +71,46 @@ interface Linter {
 }
 
 /**
- * Resolve the repo's linter (v0: Biome). The linter must be declared in the
+ * A linter `lint-fix` knows how to drive: the manifest package that declares it, its
+ * binary name, and the CLI verb that applies safe fixes in place. Biome's `check --write`
+ * applies safe fixes and organizes imports; `--unsafe` is deliberately omitted so only
+ * safe fixes land (§6.1).
+ */
+interface LinterSpec {
+  pkg: string;
+  bin: string;
+  args: readonly string[];
+}
+
+/** The linters `lint-fix` supports, resolved from the folded tree's own manifest (§6.1). */
+const SUPPORTED_LINTERS: readonly LinterSpec[] = [
+  { pkg: '@biomejs/biome', bin: 'biome', args: ['check', '--write'] },
+];
+
+/**
+ * Resolve the repo's linter (v0 catalog). The linter must be declared in the
  * folded tree's own manifest — the committed toolchain is the source of truth
  * (§6.1) — and its binary is resolved from an actual install (`toolchainRoot`
  * first, then the tree). Either miss FAILs closed (spec §9): an undeclared or
  * unresolvable linter never yields `O`, so it can never yield a false stamp.
  */
 function resolveLinter(cwd: string, toolchainRoot: string): Linter {
-  if (!manifestDeclares(cwd, '@biomejs/biome')) {
+  const declared = SUPPORTED_LINTERS.filter((linter) => manifestDeclares(cwd, linter.pkg));
+  if (declared.length === 0) {
     throw new OpApplicationError(
       'lint-fix',
-      "no supported linter is declared in the tree's package.json (v0 supports @biomejs/biome)",
+      `no supported linter is declared in the tree's package.json (supported: ${SUPPORTED_LINTERS.map((l) => l.pkg).join(', ')})`,
     );
   }
-  const bin = resolveBin('biome', [toolchainRoot, cwd]);
+  const [spec] = declared as [LinterSpec, ...LinterSpec[]];
+  const bin = resolveBin(spec.bin, [toolchainRoot, cwd]);
   if (!bin) {
     throw new OpApplicationError(
       'lint-fix',
-      'biome is declared but its binary was not found in node_modules/.bin (run the package install)',
+      `${spec.pkg} is declared but its ${spec.bin} binary was not found in node_modules/.bin (run the package install)`,
     );
   }
-  // `check --write` applies safe fixes and organizes imports in place; `--unsafe`
-  // is deliberately omitted so only safe fixes land (§6.1).
-  return { bin, args: ['check', '--write'] };
+  return { bin, args: spec.args };
 }
 
 /** Whether `pkg` appears in the tree's package.json dependencies or devDependencies. */
