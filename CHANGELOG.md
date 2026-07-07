@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/jsalvata/waiver-stamp/compare/v1.10.0...v1.11.0) (2026-07-07)
+
+
+### Features
+
+* publish json schema for .waiver-stamp.json ([9a59483](https://github.com/jsalvata/waiver-stamp/commit/9a59483f3551305f67a98cacac4f57efac0a1071))
+
 # [1.10.0](https://github.com/jsalvata/waiver-stamp/compare/v1.9.0...v1.10.0) (2026-07-07)
 
 
