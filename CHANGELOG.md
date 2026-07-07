@@ -1,3 +1,10 @@
+## [1.11.1](https://github.com/jsalvata/waiver-stamp/compare/v1.11.0...v1.11.1) (2026-07-07)
+
+
+### Bug Fixes
+
+* use full author name in license and metadata ([3308b83](https://github.com/jsalvata/waiver-stamp/commit/3308b83a1b6424115d1f88103d92f52e52865341))
+
 # [1.11.0](https://github.com/jsalvata/waiver-stamp/compare/v1.10.0...v1.11.0) (2026-07-07)
 
 
