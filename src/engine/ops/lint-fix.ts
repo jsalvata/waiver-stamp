@@ -1,7 +1,7 @@
 /**
  * `lint-fix` (spec §5.1, §6.1) — run the repo's own committed linter over the
  * named files, applying safe fixes only. Tool-reproducible, not engine-performed:
- * the transform is delegated to an external binary (v0: Biome) resolved from the
+ * the transform is delegated to an external binary (v0: Biome or ESLint) resolved from the
  * invoking checkout's install. Reproduction is the whole claim — `O`'s post-fix
  * emit must equal head's, so a hand edit smuggled alongside the lint fix still
  * mismatches (§6.1). Not strictly behaviour-preserving (import reordering changes
@@ -85,6 +85,7 @@ interface LinterSpec {
 /** The linters `lint-fix` supports, resolved from the folded tree's own manifest (§6.1). */
 const SUPPORTED_LINTERS: readonly LinterSpec[] = [
   { pkg: '@biomejs/biome', bin: 'biome', args: ['check', '--write'] },
+  { pkg: 'eslint', bin: 'eslint', args: ['--fix'] },
 ];
 
 /**
@@ -100,6 +101,14 @@ function resolveLinter(cwd: string, toolchainRoot: string): Linter {
     throw new OpApplicationError(
       'lint-fix',
       `no supported linter is declared in the tree's package.json (supported: ${SUPPORTED_LINTERS.map((l) => l.pkg).join(', ')})`,
+    );
+  }
+  if (declared.length > 1) {
+    throw new OpApplicationError(
+      'lint-fix',
+      `the tree declares multiple supported linters (${declared
+        .map((l) => l.pkg)
+        .join(', ')}); the committed toolchain is ambiguous`,
     );
   }
   const [spec] = declared as [LinterSpec, ...LinterSpec[]];

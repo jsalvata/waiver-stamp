@@ -4,7 +4,7 @@
  * project on disk so engine tests run against a real tsconfig + real files.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +39,40 @@ export const FIXTURE_PACKAGE_JSON = `${JSON.stringify(
   null,
   2,
 )}\n`;
+
+/** A committable `package.json` declaring ESLint so the `lint-fix` op selects it. */
+export const FIXTURE_ESLINT_PACKAGE_JSON = `${JSON.stringify(
+  { name: 'fixture', devDependencies: { eslint: '^9.0.0' } },
+  null,
+  2,
+)}\n`;
+
+/**
+ * Write a stub `eslint` into `<cwd>/node_modules/.bin/eslint` that honors `--fix <files>`
+ * by replacing `var` with `const` in each named file. `resolveBin` searches the fixture
+ * cwd, so tests resolve this without an eslint devDep on waiver-stamp — which would make
+ * this repo's own manifest declare two linters and trip the both-declared ambiguity rule.
+ * ESLint's real autofix determinism is an assumed third-party property (spec §9); the stub
+ * validates the engine's seam (detection -> `--fix` invocation -> changed-file detection).
+ */
+export async function installStubEslint(cwd: string): Promise<void> {
+  const binDir = join(cwd, 'node_modules', '.bin');
+  await mkdir(binDir, { recursive: true });
+  const bin = join(binDir, 'eslint');
+  const script = [
+    '#!/usr/bin/env node',
+    "const { readFileSync, writeFileSync } = require('node:fs');",
+    "const files = process.argv.slice(2).filter((a) => !a.startsWith('-'));",
+    'for (const f of files) {',
+    "  const before = readFileSync(f, 'utf8');",
+    "  const after = before.replace(/\\bvar\\b/g, 'const');",
+    '  if (after !== before) writeFileSync(f, after);',
+    '}',
+    '',
+  ].join('\n');
+  await writeFile(bin, script, 'utf8');
+  await chmod(bin, 0o755);
+}
 
 export interface Fixture {
   /** Absolute path to the temp project root (holds tsconfig.json). */

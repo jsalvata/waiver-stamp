@@ -189,8 +189,8 @@ waivered commits.
 ## Scope (v0)
 
 Implemented: the **`rename`** and **`move-file`** reproductive ops; the **`lint-fix`**
-tool-reproducible op (runs the repo's own committed linter — v0: Biome — over the named
-files, safe fixes only); **`change-test`** / **`change-docs`** exclusion ops; the standing
+tool-reproducible op (runs the repo's own committed linter — v0: Biome or ESLint — over
+the named files, safe fixes only); **`change-test`** / **`change-docs`** exclusion ops; the standing
 **dependency-bump policy** (allowlisted,
 up-moving dependency bumps confined to `package.json` + `pnpm-lock.yaml`; lockfile
 honesty is delegated to the repo's required external check, e.g. lockfile-firewall —
