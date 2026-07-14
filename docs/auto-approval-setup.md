@@ -70,11 +70,12 @@ gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha
 ```
 
 **Whichever you pick, that single pin covers the tool as well as the actions.** The producer
-action's `waiver-version` input defaults to *the CLI release that ships at the ref you pinned*
-(it reads the version out of its own checkout), so the pin gives you a fully reproducible
-verdict — it is not merely pinning the shell script that invokes the tool. You only need
-`waiver-version` if you want to deviate: `latest` to float deliberately, or an explicit `x.y.z`
-to run a CLI version other than the one the pinned action shipped with.
+action takes no inputs and the CLI version is not selectable: it always runs *the release that
+ships at the ref you pinned*, read out of its own checkout. So the pin gives you a fully
+reproducible verdict — it is not merely pinning the shell script that invokes the tool. There is
+deliberately no way to point the action at a different CLI version, because the only things that
+would buy you are a float (`latest`) or an action/CLI mismatch, and both silently give up the
+property you pinned for.
 
 Upgrading is therefore one edit: bump both refs to the new release.
 

@@ -9,14 +9,13 @@
 #                                     SECURITY header)
 #   docs/auto-approval-setup.md       the pin named in the setup guide
 #
-# Three distinct shapes carry the version, and MISSING ONE is the failure mode this script
+# Two distinct shapes carry the version, and MISSING ONE is the failure mode this script
 # exists to prevent — a template pinned to the new release while the `gh api …/commits/vX`
 # line beside it still names the old one is worse than either alone, because the reader
 # cannot tell which is authoritative:
 #
 #   @v1.2.3                    the tag pin itself (and bare `@v1.2.3` in prose)
 #   commits/v1.2.3             the `gh api …/commits/<tag>` tag→SHA one-liner
-#   waiver-version: 1.2.3      the override example in the producer template's comments
 #
 # NB we do NOT rewrite a CLI version inside action.yml. Unlike lockfile-assay, which pins
 # `VERSION="x.y.z"` in its action, our producer resolves the CLI release from its OWN
@@ -43,12 +42,10 @@ SEMVER='[0-9]+\.[0-9]+\.[0-9]+'
 PATTERNS=(
   "@v${SEMVER}"
   "commits/v${SEMVER}"
-  "waiver-version: ${SEMVER}"
 )
 REPLACEMENTS=(
   "@v${VER}"
   "commits/v${VER}"
-  "waiver-version: ${VER}"
 )
 
 # NB: no `sed -i`. It is not portable — GNU takes no argument, while BSD/macOS consumes the

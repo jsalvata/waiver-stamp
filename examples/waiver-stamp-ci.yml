@@ -49,7 +49,7 @@ jobs:
         # default `unpinned-uses`, say), swap in the SHA this tag points at instead:
         #   gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha
         uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@v1.11.2
-        # No `with:` needed. `waiver-version` defaults to the CLI release that ships at the ref
-        # you pinned above, so the pin covers BOTH this action's code and the tool it runs.
-        # Override only if you deliberately want to float (`waiver-version: latest`) or to run a
-        # CLI version other than the one this action shipped with (`waiver-version: 1.11.2`).
+        # No `with:` — the action takes no inputs. The CLI version is not selectable: it is
+        # always the release that ships at the ref you pinned above, so that one pin covers
+        # BOTH this action's code and the tool that computes the verdict. To change the tool,
+        # move the ref.

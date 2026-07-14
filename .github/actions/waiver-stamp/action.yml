@@ -1,13 +1,12 @@
 name: waiver-stamp
 description: Run waiver stamp over the PR range, publish a report artifact, and gate on the verdict.
-inputs:
-  waiver-version:
-    description: >-
-      Version of the waiver-stamp CLI to run. Empty (the default) means "the version that
-      ships at this action's own pinned ref", so pinning `uses:` to a SHA also pins the tool
-      that computes the verdict. Pass an explicit `x.y.z` — or `latest` to float — to override.
-    required: false
-    default: ''
+# No inputs, deliberately. The CLI version is NOT selectable: it is always the release that ships
+# at this action's own pinned ref, so `uses: …@<ref>` pins the tool that computes the verdict and
+# not merely the shell script below. An input to override it could only ever be used to UNDO that
+# — `latest` to float (the bug this repo shipped and then fixed), or an `x.y.z` mismatched with
+# the action it runs beside, which nothing downstream detects (the reviewer records toolVersion
+# but never checks it). The action and the CLI release in lockstep from this one repo, so every
+# CLI version has a matching ref: to change the tool, move the ref.
 runs:
   using: composite
   steps:
@@ -15,17 +14,12 @@ runs:
       env:
         BASE: ${{ github.event.pull_request.base.sha }}
         HEAD: ${{ github.event.pull_request.head.sha }}
-        WAIVER_VERSION: ${{ inputs.waiver-version }}
       shell: bash
       run: |
         set -euo pipefail
-        # Resolve the default from this action's own checkout: GitHub materialises the whole
-        # waiver-stamp repo at the pinned ref, so its package.json names the CLI release that
-        # matches this very code. Without this, the SHA pin would cover only the shell script
-        # below while `latest` silently floated the tool whose verdict removes human review.
-        if [ -z "$WAIVER_VERSION" ]; then
-          WAIVER_VERSION="$(node -p "require(process.argv[1]).version" "$GITHUB_ACTION_PATH/../../../package.json")"
-        fi
+        # GitHub materialises the whole waiver-stamp repo at the pinned ref, so its package.json
+        # names the CLI release that matches this very code.
+        WAIVER_VERSION="$(node -p "require(process.argv[1]).version" "$GITHUB_ACTION_PATH/../../../package.json")"
         VER="$(npx --yes waiver-stamp@"$WAIVER_VERSION" --version)"
         set +e
         npx --yes waiver-stamp@"$WAIVER_VERSION" stamp --base "$BASE" --head "$HEAD" --json > report.raw.json
