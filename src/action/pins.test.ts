@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-// Grep-level guards over the artifacts an adopter copy-pastes. Nothing else in the
-// suite reads them: our own CI dogfoods the CLI directly (`node dist/cli.js`, see
-// .github/workflows/ci.yml) and never loads the composite action or the templates,
-// so a broken pin in here passes every other check and ships. These tests are the
-// only thing standing between a bad pin and an adopter's write token.
+// Grep-level guards over the artifacts an adopter copy-pastes. Nothing exercises the
+// pins or the templates: the dogfood `waiver-stamp` job stamps with `node dist/cli.js`
+// from the source under test, and the action-selftest workflow runs the composite action
+// but against this PR's own range, not the pinned templates. So a broken pin here passes
+// every other check and ships. These tests are the only thing standing between a bad pin
+// and an adopter's write token.
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
 
@@ -96,8 +97,9 @@ describe('the producer action pins the CLI it installs', () => {
   });
 
   it('never installs the CLI unpinned', () => {
-    // every `waiver-stamp@…` install must carry the resolved version, not a bare name or `latest`
+    // every install must carry the resolved version — `waiver-stamp@<version>`, never a bare
+    // name or `@latest`, whether installed via `npm install` or `npx`.
     expect(actionYml()).not.toMatch(/waiver-stamp@latest/);
-    expect(actionYml()).not.toMatch(/npx\s+(--yes\s+)?waiver-stamp(?!@)/);
+    expect(actionYml()).not.toMatch(/\b(?:npm\s+install|npx)\b[^\n]*\bwaiver-stamp(?!@)/);
   });
 });
