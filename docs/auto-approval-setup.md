@@ -50,11 +50,13 @@ The templates ship pinned to a release tag (`@v1.11.2`, kept current on every re
 can paste them as-is** — we keep `v*` tags immutable via a repo ruleset. If your policy is
 hash-pin-only (e.g. [zizmor](https://github.com/zizmorcore/zizmor)'s default `unpinned-uses`), or
 you'd rather not rely on a setting you can't see, swap in the SHA the tag points at:
-`gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha`. Just keep both files on the same
-ref, and never a mutable one (a branch, `@main`).
+`gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha`. You pin twice — the producer's
+`uses:` (in `waiver-stamp-ci.yml`) and the reviewer's (in `waiver-stamp-review.yml`); keep both on
+the same ref, and never a mutable one (a branch, `@main`).
 
 Either way the pin also fixes the CLI version — it ships at the ref you pinned — so the verdict is
-fully reproducible, not just the shell script. Upgrading is one edit: bump both refs.
+fully reproducible, not just the shell script. Upgrading means bumping those two pins to the new
+release.
 
 ## Adopter checklist
 
