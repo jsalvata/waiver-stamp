@@ -1,3 +1,10 @@
+## [1.11.2](https://github.com/jsalvata/waiver-stamp/compare/v1.11.1...v1.11.2) (2026-07-14)
+
+
+### Bug Fixes
+
+* pin cli version to the action's own ref ([0ad8796](https://github.com/jsalvata/waiver-stamp/commit/0ad8796cb6046ae258ad4c9cdc01772be1a2f165))
+
 ## [1.11.1](https://github.com/jsalvata/waiver-stamp/compare/v1.11.0...v1.11.1) (2026-07-07)
 
 
