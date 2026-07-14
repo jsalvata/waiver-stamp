@@ -82,24 +82,17 @@ jobs:
       #   gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha
       - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.11.2
         with:
-          # <-- EDIT: newline/comma list of YOUR required CHECK-RUN name(s) that must be green on
-          #     the head SHA. These are check-run names, NOT workflow job ids — the two differ
-          #     whenever a job uses `name:` or a matrix:
-          #
+          # These are CHECK-RUN names that must be green on the head SHA — NOT workflow job ids.
+          # The two differ whenever a job sets `name:` or uses a matrix:
           #       jobs.build             -> "build"
           #       jobs.test (name: Unit) -> "Unit"
-          #       a matrix job `integration` over node 9.12.0 / 10.0.0
+          #       matrix `integration` over node 9.12.0 / 10.0.0
           #                              -> "integration (9.12.0)", "integration (10.0.0)"
-          #
-          #     One entry per matrix leg — listing the bare job id `integration` matches nothing
-          #     and the reviewer waits forever (fail-closed: no review, never a wrong one).
-          #     To read the real names off a recent PR of your own:
-          #
+          # One entry per matrix leg — a bare `integration` matches nothing and the reviewer then
+          # waits forever (fail-closed). Read the real names off a recent PR of your own:
           #       gh api repos/OWNER/REPO/commits/<head-sha>/check-runs --jq '.check_runs[].name'
-          #
-          #     Do NOT list "waiver-stamp" itself here — its verdict IS the artifact this action
-          #     already trusts.
-          ci-checks: |
+          # Do NOT list "waiver-stamp" itself — its verdict IS the artifact this action trusts.
+          ci-checks: |  # <-- EDIT: replace `build` below with your check-run name(s), one per line
             build
           lockfile-honesty-checks: ''  # <-- EDIT (optional): if you have a separate
                              #     lockfile-honesty check (e.g. lockfile-firewall) wired

@@ -204,14 +204,10 @@ product).
 their existing build job (after `install`), or runs as a small dedicated job on
 `pull_request`.
 
-- **Inputs:** none, deliberately. The CLI version is not selectable: the step always runs **the
-  release that ships at the action's own pinned ref**, reading the version out of its own
-  checkout (`$GITHUB_ACTION_PATH/../../../package.json`), so an adopter's `uses: …@<ref>` pin
-  covers the tool that computes the verdict, not merely the shell script that invokes it. An
-  override input would only ever serve to undo that — floating on `latest`, or pairing the
-  action with a CLI it never released against (undetected: the reviewer records `toolVersion`
-  but does not check it). The action and the CLI release in lockstep, so every CLI version has
-  a matching ref: to change the tool, move the ref.
+- **Inputs:** none. The step runs **the CLI release that ships at the action's own pinned ref**,
+  reading the version out of its own checkout (`$GITHUB_ACTION_PATH/../../../package.json`), so an
+  adopter's `uses: …@<ref>` pin covers the tool that computes the verdict, not merely the shell
+  script that invokes it. To run a different CLI version, move the ref.
 - **Behaviour:** resolve `base = event.pull_request.base.sha`,
   `head = event.pull_request.head.sha`; run `waiver stamp --base --head --json`; write the
   verdict + per-commit findings to the **job summary**; upload the report (plus the `base`

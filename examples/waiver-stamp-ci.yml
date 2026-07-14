@@ -37,19 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: waiver-stamp
-        # Pin to a full commit SHA of jsalvata/waiver-stamp, not a branch or tag. This job is
-        # unprivileged (read-only token on forks), but do not read that as "the pin doesn't
-        # matter": the verdict this job publishes is what the privileged reviewer consumes to
-        # decide APPROVE. The reviewer re-derives its own guards (G1/G2) from git data, so a
-        # bad tool cannot touch `.github/**` or sneak a dependency bump past it — but the core
-        # "is this really a mechanical refactor" judgment is this tool's, so pin it.
-        #
-        # The `v*` tags are immutable (enforced by a repo ruleset), so this tag pin cannot be
-        # force-moved under you. Paste it as-is. If your policy is hash-pin-only (zizmor's
-        # default `unpinned-uses`, say), swap in the SHA this tag points at instead:
-        #   gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha
+        # Safe to paste as-is: we keep `v*` tags immutable (a repo ruleset). Prefer a full SHA
+        # if your policy is hash-pin-only — `gh api repos/jsalvata/waiver-stamp/commits/v1.11.2
+        # --jq .sha`. The pin also fixes the CLI version (it ships at this ref), so no `with:`.
         uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@v1.11.2
-        # No `with:` — the action takes no inputs. The CLI version is not selectable: it is
-        # always the release that ships at the ref you pinned above, so that one pin covers
-        # BOTH this action's code and the tool that computes the verdict. To change the tool,
-        # move the ref.

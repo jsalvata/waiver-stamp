@@ -1,12 +1,5 @@
 name: waiver-stamp
 description: Run waiver stamp over the PR range, publish a report artifact, and gate on the verdict.
-# No inputs, deliberately. The CLI version is NOT selectable: it is always the release that ships
-# at this action's own pinned ref, so `uses: …@<ref>` pins the tool that computes the verdict and
-# not merely the shell script below. An input to override it could only ever be used to UNDO that
-# — `latest` to float (the bug this repo shipped and then fixed), or an `x.y.z` mismatched with
-# the action it runs beside, which nothing downstream detects (the reviewer records toolVersion
-# but never checks it). The action and the CLI release in lockstep from this one repo, so every
-# CLI version has a matching ref: to change the tool, move the ref.
 runs:
   using: composite
   steps:
@@ -17,8 +10,9 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        # GitHub materialises the whole waiver-stamp repo at the pinned ref, so its package.json
-        # names the CLI release that matches this very code.
+        # Run the CLI release that ships at this action's pinned ref: GitHub materialises the
+        # repo here, so its package.json names the version matching this code. That makes
+        # `uses: …@<ref>` pin the tool that computes the verdict, not just this script.
         WAIVER_VERSION="$(node -p "require(process.argv[1]).version" "$GITHUB_ACTION_PATH/../../../package.json")"
         VER="$(npx --yes waiver-stamp@"$WAIVER_VERSION" --version)"
         set +e

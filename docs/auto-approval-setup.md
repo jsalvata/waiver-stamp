@@ -46,38 +46,15 @@ complete design rationale.
 
 ## Which ref to pin
 
-The templates ship pinned to a release tag — `@v1.11.2` — and that tag is kept current for you
-on every release, so **you can paste them as-is**. Both files must name the same ref.
+The templates ship pinned to a release tag (`@v1.11.2`, kept current on every release), so **you
+can paste them as-is** — we keep `v*` tags immutable via a repo ruleset. If your policy is
+hash-pin-only (e.g. [zizmor](https://github.com/zizmorcore/zizmor)'s default `unpinned-uses`), or
+you'd rather not rely on a setting you can't see, swap in the SHA the tag points at:
+`gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha`. Just keep both files on the same
+ref, and never a mutable one (a branch, `@main`).
 
-The rule that actually matters is: **pin an immutable ref, never a mutable one.** A branch or
-`@main` would let the code that holds your write token change under you without you re-pinning.
-Two refs qualify, and the choice is a trust question, not a security-vs-insecurity one:
-
-| Pin | What makes it immutable | Use when |
-| --- | --- | --- |
-| `@v1.11.2` (tag) | A repository ruleset on `jsalvata/waiver-stamp` restricts *update* and *deletion* on `v*` tags, so a published tag cannot be force-moved. | Default. Readable, and upgrading is a one-token edit. |
-| `@<40-char SHA>` (hash) | Git itself — a commit SHA is content-addressed, so it needs no trust in our repo settings at all. | Your policy is hash-pin-only (e.g. [zizmor](https://github.com/zizmorcore/zizmor)'s default `unpinned-uses` audit), or you'd rather not rely on a setting you can't see. |
-
-The honest distinction: a tag's immutability is a property of *our* configuration, which you
-must take on trust; a SHA's is arithmetic you can verify yourself. That gap is small — you are
-already trusting us to run our code against your write token — but it is real, so hash-pinning
-stays fully supported and is what we'd choose for the privileged reviewer under a strict policy.
-
-To resolve the tag to its SHA:
-
-```bash
-gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha
-```
-
-**Whichever you pick, that single pin covers the tool as well as the actions.** The producer
-action takes no inputs and the CLI version is not selectable: it always runs *the release that
-ships at the ref you pinned*, read out of its own checkout. So the pin gives you a fully
-reproducible verdict — it is not merely pinning the shell script that invokes the tool. There is
-deliberately no way to point the action at a different CLI version, because the only things that
-would buy you are a float (`latest`) or an action/CLI mismatch, and both silently give up the
-property you pinned for.
-
-Upgrading is therefore one edit: bump both refs to the new release.
+Either way the pin also fixes the CLI version — it ships at the ref you pinned — so the verdict is
+fully reproducible, not just the shell script. Upgrading is one edit: bump both refs.
 
 ## Adopter checklist
 
