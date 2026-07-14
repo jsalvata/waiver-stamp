@@ -43,6 +43,29 @@ jobs:
           node dist/cli.js --help | grep -q ' stamp '
           node dist/cli.js verify --help >/dev/null
 
+  # lockfile-assay needs Node >= 22, so this job pins 22 rather than the 20 the rest of CI
+  # builds against. fetch-depth: 0 is required — the check re-derives the lockfile from the
+  # merge base, which a shallow clone does not have.
+  lockfile-assay:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Check lockfile derivation
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          MERGE_BASE="$(git merge-base "$BASE" "$HEAD")"
+          pnpm exec lockfile-assay check --base "$MERGE_BASE" --head "$HEAD"
+
   # Dogfood producer. This intentionally does NOT reuse the published composite action
   # (.github/actions/waiver-stamp) the way examples/waiver-stamp-ci.yml does — because this
   # repo *is* the tool. An adopter runs a pinned, released `npx waiver-stamp@<version>`; we
