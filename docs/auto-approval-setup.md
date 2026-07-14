@@ -44,6 +44,28 @@ reasoning, the design doc §3.4 for the threat model this defends against (the c
 GitHub Actions "pwn request"), and [`automation-layer.md`](automation-layer.md) for the
 complete design rationale.
 
+## Which SHA to pin
+
+Both templates say `@<COMMIT_SHA>`. **Use the commit SHA that the latest release tag points
+at** — the same SHA in both files:
+
+```bash
+gh api repos/jsalvata/waiver-stamp/commits/"$(
+  gh api repos/jsalvata/waiver-stamp/releases/latest --jq .tag_name
+)" --jq .sha
+```
+
+Pin to a full 40-character commit SHA, never a tag or branch: a tag can be force-moved, and
+`waiver-stamp-review` is the one job holding a write token.
+
+**That single pin covers the tool as well as the actions.** The producer action's
+`waiver-version` input defaults to *the CLI release that ships at the ref you pinned* (it reads
+the version from its own checkout), so a pinned SHA gives you a fully reproducible verdict.
+You only need `waiver-version` if you want to deviate — `latest` to float deliberately, or an
+explicit `x.y.z` to run a CLI version other than the one the pinned action shipped with.
+
+Upgrading is therefore one edit: bump both `@<SHA>`s to the new release's SHA.
+
 ## Adopter checklist
 
 Each step is one action; the indented note under it is the *why*, there only if you want
@@ -62,35 +84,67 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    SHA, and `ci-checks` (plus `lockfile-honesty-checks` if you have a lockfile-honesty gate).
    > This is the only workflow that holds a write token. Its checkout shape is
    > security-load-bearing — read its header before changing anything else.
+   >
+   > `ci-checks` takes **check-run names, not workflow job ids** — they diverge whenever a job
+   > sets `name:` or uses a matrix. A matrix job `integration` over two Node versions produces
+   > `integration (9.12.0)` and `integration (10.0.0)`, and each leg needs its own entry; the
+   > bare id `integration` matches nothing, and the reviewer then waits forever rather than
+   > approve on an unverified check (fail-closed). Read the real names off any recent PR with
+   > `gh api repos/OWNER/REPO/commits/<head-sha>/check-runs --jq '.check_runs[].name'`.
 
-3. **Mark both checks required, and dismiss stale approvals.** In branch protection, make
+3. **Decide your `.waiver-stamp.json` policy — or knowingly skip it.** The file is optional and
+   **every policy in it is closed by default**: with no config, `changeDocs.allow` is empty, so
+   the `change-docs` op confines *nothing* and no `.md` file can be waived away — not
+   `CLAUDE.md`, not `README.md`, not anything. `allowBumping` is likewise empty, so every
+   dependency bump falls to review. Skipping the file is safe; it costs you the two ops, it
+   never grants them.
+   > Stated outright because the inverse would be a security-relevant default: a permissive
+   > `change-docs` would let any adopter who skipped the config auto-approve edits to
+   > agent-instruction files. It doesn't. To *use* `change-docs` you must opt in explicitly,
+   > and the recommended shape keeps AI-instruction assets denied:
+   >
+   > ```json
+   > {
+   >   "changeDocs": {
+   >     "allow": ["docs/**", "**/README.md", "CHANGELOG.md"],
+   >     "deny": [".claude/**", "**/CLAUDE.md", "**/AGENTS.md", ".cursor/**"]
+   >   }
+   > }
+   > ```
+   >
+   > Policy is always read from the commit's **base**, so a PR can't widen its own permissions
+   > in the same commit — and `.waiver-stamp.json` is itself unwaivable, so any edit to it is a
+   > review-forcing diff. See the [README](../README.md#configuration--waiver-stampjson) and
+   > [`docs/spec.md` §6.5](spec.md).
+
+4. **Mark both checks required, and dismiss stale approvals.** In branch protection, make
    **both** your CI check **and** the `waiver-stamp` check required status checks, and enable
    **"Dismiss stale pull request approvals when new commits are pushed."**
    > Without dismiss-stale, a bot APPROVE from an earlier, smaller commit range could linger
    > after new commits land.
 
-4. *(Recommended)* **Prefer merge-commit or rebase-merge over squash-merge.** This lands the
+5. *(Recommended)* **Prefer merge-commit or rebase-merge over squash-merge.** This lands the
    individually-verified commits on your default branch as-is, waivers intact.
    > Not required for auto-approval — the stamp has already done its job by merge time. It's a
    > traceability nicety: a squash-merge discards the per-commit waivers, so the merged history
    > no longer carries the proof.
 
-5. **Disable `commitlint`'s `body-max-line-length`** (`[0]`) if your repo enforces it.
+6. **Disable `commitlint`'s `body-max-line-length`** (`[0]`) if your repo enforces it.
    > Pretty-printed waiver JSON in a commit body can exceed the default 100-char limit, and a
    > rejecting `commit-msg` hook would block waivered commits from ever being written.
 
-6. *(Recommended)* **Protect `.github/**` with CODEOWNERS or a ruleset.**
+7. *(Recommended)* **Protect `.github/**` with CODEOWNERS or a ruleset.**
    > Defense in depth behind G1, which already blocks any `.github/**` change from producing an
    > APPROVE — but an extra branch-protection layer costs little.
 
-7. *(Optional)* **Upgrade `github-token` to an App or bot-PAT token** so the reviewer's APPROVE
+8. *(Optional)* **Upgrade `github-token` to an App or bot-PAT token** so the reviewer's APPROVE
    counts toward "required approving reviews" branch protection.
    > The default `${{ github.token }}` posts a visible APPROVE that does **not** satisfy that
    > rule — deliberately conservative, bounding the blast radius of any residual forgery until
    > you opt in. If you upgrade, this token runs **our** code with **your** write credential, so
    > pin the action ref by full commit SHA (as in steps 1–2).
 
-8. *(Optional caveat)* **If you set `allowBumping` without wiring a lockfile-honesty check**
+9. *(Optional caveat)* **If you set `allowBumping` without wiring a lockfile-honesty check**
    into `lockfile-honesty-checks`, know the accepted residual.
    > waiver-stamp assumes the lockfile is honest, so a poisoned tarball behind an allowlisted
    > package name (version string unchanged) could pass the dependency-bump gates undetected.

@@ -37,11 +37,17 @@ jobs:
           persist-credentials: false
 
       - name: waiver-stamp
-        # Pin to a full commit SHA of jsalvata/waiver-stamp, not a branch or tag — this
-        # action's code runs unprivileged (read-only token on forks), so SHA-pinning
-        # here is about supply-chain hygiene, not the trust boundary itself (that's the
-        # reviewer caller's job, see waiver-stamp-review.yml).
+        # Pin to a full commit SHA of jsalvata/waiver-stamp, not a branch or tag. This job is
+        # unprivileged (read-only token on forks), but do not read that as "the pin doesn't
+        # matter": the verdict this job publishes is what the privileged reviewer consumes to
+        # decide APPROVE. The reviewer re-derives its own guards (G1/G2) from git data, so a
+        # bad tool cannot touch `.github/**` or sneak a dependency bump past it — but the core
+        # "is this really a mechanical refactor" judgment is this tool's, so pin it.
+        #
+        # Get the SHA for the current release (see docs/auto-approval-setup.md):
+        #   gh api repos/jsalvata/waiver-stamp/commits/v1.11.1 --jq .sha
         uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@<COMMIT_SHA>  # <-- EDIT: full SHA
-        with:
-          waiver-version: latest  # <-- EDIT: pin to a specific waiver-stamp release if you want
-                                   #     reproducible verdicts independent of new tool releases.
+        # No `with:` needed. `waiver-version` defaults to the CLI release that ships at the SHA
+        # you pinned above, so the pin covers BOTH this action's code and the tool it runs.
+        # Override only if you deliberately want to float (`waiver-version: latest`) or to run a
+        # CLI version other than the one this action shipped with (`waiver-version: 1.11.1`).

@@ -76,11 +76,25 @@ jobs:
 
       - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@<COMMIT_SHA>  # <-- EDIT: full SHA
         with:
-          ci-checks: build  # <-- EDIT: newline/comma list of YOUR required check-run
-                             #     name(s) that must be green on the head SHA (e.g. the
-                             #     job name(s) from waiver-stamp-ci.yml's CI workflow).
-                             #     Do NOT list "waiver-stamp" itself here — its verdict
-                             #     IS the artifact this action already trusts.
+          # <-- EDIT: newline/comma list of YOUR required CHECK-RUN name(s) that must be green on
+          #     the head SHA. These are check-run names, NOT workflow job ids — the two differ
+          #     whenever a job uses `name:` or a matrix:
+          #
+          #       jobs.build             -> "build"
+          #       jobs.test (name: Unit) -> "Unit"
+          #       a matrix job `integration` over node 9.12.0 / 10.0.0
+          #                              -> "integration (9.12.0)", "integration (10.0.0)"
+          #
+          #     One entry per matrix leg — listing the bare job id `integration` matches nothing
+          #     and the reviewer waits forever (fail-closed: no review, never a wrong one).
+          #     To read the real names off a recent PR of your own:
+          #
+          #       gh api repos/OWNER/REPO/commits/<head-sha>/check-runs --jq '.check_runs[].name'
+          #
+          #     Do NOT list "waiver-stamp" itself here — its verdict IS the artifact this action
+          #     already trusts.
+          ci-checks: |
+            build
           lockfile-honesty-checks: ''  # <-- EDIT (optional): if you have a separate
                              #     lockfile-honesty check (e.g. lockfile-firewall) wired
                              #     in as a required check, list its name(s) here to
