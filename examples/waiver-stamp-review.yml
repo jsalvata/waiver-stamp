@@ -89,7 +89,9 @@ jobs:
           #       matrix `integration` over node 9.12.0 / 10.0.0
           #                              -> "integration (9.12.0)", "integration (10.0.0)"
           # One entry per matrix leg — a bare `integration` matches nothing and the reviewer then
-          # waits forever (fail-closed). Read the real names off a recent PR of your own:
+          # waits forever (fail-closed). List only checks that run on PRs, too — a push-only job
+          # like `release` never reports on the head SHA, so it hangs the reviewer the same way.
+          # Read the real names off a recent PR of your own:
           #       gh api repos/OWNER/REPO/commits/<head-sha>/check-runs --jq '.check_runs[].name'
           # Do NOT list "waiver-stamp" itself — its verdict IS the artifact this action trusts.
           ci-checks: |  # <-- EDIT: replace `build` below with your check-run name(s), one per line
