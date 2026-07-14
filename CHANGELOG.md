@@ -1,3 +1,11 @@
+# [1.12.0](https://github.com/jsalvata/waiver-stamp/compare/v1.11.2...v1.12.0) (2026-07-14)
+
+
+### Features
+
+* drop the waiver-version input ([cfdf3db](https://github.com/jsalvata/waiver-stamp/commit/cfdf3dbb181ebd2105fabb00eb4df1dc3a15b3ce))
+* ship immutable tag pins in the templates ([7d48a12](https://github.com/jsalvata/waiver-stamp/commit/7d48a123bb536470f4e63520fe1e6660c4389772))
+
 ## [1.11.2](https://github.com/jsalvata/waiver-stamp/compare/v1.11.1...v1.11.2) (2026-07-14)
 
 
