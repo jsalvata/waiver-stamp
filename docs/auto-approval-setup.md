@@ -44,27 +44,39 @@ reasoning, the design doc §3.4 for the threat model this defends against (the c
 GitHub Actions "pwn request"), and [`automation-layer.md`](automation-layer.md) for the
 complete design rationale.
 
-## Which SHA to pin
+## Which ref to pin
 
-Both templates say `@<COMMIT_SHA>`. **Use the commit SHA that the latest release tag points
-at** — the same SHA in both files:
+The templates ship pinned to a release tag — `@v1.11.2` — and that tag is kept current for you
+on every release, so **you can paste them as-is**. Both files must name the same ref.
+
+The rule that actually matters is: **pin an immutable ref, never a mutable one.** A branch or
+`@main` would let the code that holds your write token change under you without you re-pinning.
+Two refs qualify, and the choice is a trust question, not a security-vs-insecurity one:
+
+| Pin | What makes it immutable | Use when |
+| --- | --- | --- |
+| `@v1.11.2` (tag) | A repository ruleset on `jsalvata/waiver-stamp` restricts *update* and *deletion* on `v*` tags, so a published tag cannot be force-moved. | Default. Readable, and upgrading is a one-token edit. |
+| `@<40-char SHA>` (hash) | Git itself — a commit SHA is content-addressed, so it needs no trust in our repo settings at all. | Your policy is hash-pin-only (e.g. [zizmor](https://github.com/zizmorcore/zizmor)'s default `unpinned-uses` audit), or you'd rather not rely on a setting you can't see. |
+
+The honest distinction: a tag's immutability is a property of *our* configuration, which you
+must take on trust; a SHA's is arithmetic you can verify yourself. That gap is small — you are
+already trusting us to run our code against your write token — but it is real, so hash-pinning
+stays fully supported and is what we'd choose for the privileged reviewer under a strict policy.
+
+To resolve the tag to its SHA:
 
 ```bash
-gh api repos/jsalvata/waiver-stamp/commits/"$(
-  gh api repos/jsalvata/waiver-stamp/releases/latest --jq .tag_name
-)" --jq .sha
+gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha
 ```
 
-Pin to a full 40-character commit SHA, never a tag or branch: a tag can be force-moved, and
-`waiver-stamp-review` is the one job holding a write token.
+**Whichever you pick, that single pin covers the tool as well as the actions.** The producer
+action's `waiver-version` input defaults to *the CLI release that ships at the ref you pinned*
+(it reads the version out of its own checkout), so the pin gives you a fully reproducible
+verdict — it is not merely pinning the shell script that invokes the tool. You only need
+`waiver-version` if you want to deviate: `latest` to float deliberately, or an explicit `x.y.z`
+to run a CLI version other than the one the pinned action shipped with.
 
-**That single pin covers the tool as well as the actions.** The producer action's
-`waiver-version` input defaults to *the CLI release that ships at the ref you pinned* (it reads
-the version from its own checkout), so a pinned SHA gives you a fully reproducible verdict.
-You only need `waiver-version` if you want to deviate — `latest` to float deliberately, or an
-explicit `x.y.z` to run a CLI version other than the one the pinned action shipped with.
-
-Upgrading is therefore one edit: bump both `@<SHA>`s to the new release's SHA.
+Upgrading is therefore one edit: bump both refs to the new release.
 
 ## Adopter checklist
 
@@ -80,8 +92,10 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
 
 2. **Add the privileged reviewer caller.** Copy
    [`examples/waiver-stamp-review.yml`](../examples/waiver-stamp-review.yml) in as-is,
-   editing only its marked `# <-- EDIT` points: your CI workflow name(s), the pinned action
-   SHA, and `ci-checks` (plus `lockfile-honesty-checks` if you have a lockfile-honesty gate).
+   editing only its marked `# <-- EDIT` points: your CI workflow name(s) and `ci-checks` (plus
+   `lockfile-honesty-checks` if you have a lockfile-honesty gate). The `uses:` ref already
+   points at the current release — see [Which ref to pin](#which-ref-to-pin) if you'd rather
+   hash-pin it.
    > This is the only workflow that holds a write token. Its checkout shape is
    > security-load-bearing — read its header before changing anything else.
    >
@@ -142,7 +156,8 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > The default `${{ github.token }}` posts a visible APPROVE that does **not** satisfy that
    > rule — deliberately conservative, bounding the blast radius of any residual forgery until
    > you opt in. If you upgrade, this token runs **our** code with **your** write credential, so
-   > pin the action ref by full commit SHA (as in steps 1–2).
+   > this is the case where hash-pinning earns its keep — see
+   > [Which ref to pin](#which-ref-to-pin).
 
 9. *(Optional caveat)* **If you set `allowBumping` without wiring a lockfile-honesty check**
    into `lockfile-honesty-checks`, know the accepted residual.

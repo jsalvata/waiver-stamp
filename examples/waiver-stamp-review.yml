@@ -7,13 +7,16 @@
 #
 # WHY THIS SHAPE (the pwn-request defense, design doc §3.4):
 #
-#   1. `uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@<COMMIT_SHA>` is
-#      pinned to a full commit SHA of an EXTERNAL repo. That makes the action's code
-#      trusted — a PR against YOUR repo cannot alter what this job runs, no matter what
-#      it changes in its own branch. (Contrast: this repo's own dogfood uses a local
-#      `uses: ./…` action and instead checks out its OWN default branch below to get the
-#      same trusted-code property — you don't need that trick because your `uses:` ref
-#      already points at code outside your repo entirely.)
+#   1. `uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.11.2` is pinned to
+#      an immutable ref of an EXTERNAL repo (the `v*` tags are protected against being moved
+#      or deleted by a repo ruleset; a full commit SHA is the hash-pinned alternative). That
+#      makes the action's code trusted — a PR against YOUR repo cannot alter what this job
+#      runs, no matter what it changes in its own branch. (Contrast: this repo's own dogfood
+#      uses a local `uses: ./…` action and instead checks out its OWN default branch below to
+#      get the same trusted-code property — you don't need that trick because your `uses:` ref
+#      already points at code outside your repo entirely.) What you must NOT do is pin a
+#      mutable ref — a branch, or `@main` — which would let us (or anyone who compromised us)
+#      change the code holding your write token without you re-pinning.
 #   2. The checkout below targets `${{ github.event.repository.default_branch }}` — YOUR
 #      default branch — never the PR head. `persist-credentials: false` means even that
 #      checkout can't leak a push-capable credential.
@@ -74,7 +77,10 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: git fetch --no-tags --force origin "$HEAD_SHA"
 
-      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@<COMMIT_SHA>  # <-- EDIT: full SHA
+      # Immutable tag (see the SECURITY header). Paste as-is; or, if your policy is
+      # hash-pin-only, swap in the SHA it points at:
+      #   gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha
+      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.11.2
         with:
           # <-- EDIT: newline/comma list of YOUR required CHECK-RUN name(s) that must be green on
           #     the head SHA. These are check-run names, NOT workflow job ids — the two differ
