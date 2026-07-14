@@ -44,27 +44,19 @@ reasoning, the design doc §3.4 for the threat model this defends against (the c
 GitHub Actions "pwn request"), and [`automation-layer.md`](automation-layer.md) for the
 complete design rationale.
 
-## Which SHA to pin
+## Which ref to pin
 
-Both templates say `@<COMMIT_SHA>`. **Use the commit SHA that the latest release tag points
-at** — the same SHA in both files:
+The templates ship pinned to a release tag (`@v1.11.2`, kept current on every release), so **you
+can paste them as-is** — we keep `v*` tags immutable via a repo ruleset. If your policy is
+hash-pin-only (e.g. [zizmor](https://github.com/zizmorcore/zizmor)'s default `unpinned-uses`), or
+you'd rather not rely on a setting you can't see, swap in the SHA the tag points at:
+`gh api repos/jsalvata/waiver-stamp/commits/v1.11.2 --jq .sha`. You pin twice — the producer's
+`uses:` (in `waiver-stamp-ci.yml`) and the reviewer's (in `waiver-stamp-review.yml`); keep both on
+the same ref, and never a mutable one (a branch, `@main`).
 
-```bash
-gh api repos/jsalvata/waiver-stamp/commits/"$(
-  gh api repos/jsalvata/waiver-stamp/releases/latest --jq .tag_name
-)" --jq .sha
-```
-
-Pin to a full 40-character commit SHA, never a tag or branch: a tag can be force-moved, and
-`waiver-stamp-review` is the one job holding a write token.
-
-**That single pin covers the tool as well as the actions.** The producer action's
-`waiver-version` input defaults to *the CLI release that ships at the ref you pinned* (it reads
-the version from its own checkout), so a pinned SHA gives you a fully reproducible verdict.
-You only need `waiver-version` if you want to deviate — `latest` to float deliberately, or an
-explicit `x.y.z` to run a CLI version other than the one the pinned action shipped with.
-
-Upgrading is therefore one edit: bump both `@<SHA>`s to the new release's SHA.
+Either way the pin also fixes the CLI version — it ships at the ref you pinned — so the verdict is
+fully reproducible, not just the shell script. Upgrading means bumping those two pins to the new
+release.
 
 ## Adopter checklist
 
@@ -80,8 +72,10 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
 
 2. **Add the privileged reviewer caller.** Copy
    [`examples/waiver-stamp-review.yml`](../examples/waiver-stamp-review.yml) in as-is,
-   editing only its marked `# <-- EDIT` points: your CI workflow name(s), the pinned action
-   SHA, and `ci-checks` (plus `lockfile-honesty-checks` if you have a lockfile-honesty gate).
+   editing only its marked `# <-- EDIT` points: your CI workflow name(s) and `ci-checks` (plus
+   `lockfile-honesty-checks` if you have a lockfile-honesty gate). The `uses:` ref already
+   points at the current release — see [Which ref to pin](#which-ref-to-pin) if you'd rather
+   hash-pin it.
    > This is the only workflow that holds a write token. Its checkout shape is
    > security-load-bearing — read its header before changing anything else.
    >
@@ -142,7 +136,8 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > The default `${{ github.token }}` posts a visible APPROVE that does **not** satisfy that
    > rule — deliberately conservative, bounding the blast radius of any residual forgery until
    > you opt in. If you upgrade, this token runs **our** code with **your** write credential, so
-   > pin the action ref by full commit SHA (as in steps 1–2).
+   > this is the case where hash-pinning earns its keep — see
+   > [Which ref to pin](#which-ref-to-pin).
 
 9. *(Optional caveat)* **If you set `allowBumping` without wiring a lockfile-honesty check**
    into `lockfile-honesty-checks`, know the accepted residual.

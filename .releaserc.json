@@ -4,12 +4,24 @@
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     "@semantic-release/changelog",
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "bash scripts/set-release-version.sh ${nextRelease.version}"
+      }
+    ],
     "@semantic-release/npm",
     "@semantic-release/github",
     [
       "@semantic-release/git",
       {
-        "assets": ["CHANGELOG.md", "package.json"],
+        "assets": [
+          "CHANGELOG.md",
+          "package.json",
+          "examples/waiver-stamp-ci.yml",
+          "examples/waiver-stamp-review.yml",
+          "docs/auto-approval-setup.md"
+        ],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ]

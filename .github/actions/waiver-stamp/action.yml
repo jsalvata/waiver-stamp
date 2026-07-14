@@ -1,13 +1,5 @@
 name: waiver-stamp
 description: Run waiver stamp over the PR range, publish a report artifact, and gate on the verdict.
-inputs:
-  waiver-version:
-    description: >-
-      Version of the waiver-stamp CLI to run. Empty (the default) means "the version that
-      ships at this action's own pinned ref", so pinning `uses:` to a SHA also pins the tool
-      that computes the verdict. Pass an explicit `x.y.z` — or `latest` to float — to override.
-    required: false
-    default: ''
 runs:
   using: composite
   steps:
@@ -15,17 +7,13 @@ runs:
       env:
         BASE: ${{ github.event.pull_request.base.sha }}
         HEAD: ${{ github.event.pull_request.head.sha }}
-        WAIVER_VERSION: ${{ inputs.waiver-version }}
       shell: bash
       run: |
         set -euo pipefail
-        # Resolve the default from this action's own checkout: GitHub materialises the whole
-        # waiver-stamp repo at the pinned ref, so its package.json names the CLI release that
-        # matches this very code. Without this, the SHA pin would cover only the shell script
-        # below while `latest` silently floated the tool whose verdict removes human review.
-        if [ -z "$WAIVER_VERSION" ]; then
-          WAIVER_VERSION="$(node -p "require(process.argv[1]).version" "$GITHUB_ACTION_PATH/../../../package.json")"
-        fi
+        # Run the CLI release that ships at this action's pinned ref: GitHub materialises the
+        # repo here, so its package.json names the version matching this code. That makes
+        # `uses: …@<ref>` pin the tool that computes the verdict, not just this script.
+        WAIVER_VERSION="$(node -p "require(process.argv[1]).version" "$GITHUB_ACTION_PATH/../../../package.json")"
         VER="$(npx --yes waiver-stamp@"$WAIVER_VERSION" --version)"
         set +e
         npx --yes waiver-stamp@"$WAIVER_VERSION" stamp --base "$BASE" --head "$HEAD" --json > report.raw.json

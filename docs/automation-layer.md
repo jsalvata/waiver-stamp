@@ -204,11 +204,10 @@ product).
 their existing build job (after `install`), or runs as a small dedicated job on
 `pull_request`.
 
-- **Inputs:** `waiver-version` (which `waiver-stamp` CLI to run). **Default: the release that
-  ships at the action's own pinned ref** — the step reads the version out of its own checkout
-  (`$GITHUB_ACTION_PATH/../../../package.json`), so an adopter's `uses: …@<SHA>` pin covers the
-  tool that computes the verdict, not merely the shell script that invokes it. Overridable with
-  an explicit `x.y.z`, or `latest` to float deliberately.
+- **Inputs:** none. The step runs **the CLI release that ships at the action's own pinned ref**,
+  reading the version out of its own checkout (`$GITHUB_ACTION_PATH/../../../package.json`), so an
+  adopter's `uses: …@<ref>` pin covers the tool that computes the verdict, not merely the shell
+  script that invokes it. To run a different CLI version, move the ref.
 - **Behaviour:** resolve `base = event.pull_request.base.sha`,
   `head = event.pull_request.head.sha`; run `waiver stamp --base --head --json`; write the
   verdict + per-commit findings to the **job summary**; upload the report (plus the `base`
