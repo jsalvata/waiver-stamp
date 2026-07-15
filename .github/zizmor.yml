@@ -16,6 +16,11 @@ rules:
       # never executed/uses'd). That checkout-default-branch pattern is exactly zizmor's
       # own recommended mitigation for workflow_run, so this is a false positive here.
       - waiver-stamp-review.yml
+      # lockfile-assay.yml's `pull_request_target` is the anchor: it runs the base branch's
+      # trusted workflow definition, checks out the base (never the head), and fetches the
+      # head only as inert git data (never executed/uses'd). App secrets live on a
+      # branch-restricted environment. Same base-checkout mitigation as above.
+      - lockfile-assay.yml
 
   adhoc-packages:
     ignore:
@@ -33,3 +38,11 @@ rules:
       # matches this key by basename, so it also covers the reviewer action.yml — which installs
       # nothing at runtime (it is a bundled ncc build), so nothing real is suppressed there.
       - action.yml
+
+  artipacked:
+    ignore:
+      # lockfile-assay.yml has no artifact-upload step, so checkout's persisted credential
+      # never leaves the runner. `persist-credentials: false` is not an option here: the
+      # job fetches the PR head (`git fetch origin pull/<n>/head`) over the same origin
+      # remote right after checkout, which needs those credentials.
+      - lockfile-assay.yml
