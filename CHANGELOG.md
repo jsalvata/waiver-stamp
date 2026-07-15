@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/jsalvata/waiver-stamp/compare/v1.14.0...v1.15.0) (2026-07-15)
+
+
+### Features
+
+* require node 24 and target es2024 ([91d37fe](https://github.com/jsalvata/waiver-stamp/commit/91d37feec9657be72ecf35491b895e62e33022de))
+
 # [1.14.0](https://github.com/jsalvata/waiver-stamp/compare/v1.13.0...v1.14.0) (2026-07-15)
 
 
