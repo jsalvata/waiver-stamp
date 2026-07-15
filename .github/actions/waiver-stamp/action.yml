@@ -14,9 +14,16 @@ runs:
         # repo here, so its package.json names the version matching this code. That makes
         # `uses: …@<ref>` pin the tool that computes the verdict, not just this script.
         WAIVER_VERSION="$(node -p "require(process.argv[1]).version" "$GITHUB_ACTION_PATH/../../../package.json")"
-        VER="$(npx --yes waiver-stamp@"$WAIVER_VERSION" --version)"
+        # Install that release into an isolated prefix and run it by absolute path. Resolving the
+        # CLI by bare package name would instead pick up a local package of the same name when
+        # this action runs inside a checkout of this repo (the self-test job) — where the bin is
+        # unbuilt, so newer npm exits 127 — and never guarantees the pinned version elsewhere.
+        TOOLHOME="$(mktemp -d)"
+        npm install --prefix "$TOOLHOME" --no-audit --no-fund "waiver-stamp@$WAIVER_VERSION" >/dev/null
+        WAIVER="$TOOLHOME/node_modules/.bin/waiver"
+        VER="$("$WAIVER" --version)"
         set +e
-        npx --yes waiver-stamp@"$WAIVER_VERSION" stamp --base "$BASE" --head "$HEAD" --json > report.raw.json
+        "$WAIVER" stamp --base "$BASE" --head "$HEAD" --json > report.raw.json
         CODE=$?
         set -e
         # Wrap with toolVersion; the report already carries verdict/base/head (Task 1).

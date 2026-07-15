@@ -1,0 +1,76 @@
+name: Action self-test
+
+# Exercise the composite producer action (.github/actions/waiver-stamp) end-to-end. The
+# dogfood `waiver-stamp` job in ci.yml deliberately does NOT — it stamps with `node
+# dist/cli.js` from the source under test, so the action's own YAML and shell (the version
+# self-resolution from $GITHUB_ACTION_PATH/../../../package.json, the report wrapping, the
+# artifact upload) ship to adopters having never run in our own CI. A broken action.yml would
+# pass ci.yml and only surface in an adopter's repo. This job runs the action for real and
+# asserts the artifact contract adopters depend on.
+#
+# It lives in its own workflow rather than a job in ci.yml because the action uploads an
+# artifact named `waiver-stamp-report` — the same name ci.yml's dogfood job uploads. Two
+# uploads of one name in a single run collide under upload-artifact@v4; a separate workflow is
+# a separate run, so the names don't clash.
+#
+# Chicken-and-egg: the action npx-installs the *published* CLI at the version in this checkout's
+# package.json, which on a PR is the last release — not this PR's source. That is intentional:
+# the point is to validate the action's plumbing, not that it stamps this PR's new behaviour.
+# So the assertions check the artifact contract (report present, verdict in the known set,
+# toolVersion == package.json) and never a specific verdict — this PR's own range carries no
+# waiver, so its verdict is ABSTAIN (or REQUEST_CHANGES if a commit claims a waiver that fails).
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  action-selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the action walks base..head; both SHAs must be in local history
+          persist-credentials: false
+
+      # The action exits 1 only on a REQUEST_CHANGES verdict. That gate runs after the report is
+      # written and uploaded, so we let the step "fail" and assert on the artifact below rather
+      # than on the exit code. A genuinely broken action produces no artifact, and the download
+      # step then fails the job for real.
+      - id: run-action
+        continue-on-error: true
+        uses: ./.github/actions/waiver-stamp
+
+      - name: Download the report the action produced
+        uses: actions/download-artifact@v4
+        with:
+          name: waiver-stamp-report
+          path: selftest-artifact
+
+      - name: Assert the report contract holds
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The `$` below are JS template literals inside a single-quoted node script, not shell
+          # expansions — single quotes are deliberate so bash leaves them alone.
+          # shellcheck disable=SC2016
+          node -e '
+            const fs = require("node:fs");
+            const report = JSON.parse(fs.readFileSync("selftest-artifact/waiver-stamp-report.json", "utf8"));
+            const pkgVersion = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
+            const VERDICTS = ["APPROVE", "COMMENT", "REQUEST_CHANGES", "ABSTAIN"];
+            const problems = [];
+            if (!VERDICTS.includes(report.verdict))
+              problems.push(`verdict ${JSON.stringify(report.verdict)} is not one of ${VERDICTS.join(", ")}`);
+            if (report.toolVersion !== pkgVersion)
+              problems.push(`toolVersion ${JSON.stringify(report.toolVersion)} != package.json ${JSON.stringify(pkgVersion)}`);
+            if (!Array.isArray(report.commits) || report.commits.length < 1)
+              problems.push("report.commits is not a non-empty array");
+            if (problems.length) {
+              console.error("Action self-test failed:\n- " + problems.join("\n- "));
+              process.exit(1);
+            }
+            console.log(`OK: verdict=${report.verdict} toolVersion=${report.toolVersion} commits=${report.commits.length}`);
+          '

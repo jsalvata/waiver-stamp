@@ -46,11 +46,11 @@ complete design rationale.
 
 ## Which ref to pin
 
-The templates ship pinned to a release tag (`@v1.12.0`, kept current on every release), so **you
+The templates ship pinned to a release tag (`@v1.13.0`, kept current on every release), so **you
 can paste them as-is** — we keep `v*` tags immutable via a repo ruleset. If your policy is
 hash-pin-only (e.g. [zizmor](https://github.com/zizmorcore/zizmor)'s default `unpinned-uses`), or
 you'd rather not rely on a setting you can't see, swap in the SHA the tag points at:
-`gh api repos/jsalvata/waiver-stamp/commits/v1.12.0 --jq .sha`. You pin twice — the producer's
+`gh api repos/jsalvata/waiver-stamp/commits/v1.13.0 --jq .sha`. You pin twice — the producer's
 `uses:` (in `waiver-stamp-ci.yml`) and the reviewer's (in `waiver-stamp-review.yml`); keep both on
 the same ref, and never a mutable one (a branch, `@main`).
 
@@ -72,10 +72,11 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
 
 2. **Add the privileged reviewer caller.** Copy
    [`examples/waiver-stamp-review.yml`](../examples/waiver-stamp-review.yml) in as-is,
-   editing only its marked `# <-- EDIT` points: your CI workflow name(s) and `ci-checks` (plus
+   editing its marked `# <-- EDIT` points: your CI workflow name(s) and `ci-checks` (plus
    `lockfile-honesty-checks` if you have a lockfile-honesty gate). The `uses:` ref already
-   points at the current release — see [Which ref to pin](#which-ref-to-pin) if you'd rather
-   hash-pin it.
+   points at the current release; if your policy is hash-pin-only you can't paste it verbatim —
+   also swap its `uses:` refs (the action and `actions/checkout`) for SHAs. See
+   [Which ref to pin](#which-ref-to-pin).
    > This is the only workflow that holds a write token. Its checkout shape is
    > security-load-bearing — read its header before changing anything else.
    >
@@ -83,7 +84,9 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > sets `name:` or uses a matrix. A matrix job `integration` over two Node versions produces
    > `integration (9.12.0)` and `integration (10.0.0)`, and each leg needs its own entry; the
    > bare id `integration` matches nothing, and the reviewer then waits forever rather than
-   > approve on an unverified check (fail-closed). Read the real names off any recent PR with
+   > approve on an unverified check (fail-closed). For the same reason, list only checks that
+   > run on pull requests — a push-only job like `release` never reports on the PR head SHA, so
+   > listing it hangs the reviewer just as surely. Read the real names off any recent PR with
    > `gh api repos/OWNER/REPO/commits/<head-sha>/check-runs --jq '.check_runs[].name'`.
 
 3. **Decide your `.waiver-stamp.json` policy — or knowingly skip it.** The file is optional and

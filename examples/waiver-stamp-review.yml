@@ -7,7 +7,7 @@
 #
 # WHY THIS SHAPE (the pwn-request defense, design doc §3.4):
 #
-#   1. `uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.12.0` is pinned to
+#   1. `uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.13.0` is pinned to
 #      an immutable ref of an EXTERNAL repo (the `v*` tags are protected against being moved
 #      or deleted by a repo ruleset; a full commit SHA is the hash-pinned alternative). That
 #      makes the action's code trusted — a PR against YOUR repo cannot alter what this job
@@ -79,8 +79,8 @@ jobs:
 
       # Immutable tag (see the SECURITY header). Paste as-is; or, if your policy is
       # hash-pin-only, swap in the SHA it points at:
-      #   gh api repos/jsalvata/waiver-stamp/commits/v1.12.0 --jq .sha
-      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.12.0
+      #   gh api repos/jsalvata/waiver-stamp/commits/v1.13.0 --jq .sha
+      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.13.0
         with:
           # These are CHECK-RUN names that must be green on the head SHA — NOT workflow job ids.
           # The two differ whenever a job sets `name:` or uses a matrix:
@@ -89,7 +89,9 @@ jobs:
           #       matrix `integration` over node 9.12.0 / 10.0.0
           #                              -> "integration (9.12.0)", "integration (10.0.0)"
           # One entry per matrix leg — a bare `integration` matches nothing and the reviewer then
-          # waits forever (fail-closed). Read the real names off a recent PR of your own:
+          # waits forever (fail-closed). List only checks that run on PRs, too — a push-only job
+          # like `release` never reports on the head SHA, so it hangs the reviewer the same way.
+          # Read the real names off a recent PR of your own:
           #       gh api repos/OWNER/REPO/commits/<head-sha>/check-runs --jq '.check_runs[].name'
           # Do NOT list "waiver-stamp" itself — its verdict IS the artifact this action trusts.
           ci-checks: |  # <-- EDIT: replace `build` below with your check-run name(s), one per line
