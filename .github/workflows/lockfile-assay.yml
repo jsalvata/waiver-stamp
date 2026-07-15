@@ -29,6 +29,8 @@
 name: lockfile-assay
 on:
   pull_request_target:
+permissions:
+  contents: read        # default token is used only for checkout + head fetch
 jobs:
   assay:
     runs-on: ubuntu-latest
@@ -47,6 +49,7 @@ jobs:
         with:
           app-id: ${{ secrets.ASSAY_APP_ID }}
           private-key: ${{ secrets.ASSAY_APP_PRIVATE_KEY }}
+          permission-checks: write
       - uses: jsalvata/lockfile-assay@v1.0.2   # pin to a published release; bump on upgrade
         with:
           base: origin/${{ github.base_ref }}
