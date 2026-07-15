@@ -26,3 +26,10 @@ rules:
       # npm itself (from the official registry) is intentional here — the step already
       # carries an inline comment saying as much. Audit added in zizmor v1.26.
       - release.yml
+      # The producer action installs the pinned CLI release at runtime — the version resolved
+      # from its own ref — and runs it. That ad-hoc install is the action's entire job; a
+      # composite action ships no lockfile that could pin it. The version is pinned to an exact
+      # `waiver-stamp@<version>`, never a range, and the pins.test.ts suite guards that. zizmor
+      # matches this key by basename, so it also covers the reviewer action.yml — which installs
+      # nothing at runtime (it is a bundled ncc build), so nothing real is suppressed there.
+      - action.yml
