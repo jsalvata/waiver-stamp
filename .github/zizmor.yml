@@ -24,13 +24,6 @@ rules:
 
   adhoc-packages:
     ignore:
-      # release.yml's `npm install -g npm@latest` is a deliberate, unavoidable bootstrap:
-      # OIDC trusted publishing (semantic-release v25 / @semantic-release/npm v13) requires
-      # npm >= 11.5.1, but the setup-node Node 22 toolchain ships npm 10.x. Nothing in a
-      # lockfile can upgrade the global npm that runs the publish, so the ad-hoc install of
-      # npm itself (from the official registry) is intentional here — the step already
-      # carries an inline comment saying as much. Audit added in zizmor v1.26.
-      - release.yml
       # The producer action installs the pinned CLI release at runtime — the version resolved
       # from its own ref — and runs it. That ad-hoc install is the action's entire job; a
       # composite action ships no lockfile that could pin it. The version is pinned to an exact

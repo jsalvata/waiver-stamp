@@ -23,15 +23,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # semantic-release v25 requires Node >= 22.14 (the published package
-          # still supports Node >= 20 — see ci.yml, which tests on 20).
-          node-version: 22
+          node-version: 24
           cache: pnpm
-
-      # OIDC trusted publishing (semantic-release v25 / @semantic-release/npm v13)
-      # requires npm >= 11.5.1; Node 20 ships npm 10.x.
-      - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
 
       - run: pnpm install --frozen-lockfile
 
