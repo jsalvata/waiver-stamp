@@ -1,3 +1,15 @@
+# [1.13.0](https://github.com/jsalvata/waiver-stamp/compare/v1.12.0...v1.13.0) (2026-07-15)
+
+
+### Bug Fixes
+
+* install the pinned CLI hermetically in the action ([6453d01](https://github.com/jsalvata/waiver-stamp/commit/6453d016d64f4b50d9b08ef3c1395b2568ac36e0))
+
+
+### Features
+
+* self-test the composite action in CI ([60f4a05](https://github.com/jsalvata/waiver-stamp/commit/60f4a053b72435ecbf9408cee6807c5fedbc38f5))
+
 # [1.12.0](https://github.com/jsalvata/waiver-stamp/compare/v1.11.2...v1.12.0) (2026-07-14)
 
 
