@@ -13,6 +13,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Release secrets live on this environment, restricted to main.
+    environment: semantic-release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,7 +40,19 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Push as the jsalvata-semantic-release App, which is on the main ruleset's bypass
+      # list. The default GITHUB_TOKEN (github-actions[bot]) is not, so its `[skip ci]`
+      # release commit can never satisfy the required lockfile-assay check and is rejected.
+      - uses: actions/create-github-app-token@v1
+        id: release-app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+
       - name: Release
         run: pnpm exec semantic-release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.release-app-token.outputs.token }}
