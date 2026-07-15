@@ -1,3 +1,17 @@
+# [1.14.0](https://github.com/jsalvata/waiver-stamp/compare/v1.13.0...v1.14.0) (2026-07-15)
+
+
+### Bug Fixes
+
+* make lockfile-assay workflow zizmor-clean ([83d43ef](https://github.com/jsalvata/waiver-stamp/commit/83d43efdacec0bec48f1c90b614b5c431a6a3a26))
+* support app-token reviewers ([f5d5a5a](https://github.com/jsalvata/waiver-stamp/commit/f5d5a5aec9bb39063151171faa0d36f815bad8bf))
+
+
+### Features
+
+* install lockfile-assay ci and hooks ([2d07602](https://github.com/jsalvata/waiver-stamp/commit/2d07602c152046b35f952afef8480bc2722b30bd))
+* use the anchored lockfile-assay workflow ([4187654](https://github.com/jsalvata/waiver-stamp/commit/4187654497590d7882e845e85cb4529dee28b1c4))
+
 # [1.13.0](https://github.com/jsalvata/waiver-stamp/compare/v1.12.0...v1.13.0) (2026-07-15)
 
 
