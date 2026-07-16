@@ -56,6 +56,19 @@ export async function postOutcome(
     }
   }
 
+  // The default GITHUB_TOKEN authenticates as github-actions[bot]; GitHub blocks that identity
+  // from approving PRs, and even a posted bot APPROVE wouldn't count toward required reviews. About
+  // to APPROVE as it ⇒ the App-token wiring (setup step 8) is missing or was dropped in a refactor.
+  // Say so — the raw API error ("GitHub Actions is not permitted to approve pull requests") is opaque.
+  if (outcome.action === 'APPROVE' && me === 'github-actions[bot]') {
+    core.warning(
+      'waiver-stamp-review: about to APPROVE as the default GitHub Actions identity ' +
+        '(github-actions[bot]). GitHub blocks that identity from approving PRs and would not count ' +
+        'the review anyway. The App-token wiring (environment + create-github-app-token step + ' +
+        'github-token input) is missing or was dropped — see docs/auto-approval-setup.md step 8.',
+    );
+  }
+
   if (outcome.action !== 'NONE') {
     await octokit.rest.pulls.createReview({
       owner,
