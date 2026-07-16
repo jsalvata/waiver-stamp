@@ -1,5 +1,10 @@
+import * as core from '@actions/core';
 import { describe, expect, it, vi } from 'vitest';
 import { postOutcome } from './review.ts';
+
+// review.ts calls core.warning directly; mock the module so it's assertable
+// (vi.spyOn can't redefine @actions/core's read-only exports).
+vi.mock('@actions/core', () => ({ warning: vi.fn() }));
 
 /** 403 shape Octokit surfaces for a token that can't reach an endpoint. */
 function forbidden(): never {
@@ -105,5 +110,30 @@ describe('postOutcome', () => {
     expect(s.createReview).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'APPROVE', commit_id: args.headSha }),
     );
+  });
+
+  it('warns when approving as the default Actions identity (App-token wiring missing)', async () => {
+    const s = octokitSpy([], { user: 'github-actions[bot]' });
+    vi.mocked(core.warning).mockClear();
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('default GitHub Actions identity'),
+    );
+    // Additive diagnostic — the APPROVE is still attempted (fail-closed behaviour unchanged).
+    expect(s.createReview).toHaveBeenCalledWith(expect.objectContaining({ event: 'APPROVE' }));
+  });
+
+  it('does not warn when approving as a real App identity', async () => {
+    const s = octokitSpy([], { appSlug: 'my-reviewer' });
+    vi.mocked(core.warning).mockClear();
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
+    expect(core.warning).not.toHaveBeenCalled();
+  });
+
+  it('does not warn when the default identity only COMMENTs (comments post fine)', async () => {
+    const s = octokitSpy([], { user: 'github-actions[bot]' });
+    vi.mocked(core.warning).mockClear();
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'COMMENT', body: 'partial' } });
+    expect(core.warning).not.toHaveBeenCalled();
   });
 });
