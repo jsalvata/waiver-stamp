@@ -134,13 +134,49 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > Defense in depth behind G1, which already blocks any `.github/**` change from producing an
    > APPROVE — but an extra branch-protection layer costs little.
 
-8. *(Optional)* **Upgrade `github-token` to an App or bot-PAT token** so the reviewer's APPROVE
+8. *(Optional)* **Upgrade `github-token` to a GitHub App token** so the reviewer's APPROVE
    counts toward "required approving reviews" branch protection.
-   > The default `${{ github.token }}` posts a visible APPROVE that does **not** satisfy that
-   > rule — deliberately conservative, bounding the blast radius of any residual forgery until
-   > you opt in. If you upgrade, this token runs **our** code with **your** write credential, so
-   > this is the case where hash-pinning earns its keep — see
-   > [Which ref to pin](#which-ref-to-pin).
+   > The default `${{ github.token }}` can't even *post* an APPROVE — GitHub blocks the Actions
+   > identity from approving PRs — and a bot APPROVE that did post still wouldn't *count*. Both
+   > are deliberate: with the default token the layer leaves the approving click to a human and
+   > publishes the green `waiver-stamp` check as its trust signal, bounding the blast radius of
+   > any residual forgery. Opting in removes that human click. (A machine-user PAT with repo
+   > write access also counts and sidesteps the App-permission subtlety below, at the cost of
+   > running a bot account.)
+   >
+   > For the App path, **two things must both hold**, and it's easy to get only the first:
+   >
+   > 1. **Mint an App token and pass it as `github-token`.** Add an `environment:`, a
+   >    `create-github-app-token` step, and wire its output into the action's `github-token`
+   >    input. Scope the mint — zizmor's `github-app` audit (High) flags an unscoped one and
+   >    wants a `permission-*` input — with `permission-pull-requests: write`.
+   > 2. **Grant the App `Contents: write`, *not just* `Pull requests: write`.** GitHub counts an
+   >    approving review only from an identity with **repository write access**, which for a
+   >    GitHub App *is* `Contents: write`. With `pull_requests`-only the App can *submit* the
+   >    review, but GitHub silently won't count it: PR up to date, all required checks green, and
+   >    `mergeable_state` stays `blocked` / `reviewDecision: REVIEW_REQUIRED`. Granting `contents`
+   >    and re-accepting the install flips it to counted immediately — counting is evaluated
+   >    against the reviewer's *current* access, so no re-run is needed. (GitHub docs:
+   >    [available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets),
+   >    "approving reviews from people with write permissions".)
+   >
+   > The two halves interact: scoping the mint to `permission-pull-requests: write` is correct,
+   > but it does **not** relax the requirement that the App itself hold `Contents: write` —
+   > configure both.
+   >
+   > **The security tradeoff:** `Contents: write` is code-push. A leaked App key now carries write
+   > to your code, not just the ability to approve. It's bounded — the App is not a ruleset bypass
+   > actor, so protected branches (e.g. `main`) stay PR-gated — but weigh it against keeping a
+   > human/admin final click and treating the green `waiver-stamp` *check* as the trust signal.
+   > This token also runs **our** code with **your** write credential, so this is the case where
+   > hash-pinning earns its keep — see [Which ref to pin](#which-ref-to-pin).
+   >
+   > **The wiring is load-bearing and easy to drop.** The `environment:`, the
+   > `create-github-app-token` step, and the `github-token:` input are three separate pieces; an
+   > unrelated workflow refactor off a base that predates them can silently drop the lot, and the
+   > reviewer falls back to the default identity. That's fail-closed (no APPROVE posts), but the
+   > cause isn't obvious — so the action warns explicitly when it's about to APPROVE as the
+   > default Actions identity, pointing back here.
 
 9. *(Optional caveat)* **If you set `allowBumping` without wiring a lockfile-honesty check**
    into `lockfile-honesty-checks`, know the accepted residual.
@@ -149,3 +185,11 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > The reviewer's APPROVE body names this caveat whenever `lockfile-honesty-checks` is empty —
    > not silent, but a real gap until a lockfile-honesty tool (e.g. a lockfile-firewall product)
    > is wired in as a required check.
+
+## When a waivered PR falls behind `main`
+
+**Rebase it — never merge-update it.** A "Update branch" merge adds a merge commit, and a merge
+commit carries no waiver, so the aggregate verdict drops from APPROVE to COMMENT and auto-approval
+is lost. If `main` has drifted around the code you touched, GitHub's rebase button will conflict;
+do a local reset to `main` + a fresh `waiver apply` + force-push rather than replaying the stale
+commit.
