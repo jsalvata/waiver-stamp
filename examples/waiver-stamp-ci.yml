@@ -38,6 +38,6 @@ jobs:
 
       - name: waiver-stamp
         # Safe to paste as-is: we keep `v*` tags immutable (a repo ruleset). Prefer a full SHA
-        # if your policy is hash-pin-only — `gh api repos/jsalvata/waiver-stamp/commits/v1.15.0
+        # if your policy is hash-pin-only — `gh api repos/jsalvata/waiver-stamp/commits/v1.16.0
         # --jq .sha`. The pin also fixes the CLI version (it ships at this ref), so no `with:`.
-        uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@v1.15.0
+        uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@v1.16.0

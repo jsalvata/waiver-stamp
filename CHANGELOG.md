@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/jsalvata/waiver-stamp/compare/v1.15.0...v1.16.0) (2026-07-16)
+
+
+### Features
+
+* warn when approving as default identity ([83883b5](https://github.com/jsalvata/waiver-stamp/commit/83883b55bbf055b99c4c7871ec4a2b588532a23c))
+
 # [1.15.0](https://github.com/jsalvata/waiver-stamp/compare/v1.14.0...v1.15.0) (2026-07-15)
 
 

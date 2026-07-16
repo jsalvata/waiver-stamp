@@ -46,11 +46,11 @@ complete design rationale.
 
 ## Which ref to pin
 
-The templates ship pinned to a release tag (`@v1.15.0`, kept current on every release), so **you
+The templates ship pinned to a release tag (`@v1.16.0`, kept current on every release), so **you
 can paste them as-is** — we keep `v*` tags immutable via a repo ruleset. If your policy is
 hash-pin-only (e.g. [zizmor](https://github.com/zizmorcore/zizmor)'s default `unpinned-uses`), or
 you'd rather not rely on a setting you can't see, swap in the SHA the tag points at:
-`gh api repos/jsalvata/waiver-stamp/commits/v1.15.0 --jq .sha`. You pin twice — the producer's
+`gh api repos/jsalvata/waiver-stamp/commits/v1.16.0 --jq .sha`. You pin twice — the producer's
 `uses:` (in `waiver-stamp-ci.yml`) and the reviewer's (in `waiver-stamp-review.yml`); keep both on
 the same ref, and never a mutable one (a branch, `@main`).
 
