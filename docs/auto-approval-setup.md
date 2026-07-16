@@ -170,13 +170,6 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > human/admin final click and treating the green `waiver-stamp` *check* as the trust signal.
    > This token also runs **our** code with **your** write credential, so this is the case where
    > hash-pinning earns its keep — see [Which ref to pin](#which-ref-to-pin).
-   >
-   > **The wiring is load-bearing and easy to drop.** The `environment:`, the
-   > `create-github-app-token` step, and the `github-token:` input are three separate pieces; an
-   > unrelated workflow refactor off a base that predates them can silently drop the lot, and the
-   > reviewer falls back to the default identity. That's fail-closed (no APPROVE posts), but the
-   > cause isn't obvious — so the action warns explicitly when it's about to APPROVE as the
-   > default Actions identity, pointing back here.
 
 9. *(Optional caveat)* **If you set `allowBumping` without wiring a lockfile-honesty check**
    into `lockfile-honesty-checks`, know the accepted residual.
