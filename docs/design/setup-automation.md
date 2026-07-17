@@ -266,11 +266,13 @@ uses in production).
   Actions via `actions/create-github-app-token`; it is never a running service. This is the
   key difference from Probot (which wants the webhook secret + a process).
 
-**Name uniqueness.** App names → slugs are globally unique. Suffix the globally-unique owner
-login: `waiver-stamp-<owner>`. Deterministic, which is also the reuse key (§4.3): a second
-run finds the existing App instead of colliding. Sanitize to the slug charset (lowercase,
-non-alphanumeric → hyphen) and handle the name length cap (truncate long owner logins +
-short hash suffix).
+**Name uniqueness.** App names → slugs are globally unique. Suffix the owner login:
+`waiver-stamp-<owner>`. Here `<owner>` is whichever account owns the App — the **user**
+(personal install) or the **org** — and GitHub uses a **single global namespace** for both
+(no user and org can share a login), so the suffixed name is unique regardless of owner
+type. Deterministic, which is also the reuse key (§4.3): a second run finds the existing App
+instead of colliding. Sanitize to the slug charset (lowercase, non-alphanumeric → hyphen)
+and handle the name length cap (truncate long owner logins + short hash suffix).
 
 ### 3.2 The flow (loopback, driven by `waiver setup-repository`)
 
