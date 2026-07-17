@@ -389,8 +389,8 @@ file is the *only* at-rest copy and it is opt-in.
 > **Decision D10 (recorded):** default is **not** to persist (secure default). The multi-repo
 > convenience is opt-in and personal-only. Alternative considered: always persist to a
 > keychain — rejected for v0 (extra platform-specific dependency; disk file with 600 perms is
-> adequate and inspectable). Alternative: for personal multi-repo, batch-configure all chosen
-> repos in one run while the pem is in memory — offered as the *no-persist* path (§4.5).
+> adequate and inspectable). Multi-repo for personal accounts is served by the saved file or
+> re-minting, not a batch-many-in-one-run mode (dropped as needless complexity).
 
 ### 4.5 Secret provisioning
 
@@ -400,9 +400,9 @@ Reviewer references, by convention: `WAIVER_STAMP_APP_ID` and `WAIVER_STAMP_APP_
   <repo>` or `--visibility selected`). Set once; every repo's reviewer reads the same org
   secret. Reuse across repos then needs no pem at all (§4.3).
 - **Personal target:** set **repo** Actions secrets (`gh secret set … --repo owner/repo`),
-  from the fresh pem or the disk file. If the user declined disk persistence and wants
-  several repos configured, offer to configure them all in this one run while the pem is
-  in memory.
+  from the fresh pem or the disk file. Multiple personal repos = save the file (§4.4) or
+  re-mint per repo; no batch-configure-many-in-one-run mode (it added real complexity for
+  little gain).
 - **Environment-scoped secrets:** if the reviewer job uses an `environment:` (it need not —
   see §6), create the environment (`gh api`) and set env-scoped secrets to match. Default
   design uses **repo/org** secrets and **no** environment, which is simpler and sufficient;
