@@ -364,23 +364,24 @@ Resolution order:
    - **Personal owner:** the App can be reused but personal repos have no shared secret store
      and the pem can't be re-minted headlessly → need the pem from disk (step 2) or a fresh
      key.
-2. **Disk (personal, opt-in — §4.4).** If a saved credentials file exists and the user opted
-   to use it, load `{ app_id, pem }` from it and skip the manifest flow.
+2. **Disk (personal, opt-in — §4.4).** If a saved credentials file exists, load
+   `{ app_id, pem }` from it and skip the manifest flow.
 3. **Fresh manifest flow (§3.2).** Otherwise run the loopback create→convert, obtaining
    `{ app_id, pem, slug }`.
 
 ### 4.4 Personal-account pem-on-disk option
 
 Only when the install target is a **personal account** (orgs use org secrets, so no local pem
-persistence is needed), prompt two things:
+persistence is needed), one prompt:
 
 - *"Save the App ID + private key to disk so you can configure more of your repos later
   without re-running the browser flow?"* → if yes, write `~/.waiver-install/<owner>.json`
   (`{ "app_id": …, "pem": … }`), **`chmod 600`**, directory `chmod 700`. Warn plainly that
   this is a private key at rest on disk.
-- *"If such a file is found on a later run, use it instead of the browser flow?"* → records a
-  preference so subsequent `waiver setup-repository` runs for another repo under the same owner read the
-  file (step 2 of §4.3) rather than re-minting.
+
+On a later run, **if that file exists it is used, silently** — no second preference, no
+confirmation. Saving it *is* the opt-in; there's nothing to re-confirm, and it only ever
+speeds up the same owner's own subsequent repos.
 
 Never persist a pem for an **org** target; never transmit a pem anywhere; never log it. The
 file is the *only* at-rest copy and it is opt-in.
