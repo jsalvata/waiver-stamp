@@ -443,11 +443,14 @@ hand-off page** (§4.10), not something setup configures or interactively offers
 
 ### 4.7 commitlint & husky
 
-- **commitlint `body-max-line-length`:** if the repo enforces it (detect
-  `commitlint.config.*`), pretty-printed waiver JSON can exceed it and the `commit-msg` hook
-  would reject waivered commits (`docs/auto-approval-setup.md` §6, README "Adopting…"). Patch
-  the rule to `[0]` **only if present and non-zero**, minimally, preserving surrounding config
-  (parse-edit-write, not regex-smash); show the diff, confirm.
+- **commitlint `body-max-line-length`:** pretty-printed waiver JSON can have body lines over
+  the default 100-char limit; a `commit-msg` hook enforcing it would reject waivered commits
+  (`docs/auto-approval-setup.md` §6). commitlint config comes in too many shapes to parse
+  reliably, so we **detect empirically**: run the repo's `commit-msg` hook (or `npx
+  commitlint`) against a synthetic message with a >100-char body line and read the exit code —
+  no real commit is created. If it rejects, **warn** the adopter (naming the exact
+  `body-max-line-length: [0]` fix) rather than editing their commitlint config for them —
+  that config is theirs, and auto-patching it is more intrusive than the problem warrants.
 - **husky:** the waiver flow itself needs no husky hook, but if the repo *already* uses husky
   (detect `.husky/`), do not reinitialize it or run `husky install`/`prepare` — leave it
   intact. If we add any hook (we do not by default), it must be appended, never overwrite an
