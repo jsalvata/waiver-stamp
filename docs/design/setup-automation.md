@@ -294,12 +294,9 @@ request would transit Pages access logs).
 6. Server writes secrets (§4.5) and serves a "done — now install the App" page linking
    `https://github.com/apps/<slug>/installations/new`.
 
-**Standalone (non-CLI) variant.** For adopters who won't run the CLI, document the
-**query-param prefill** fallback: a plain link to
-`settings/apps/new?name=…&contents=write&pull_requests=write&administration=read`; the
-adopter clicks Create, then on the App page clicks **Generate a private key** and copies the
-App ID by hand. No redirect, no code, nothing to host — at the cost of two manual clicks and
-no automated pem capture. (Exact query-param key names: §7-V2.)
+**Non-CLI adopters** don't get a query-param prefill variant — they follow the fully-manual
+provisioning process, which we document anyway (§2.8 documentation strategy) and which
+doubles as the explanation of what the automated flow does. One less surface to maintain.
 
 ### 3.3 The two irreducible clicks
 
@@ -621,9 +618,6 @@ alternatives → chosen (why)**.
   contexts to a `contents: read` token on a private repo, or require `administration: read`?
   Determines whether §2.6 default-token autodiscovery is possible and whether the App needs
   `administration: read` (§3.1/D3). Spec assumes admin-read (conservative).
-- **V2 — Query-param prefill key names.** Exact param names for scopes on
-  `settings/apps/new?…` (the §3.2 standalone fallback) — confirm `contents`, `pull_requests`,
-  `administration` are the accepted keys.
 - **V3 — localhost as manifest `redirect_url`.** Confirm GitHub accepts an
   `http://localhost:<port>` redirect in the manifest flow (Probot relies on it — high
   confidence, verify at build).
