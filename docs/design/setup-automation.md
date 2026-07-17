@@ -328,12 +328,11 @@ anything:
   admin to set secrets, edit protection). `gh auth status`; the App token cannot do these —
   this is the adopter's *own* admin credential, deliberately separate from the App key.
 - **`git`** present.
-- **Package manager / runtime** matching the documented floor: this is a **pnpm-only** tool
-  (`allowBumping` is pnpm-lockfile-scoped; README "Scope (v0)"). Detect `pnpm-lock.yaml`;
-  warn (don't hard-fail) if absent, since the reviewer layer still works without the
-  dependency-bump op. Check Node `>=24` (`package.json engines`) only if the repo is *this
-  kind* of project — for a pure adopter repo, Node floor is irrelevant to the reviewer, so
-  this is informational.
+- **Package manager:** the dependency-bump op is **pnpm-only** (`allowBumping` is
+  pnpm-lockfile-scoped; README "Scope (v0)"). Detect `pnpm-lock.yaml`; warn (don't hard-fail)
+  if absent, since the rest of the reviewer layer works without that op. No Node-version
+  check — the adopter's repo runtime is irrelevant to the reviewer, which runs waiver-stamp
+  via `npx` on the CI runner with Node pinned by the action, not by the adopter.
 - **Browser openable** (for the manifest flow) — else fall back to printing the URL.
 
 Preflight is read-only; safe to run repeatedly (`waiver setup-repository --check` runs only
