@@ -397,10 +397,6 @@ persistence is needed), one prompt:
   (`{ "app_id": …, "pem": … }`), **`chmod 600`**, directory `chmod 700`. Warn plainly that
   this is a private key at rest on disk.
 
-On a later run, **if that file exists it is used, silently** — no second preference, no
-confirmation. Saving it *is* the opt-in; there's nothing to re-confirm, and it only ever
-speeds up the same owner's own subsequent repos.
-
 Never persist a pem for an **org** target; never transmit a pem anywhere; never log it. The
 file is the *only* at-rest copy and it is opt-in.
 
