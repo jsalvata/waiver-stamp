@@ -441,7 +441,7 @@ defense-in-depth behind **G1** — the reviewer guard that already refuses APPRO
 commit in the PR range touches `.github/**` (spec §3.4). It's a **recommendation on the
 hand-off page** (§4.10), not something setup configures or interactively offers.
 
-### 4.7 commitlint & husky
+### 4.7 commitlint (and leaving hooks alone)
 
 - **commitlint `body-max-line-length`:** pretty-printed waiver JSON can have body lines over
   the default 100-char limit; a `commit-msg` hook enforcing it would reject waivered commits
@@ -451,11 +451,9 @@ hand-off page** (§4.10), not something setup configures or interactively offers
   no real commit is created. If it rejects, **warn** the adopter (naming the exact
   `body-max-line-length: [0]` fix) rather than editing their commitlint config for them —
   that config is theirs, and auto-patching it is more intrusive than the problem warrants.
-- **husky:** the waiver flow itself needs no husky hook, but if the repo *already* uses husky
-  (detect `.husky/`), do not reinitialize it or run `husky install`/`prepare` — leave it
-  intact. If we add any hook (we do not by default), it must be appended, never overwrite an
-  existing hook file. (This repo's own `.husky/pre-commit` runs `lockfile-assay check
-  --staged`; an adopter's hooks are theirs — untouched.)
+- **Git hooks (husky etc.):** setup installs no hook and reinitializes nothing — the
+  commitlint check above runs out-of-band, not via a hook. Whatever hooks the repo already
+  has are left untouched.
 
 ### 4.8 Workflow files — drop without smashing
 
