@@ -3,7 +3,7 @@
 > Status: **design** (not yet implemented). Collapses the `docs/auto-approval-setup.md`
 > checklist from a ~9-step copy-paste-and-edit chore into three pieces: reusable
 > workflows the adopter calls in a few lines, a one-click GitHub App provisioning flow,
-> and a `waiver setup` command that wires the rest without touching what's already there.
+> and a `waiver setup-repository` command that wires the rest without touching what's already there.
 
 ## 1. Purpose & scope
 
@@ -22,7 +22,7 @@ This spec defines three components that shrink that to **run one command, click 
   the lockfile-honesty check, assuming `lockfile-assay`).
 - **B — App Manifest one-click flow**: provisions a per-adopter App with the exact scopes,
   via GitHub's manifest→conversion handshake. No shared secret, no hosted backend.
-- **C — `waiver setup`**: an interactive CLI that validates prerequisites, drives B over a
+- **C — `waiver setup-repository`**: an interactive CLI that validates prerequisites, drives B over a
   loopback server, provisions secrets, merges branch-protection additively, patches
   commitlint, drops the caller workflows without overwriting anything, and ends on a
   hand-off page listing only what we deliberately left manual.
@@ -32,7 +32,7 @@ The reviewer still runs **this repo's** pinned default-branch code with the **ad
 token; no third party gains standing access; every failure is fail-closed (worst case =
 today's normal review). Components A–C reduce *setup friction*, never the safety bar.
 
-**Hard constraint — the target repo is already operational.** `waiver setup` runs against
+**Hard constraint — the target repo is already operational.** `waiver setup-repository` runs against
 a fully-configured repo. It must be **additive, idempotent, and non-destructive**: never
 overwrite an existing workflow, never replace a branch-protection rule set (only merge in
 the checks it needs), back up before editing any tracked file, and re-running must
@@ -74,7 +74,7 @@ Reviewer:
 # .github/workflows/waiver-stamp-review.yml
 on:
   workflow_run:
-    workflows: [CI, waiver-stamp-ci]   # <-- discovered & baked in by `waiver setup`
+    workflows: [CI, waiver-stamp-ci]   # <-- discovered & baked in by `waiver setup-repository`
     types: [completed]
 jobs:
   review:
@@ -94,7 +94,7 @@ trusted surface moved off the adopter.
 ### 2.2 The producer as a standalone workflow
 
 The producer runs as its own `pull_request` workflow rather than a job merged into the
-adopter's CI. This is what lets `waiver setup` avoid editing arbitrary CI YAML (§4.8).
+adopter's CI. This is what lets `waiver setup-repository` avoid editing arbitrary CI YAML (§4.8).
 
 It works because the reviewer locates the report **by head SHA across all workflow runs**,
 not by the triggering run — `src/action/adapters.ts:fetchArtifact` already
@@ -119,7 +119,7 @@ everything from the head SHA regardless of which workflow triggered it; more wak
 means more fail-closed no-ops.
 
 `workflow_run.workflows` is static YAML and cannot be discovered at runtime, so the CI
-workflow name(s) are the **one** value baked into the caller — `waiver setup` discovers and
+workflow name(s) are the **one** value baked into the caller — `waiver setup-repository` discovers and
 fills them (§4.8). This is naming a *workflow*, not maintaining a *check list*; the check
 list is what §2.4 removes.
 
@@ -168,7 +168,7 @@ hardcoded `lockfile-assay` would silently fail here.
 
 Resolution: read the honesty check name from an **optional `lockfileHonestyCheck` field in
 `.waiver-stamp.json`** (default absent). This is consistent with how the reviewer already
-reads policy from the base commit, so it can't be widened by a PR. `waiver setup` fills it
+reads policy from the base commit, so it can't be widened by a PR. `waiver setup-repository` fills it
 by detecting the adopter's lockfile-assay workflow and extracting its job/check name (§4.8).
 Behavior:
 
@@ -190,7 +190,7 @@ whose App is granted `administration: read` (§3.1). Concretely:
 
 - The reviewer uses the App token (when configured) for the autodiscovery read **and** the
   approve post; it uses the default token only for the reads the default token *can* do.
-- Because `waiver setup` always provisions the App (§4.3), the setup-produced configuration
+- Because `waiver setup-repository` always provisions the App (§4.3), the setup-produced configuration
   always has an `administration: read`-capable token — so autodiscovery is available by
   default and the manual list is genuinely gone.
 
@@ -209,7 +209,7 @@ default-token path.
 ### 2.7 Override escape hatch (kept, empty by default)
 
 Retain a single optional input `ci-checks` on `review.yml`, **empty by default**. It is not
-part of the setup-produced happy path — `waiver setup` writes no list. It exists only for
+part of the setup-produced happy path — `waiver setup-repository` writes no list. It exists only for
 (a) the no-App fallback of §2.6, and (b) repos whose required set isn't discoverable for
 some edge reason. Empty + non-discoverable ⇒ fail-closed no-op (log: "no required checks
 discovered and no override set — not approving"). The old `lockfile-honesty-checks` input is
@@ -259,13 +259,13 @@ run finds the existing App instead of colliding. Sanitize to the slug charset (l
 non-alphanumeric → hyphen) and handle the name length cap (truncate long owner logins +
 short hash suffix).
 
-### 3.2 The flow (loopback, driven by `waiver setup`)
+### 3.2 The flow (loopback, driven by `waiver setup-repository`)
 
 The redirect is captured on **loopback** — no hosted page, and the one-time `code` never
 leaves the adopter's machine (strictly more private than a GitHub-Pages redirect, whose
 request would transit Pages access logs).
 
-1. `waiver setup` binds `127.0.0.1:<ephemeral-port>`, generates a random `state`.
+1. `waiver setup-repository` binds `127.0.0.1:<ephemeral-port>`, generates a random `state`.
 2. Opens the browser to a page **its own server** serves: a self-submitting `<form method=POST>`
    targeting `https://github.com/settings/apps/new` (personal) or
    `https://github.com/organizations/<org>/settings/apps/new` (org), carrying the manifest and
@@ -299,10 +299,11 @@ Everything between (create POST, code capture, conversion, secret write) is auto
 
 ---
 
-## 4. Component C — `waiver setup`
+## 4. Component C — `waiver setup-repository`
 
-A new interactive subcommand: `waiver setup`. Wires everything B doesn't, additively and
-idempotently, against an already-operational repo.
+A new interactive subcommand: `waiver setup-repository`, run from inside the checked-out
+repo. Wires everything B doesn't, additively and idempotently, against an
+already-operational repo.
 
 ### 4.1 Preflight — validate prerequisites (fail fast, fix-it messages)
 
@@ -323,8 +324,8 @@ anything:
   this is informational.
 - **Browser openable** (for the manifest flow) — else fall back to printing the URL.
 
-Preflight is read-only; safe to run repeatedly (`waiver setup --check` runs only this and
-reports).
+Preflight is read-only; safe to run repeatedly (`waiver setup-repository --check` runs only
+this and reports).
 
 ### 4.2 Choose install target — personal or which org
 
@@ -366,7 +367,7 @@ persistence is needed), prompt two things:
   (`{ "app_id": …, "pem": … }`), **`chmod 600`**, directory `chmod 700`. Warn plainly that
   this is a private key at rest on disk.
 - *"If such a file is found on a later run, use it instead of the browser flow?"* → records a
-  preference so subsequent `waiver setup` runs for another repo under the same owner read the
+  preference so subsequent `waiver setup-repository` runs for another repo under the same owner read the
   file (step 2 of §4.3) rather than re-minting.
 
 Never persist a pem for an **org** target; never transmit a pem anywhere; never log it. The
@@ -492,8 +493,10 @@ in the PR 1 tasks (§8).
 ### 4.12 CLI surface & exit codes
 
 ```
-waiver setup [--check] [--yes] [--target personal|<org>] [--no-app]
+waiver setup-repository [--check] [--yes] [--target personal|<org>] [--no-app]
 ```
+
+Run from inside the checked-out repo (it resolves `owner/repo` from the `origin` remote, §4.1).
 
 - `--check` — run §4.1 preflight only; report and exit.
 - `--yes` — accept recommended defaults for non-destructive prompts; still pause on the two
@@ -536,7 +539,7 @@ The core threat model (`docs/automation-layer.md`, spec §3.4) is unchanged. New
 - **pem at rest (personal, opt-in).** `~/.waiver-install/<owner>.json` at `chmod 600` is a
   private key on disk — the same posture as any local App key or SSH key; opt-in and warned.
   Org installs never persist it.
-- **`waiver setup` uses the adopter's own admin credential** (`gh`) for secrets/protection —
+- **`waiver setup-repository` uses the adopter's own admin credential** (`gh`) for secrets/protection —
   deliberately separate from the App key, and never persisted by us.
 
 Fail-closed remains the invariant everywhere: any ambiguity in setup stops and asks; any
@@ -591,9 +594,9 @@ alternatives → chosen (why)**.
 - **D13 — Where the spec lives / feature packaging.** one mega-PR · bookended stack. → **See
   §8** — prep refactor of the reviewer's check-resolution seam, then feature PRs, then
   cleanup.
-- **D14 — `waiver setup` vs a separate installer binary.** new `setup` subcommand on the
+- **D14 — `waiver setup-repository` vs a separate installer binary.** new `setup` subcommand on the
   existing `waiver` CLI · standalone script. → **Subcommand.** Reuses the shipped bin,
-  commander wiring, and exit-code contract; discoverable as `waiver setup`.
+  commander wiring, and exit-code contract; discoverable as `waiver setup-repository`.
 
 ---
 
@@ -648,7 +651,7 @@ orchestration or the guards. That's a named seam.
   - **PR 3 — App manifest + loopback core** (`setup-automation-3`): the manifest builder
     (name/scopes/sanitize), the loopback server (form page, callback capture, conversion),
     browser open. Unit-tested with a fake GitHub endpoint; no secrets written yet.
-  - **PR 4 — `waiver setup` orchestration** (`setup-automation-4`): preflight, target prompt,
+  - **PR 4 — `waiver setup-repository` orchestration** (`setup-automation-4`): preflight, target prompt,
     App reuse/disk/fresh resolution, secret provisioning, additive branch-protection merge,
     commitlint/husky handling, non-destructive workflow drop, install hand-off, the
     instructions page, `.waiver-stamp.json` seeding. Wired into `cli.ts`. Heaviest PR —
