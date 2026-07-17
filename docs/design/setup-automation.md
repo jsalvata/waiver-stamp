@@ -335,8 +335,9 @@ anything:
   via `npx` on the CI runner with Node pinned by the action, not by the adopter.
 - **Browser openable** (for the manifest flow) — else fall back to printing the URL.
 
-Preflight is read-only; safe to run repeatedly (`waiver setup-repository --check` runs only
-this and reports).
+Preflight always runs (it's read-only and cheap) and gates the rest — there is no separate
+`--check` flag; running the command on an already-configured repo converges to a no-op, so
+it doubles as the "is my setup healthy?" check.
 
 ### 4.2 Choose install target — personal or which org
 
@@ -504,12 +505,11 @@ in the PR 1 tasks (§8).
 ### 4.12 CLI surface & exit codes
 
 ```
-waiver setup-repository [--check] [--yes] [--target personal|<org>] [--no-app]
+waiver setup-repository [--yes] [--target personal|<org>] [--no-app]
 ```
 
 Run from inside the checked-out repo (it resolves `owner/repo` from the `origin` remote, §4.1).
 
-- `--check` — run §4.1 preflight only; report and exit.
 - `--yes` — accept recommended defaults for non-destructive prompts; still pause on the two
   human clicks (§3.3) and on any destructive-looking merge (§4.6/4.7) unless also explicitly
   confirmed.
