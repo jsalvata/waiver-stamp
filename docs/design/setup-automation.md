@@ -34,9 +34,9 @@ today's normal review). Components A–C reduce *setup friction*, never the safe
 
 **Hard constraint — the target repo is already operational.** `waiver setup-repository` runs against
 a fully-configured repo. It must be **additive, idempotent, and non-destructive**: never
-overwrite an existing workflow, never touch the existing branch-protection rules (it adds a
-dedicated ruleset instead, §4.6), back up before editing any tracked file, and re-running
-must converge, not duplicate.
+overwrite an existing workflow, add a dedicated branch-protection ruleset and leave existing
+rules in place (§4.6), back up before editing any tracked file, and re-running must converge,
+not duplicate.
 
 Out of scope: changing the stamping engine, the op vocabulary, or the verdict semantics.
 This is purely the adoption/onboarding surface.
@@ -425,7 +425,8 @@ overwriting *those* on a re-run is idempotent, and we never touch any other secr
 
 ### 4.6 Branch protection & rules — add a dedicated ruleset
 
-The target repo already has protection. **We never read-modify-write it.** We do two things:
+The target repo already has protection; setup leaves every existing rule in place and does
+two things:
 
 - Add a **new, dedicated `waiver-stamp` ruleset** requiring the `waiver-stamp` check on the
   default branch — and *only* that check. The adopter's CI checks are already required
@@ -435,13 +436,14 @@ The target repo already has protection. **We never read-modify-write it.** We do
   earlier waiver-stamp approval before deciding afresh. Repo-wide "dismiss stale approvals"
   stays a hand-off-page recommendation (`docs/auto-approval-setup.md` §4).
 
-This is safe — and simpler than a read-merge-PUT — because rulesets **aggregate**: multiple
-rulesets on the same branch combine (most-restrictive wins), and rulesets **layer with**
-classic branch protection, so the two coexist and both evaluate
+This is safe because rulesets **aggregate**: multiple rulesets on the same branch combine
+(most-restrictive wins), and rulesets **layer with** classic branch protection, so the two
+coexist and both evaluate
 ([about rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)).
-Our ruleset adds our one requirement without merging, migrating, or clobbering anything —
-whether the repo runs classic protection, rulesets, or both. Idempotent: a re-run finds our
-ruleset and no-ops; we show the adopter the ruleset we'll create and confirm before writing.
+A dedicated ruleset therefore adds our one required check while the adopter's existing rules
+keep applying — whether the repo runs classic protection, rulesets, or both. Idempotent: a
+re-run finds our ruleset and no-ops; we show the adopter the ruleset we'll create and confirm
+before writing.
 
 `.github/**` protection (CODEOWNERS or a ruleset, `docs/auto-approval-setup.md` §7) is
 defense-in-depth behind **G1** — the reviewer guard that already refuses APPROVE if any
