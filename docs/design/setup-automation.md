@@ -124,6 +124,18 @@ workflow name(s) are the **one** value baked into the caller — `waiver setup-r
 fills them (§4.8). This is naming a *workflow*, not maintaining a *check list*; the check
 list is what §2.4 removes.
 
+**Can we trigger on *any* workflow, to avoid drift when checks are added?** No wildcard
+exists — `workflow_run.workflows` is an explicit name list (`*` is only for `branches`/
+`paths`). But the drift concern is mostly already handled: autodiscovery re-reads the
+required-check set at runtime by head SHA, so a new check added to an *existing* listed
+workflow is picked up with no config change. Only a check added in a *brand-new* workflow
+not in the list would be missed — and even then it's fail-closed: the backstop finds it
+pending → no-op → at worst a *missed* auto-approval, never a wrong one. If we later want
+true "any workflow", the lever is switching the trigger to `check_suite: completed` (fires
+per-SHA, name-agnostic) — but that is a different trigger surface needing its own
+pwn-request analysis against the `workflow_run` guarantee the whole defense rests on, so
+it's deferred, not adopted here.
+
 ### 2.4 Check autodiscovery (removes the manual `ci-checks` list)
 
 The reviewer discovers the set of required checks instead of reading a hand-maintained
