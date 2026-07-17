@@ -419,9 +419,14 @@ set for the default branch, then **add** (union) what's missing:
 
 - Add `waiver-stamp` and the adopter's existing CI check(s) to *required status checks* (the
   CI checks are very likely already required; `waiver-stamp` is the new one).
-- Enable **"Dismiss stale pull request approvals when new commits are pushed"** if not already
-  on (`docs/auto-approval-setup.md` §4 — without it a stale bot APPROVE from a smaller range
-  can linger).
+- **Stale approvals — recommend, don't force.** We do *not* flip the repo-wide **"Dismiss
+  stale pull request approvals when new commits are pushed"** (a team may deliberately keep
+  its own trust policy). Instead the reviewer **dismisses its own prior approval** when a new
+  head arrives — it re-evaluates on every push (§2.3), so it calls the dismiss-review API on
+  any earlier waiver-stamp approval before deciding afresh. That bounds the exact risk
+  dismiss-stale covered — a bot APPROVE from a smaller earlier range lingering — without
+  overriding the team. We still *recommend* dismiss-stale on the hand-off page
+  (`docs/auto-approval-setup.md` §4).
 
 Implementation reads the existing rule/protection object, computes the union, and PUTs the
 merged object back — diffing first and showing the adopter exactly what will change, with a
