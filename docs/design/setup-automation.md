@@ -412,13 +412,13 @@ Multiline pem via `gh secret set … < file` / stdin. We only ever write our two
 conventionally-named secrets (`WAIVER_STAMP_APP_ID`, `WAIVER_STAMP_APP_PRIVATE_KEY`);
 overwriting *those* on a re-run is idempotent, and we never touch any other secret.
 
-### 4.6 Branch protection & rules — additive merge only
+### 4.6 Branch protection & rules — add a dedicated ruleset
 
-The target repo already has protection. **Never replace it.** Read the current required-checks
-set for the default branch, then **add** (union) what's missing:
+The target repo already has protection. **We never read-modify-write it.** We do two things:
 
-- Add `waiver-stamp` and the adopter's existing CI check(s) to *required status checks* (the
-  CI checks are very likely already required; `waiver-stamp` is the new one).
+- Add a **new, dedicated `waiver-stamp` ruleset** requiring the `waiver-stamp` check on the
+  default branch — and *only* that check. The adopter's CI checks are already required
+  (that's how autodiscovery §2.4 found them), so there is nothing else to add.
 - **Stale approvals — recommend, don't force.** We do *not* flip the repo-wide **"Dismiss
   stale pull request approvals when new commits are pushed"** (a team may deliberately keep
   its own trust policy). Instead the reviewer **dismisses its own prior approval** when a new
@@ -428,11 +428,13 @@ set for the default branch, then **add** (union) what's missing:
   overriding the team. We still *recommend* dismiss-stale on the hand-off page
   (`docs/auto-approval-setup.md` §4).
 
-Implementation reads the existing rule/protection object, computes the union, and PUTs the
-merged object back — diffing first and showing the adopter exactly what will change, with a
-confirm. Idempotent: re-running is a no-op once both checks are present. If the repo uses
-**rulesets** rather than classic protection, edit the ruleset; if classic protection, edit
-that — match whatever is in place, don't migrate them between mechanisms.
+This is safe — and simpler than a read-merge-PUT — because rulesets **aggregate**: multiple
+rulesets on the same branch combine (most-restrictive wins), and rulesets **layer with**
+classic branch protection, so the two coexist and both evaluate
+([about rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)).
+Our ruleset adds our one requirement without merging, migrating, or clobbering anything —
+whether the repo runs classic protection, rulesets, or both. Idempotent: a re-run finds our
+ruleset and no-ops; we show the adopter the ruleset we'll create and confirm before writing.
 
 `.github/**` protection (CODEOWNERS or a ruleset, `docs/auto-approval-setup.md` §7) is
 defense-in-depth behind **G1** — the reviewer guard that already refuses APPROVE if any
@@ -607,9 +609,10 @@ alternatives → chosen (why)**.
 - **D11 — Secret scope.** repo · org · environment. → **Org for org targets, repo for
   personal; no environment by default** (simplest sufficient; environment supported as an
   option).
-- **D12 — Editing existing config.** overwrite to a known-good state · additive merge with
-  diff+confirm. → **Additive merge, diff, confirm, back up.** The repo is operational; never
-  smash. Idempotent convergence over declarative replacement.
+- **D12 — Applying branch protection.** read-modify-write the existing rule · add a separate
+  dedicated ruleset. → **Add a separate `waiver-stamp` ruleset.** Rulesets aggregate and
+  coexist with classic protection, so a new ruleset adds our one required check without ever
+  touching the adopter's existing rules — no merge, no clobber, no mechanism-matching (§4.6).
 - **D13 — Where the spec lives / feature packaging.** one mega-PR · bookended stack. → **See
   §8** — prep refactor of the reviewer's check-resolution seam, then feature PRs, then
   cleanup.
