@@ -95,7 +95,11 @@ trusted surface moved off the adopter.
 ### 2.2 The producer as a standalone workflow
 
 The producer runs as its own `pull_request` workflow rather than a job merged into the
-adopter's CI. This is what lets `waiver setup-repository` avoid editing arbitrary CI YAML (§4.8).
+adopter's CI. Merged isn't *worse* on reviewability — setup opens a workflow PR either way
+(§4.13) — the point is **generation safety**: writing a new standalone file can't corrupt
+anything, whereas merging a job into arbitrary existing CI YAML (matrices, anchors, `uses:`
+reuse) is fragile surgery. The multi-workflow trigger (§2.3) makes standalone functionally
+equivalent to merged, so we generate standalone.
 
 It works because the reviewer locates the report **by head SHA across all workflow runs**,
 not by the triggering run — `src/action/adapters.ts:fetchArtifact` already
@@ -470,9 +474,10 @@ hand-off page** (§4.10), not something setup configures or interactively offers
   it when seeding a new file; recommend it on the hand-off page when the file already exists —
   never silently edit an existing policy file). If none found, leave unset (caveat stays —
   fail-safe).
-- The producer is standalone, so we **never edit the adopter's existing CI workflow.** (An
-  adopter who prefers the producer as a *job inside* their CI can do that by hand — it's on
-  the hand-off page as an optional optimization, not something we automate.)
+- We generate the producer as a **standalone file and never edit the adopter's existing CI** —
+  not to dodge a PR (we open one regardless, §4.13) but because writing a new file is safe
+  while editing arbitrary CI YAML is fragile (§2.2). An adopter who prefers the producer as a
+  *job inside* their CI can do that by hand; it's a hand-off-page optional optimization.
 
 ### 4.9 App installation — browser hand-off
 
@@ -600,9 +605,11 @@ alternatives → chosen (why)**.
 - **D7 — Reviewer trigger with a standalone producer.** trigger only on producer · trigger on
   all check-producing workflows, last-wake-wins. → **Multi-workflow, last-wake-wins.** Avoids
   a race where the reviewer wakes before the adopter's CI finishes and never re-checks.
-- **D8 — Inject producer into existing CI?** yes (single wake) · no (standalone). → **No.**
-  Can't safely edit arbitrary CI YAML on an operational repo; D7 removes the need. Offered as
-  an optional manual optimization on the hand-off page.
+- **D8 — Inject producer into existing CI?** yes (single wake) · no (standalone). → **No —
+  generate standalone.** Not to avoid a PR (setup opens one regardless), but because writing a
+  new file is safe while editing arbitrary CI YAML is fragile; the multi-workflow trigger (D7)
+  makes standalone functionally equivalent. Merged stays an optional manual optimization on
+  the hand-off page.
 - **D9 — Install target default.** personal · org. → **Org recommended when available** (org
   secrets → near-free multi-repo reuse); personal offered with the per-repo consequence noted.
 - **D10 — Persist pem on disk?** always · never · opt-in personal-only. → **Opt-in,
