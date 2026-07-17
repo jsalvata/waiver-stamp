@@ -94,12 +94,11 @@ trusted surface moved off the adopter.
 
 ### 2.2 The producer as a standalone workflow
 
-The producer runs as its own `pull_request` workflow rather than a job merged into the
-adopter's CI. Merged isn't *worse* on reviewability — setup opens a workflow PR either way
-(§4.13) — the point is **generation safety**: writing a new standalone file can't corrupt
-anything, whereas merging a job into arbitrary existing CI YAML (matrices, anchors, `uses:`
-reuse) is fragile surgery. The multi-workflow trigger (§2.3) makes standalone functionally
-equivalent to merged, so we generate standalone.
+The producer runs as its own `pull_request` workflow. Setup generates it as a **standalone
+file** because writing a new file is safe, whereas editing arbitrary existing CI YAML
+(matrices, anchors, `uses:` reuse) would be fragile surgery. The multi-workflow trigger
+(§2.3) confirms every required check by head SHA regardless of which workflow produced it, so
+a standalone producer needs nothing wired into the adopter's CI.
 
 It works because the reviewer locates the report **by head SHA across all workflow runs**,
 not by the triggering run — `src/action/adapters.ts:fetchArtifact` already
@@ -479,9 +478,7 @@ hand-off page** (§4.10), not something setup configures or interactively offers
   never silently edit an existing policy file). If none found, leave unset (caveat stays —
   fail-safe).
 - We generate the producer as a **standalone file and never edit the adopter's existing CI** —
-  not to dodge a PR (we open one regardless, §4.13) but because writing a new file is safe
-  while editing arbitrary CI YAML is fragile (§2.2). An adopter who prefers the producer as a
-  *job inside* their CI can do that by hand; it's a hand-off-page optional optimization.
+  writing a new file is safe while editing arbitrary CI YAML is fragile (§2.2).
 
 ### 4.9 App installation — browser hand-off
 
@@ -499,9 +496,7 @@ as terse imperatives — no rationale, no prose:
 2. Review `.waiver-stamp.json` and set `allowBumping` / `changeDocs` to taste. *(link to the
    recommended-deny template; we drop a closed-by-default file only if none exists — §4.11.)*
 3. Set the repo to **merge-commit or rebase-merge** (not squash) to keep per-commit waivers.
-4. *(Optional)* Add the `waiver-stamp` producer as a job inside your existing CI workflow
-   instead of the standalone workflow.
-5. *(Optional)* Protect `.github/**` with CODEOWNERS or a ruleset.
+4. *(Optional)* Protect `.github/**` with CODEOWNERS or a ruleset.
 
 The page is generated with the adopter's `owner/repo`, App slug, and branch names
 interpolated, so every step is copy-paste-ready. It explains nothing — the *why* lives in
@@ -635,10 +630,8 @@ alternatives → chosen (why)**.
   all check-producing workflows, last-wake-wins. → **Multi-workflow, last-wake-wins.** Avoids
   a race where the reviewer wakes before the adopter's CI finishes and never re-checks.
 - **D8 — Inject producer into existing CI?** yes (single wake) · no (standalone). → **No —
-  generate standalone.** Not to avoid a PR (setup opens one regardless), but because writing a
-  new file is safe while editing arbitrary CI YAML is fragile; the multi-workflow trigger (D7)
-  makes standalone functionally equivalent. Merged stays an optional manual optimization on
-  the hand-off page.
+  generate standalone.** Writing a new file is safe while editing arbitrary CI YAML is
+  fragile; the multi-workflow trigger (D7) covers required checks in any workflow.
 - **D9 — Install target default.** personal · org. → **Org recommended when available** (org
   secrets → near-free multi-repo reuse); personal offered with the per-repo consequence noted.
 - **D10 — Persist pem on disk?** always · never · opt-in personal-only. → **Opt-in,
