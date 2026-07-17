@@ -408,9 +408,9 @@ Reviewer references, by convention: `WAIVER_STAMP_APP_ID` and `WAIVER_STAMP_APP_
   design uses **repo/org** secrets and **no** environment, which is simpler and sufficient;
   environment support is a documented option, not the default.
 
-Multiline pem via `gh secret set … < file` / stdin. Overwriting an existing secret of the
-same name is safe (idempotent) but prompt before clobbering a *differently-named* pre-existing
-waiver secret.
+Multiline pem via `gh secret set … < file` / stdin. We only ever write our two
+conventionally-named secrets (`WAIVER_STAMP_APP_ID`, `WAIVER_STAMP_APP_PRIVATE_KEY`);
+overwriting *those* on a re-run is idempotent, and we never touch any other secret.
 
 ### 4.6 Branch protection & rules — additive merge only
 
