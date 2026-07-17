@@ -23,9 +23,9 @@ This spec defines three components that shrink that to **run one command, click 
 - **B — App Manifest one-click flow**: provisions a per-adopter App with the exact scopes,
   via GitHub's manifest→conversion handshake. No shared secret, no hosted backend.
 - **C — `waiver setup-repository`**: an interactive CLI that validates prerequisites, drives B over a
-  loopback server, provisions secrets, merges branch-protection additively, patches
-  commitlint, drops the caller workflows without overwriting anything, and ends on a
-  hand-off page listing only what we deliberately left manual.
+  loopback server, provisions secrets, adds a dedicated branch-protection ruleset, flags a
+  blocking commitlint rule, drops the caller workflows without overwriting anything, and ends
+  on a hand-off page listing only what we deliberately left manual.
 
 **Non-negotiable carry-over from the core design:** none of this weakens the trust model.
 The reviewer still runs **this repo's** pinned default-branch code with the **adopter's**
@@ -34,9 +34,9 @@ today's normal review). Components A–C reduce *setup friction*, never the safe
 
 **Hard constraint — the target repo is already operational.** `waiver setup-repository` runs against
 a fully-configured repo. It must be **additive, idempotent, and non-destructive**: never
-overwrite an existing workflow, never replace a branch-protection rule set (only merge in
-the checks it needs), back up before editing any tracked file, and re-running must
-converge, not duplicate.
+overwrite an existing workflow, never touch the existing branch-protection rules (it adds a
+dedicated ruleset instead, §4.6), back up before editing any tracked file, and re-running
+must converge, not duplicate.
 
 Out of scope: changing the stamping engine, the op vocabulary, or the verdict semantics.
 This is purely the adoption/onboarding surface.
