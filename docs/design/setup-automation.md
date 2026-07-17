@@ -540,6 +540,31 @@ Idempotent by construction: every mutating step checks current state first and c
 half-finished run (e.g. user closed the browser) is resumable — re-run and it picks up from
 the first unsatisfied step.
 
+### 4.13 How changes are applied — file PRs vs `gh` config, and their ordering
+
+Setup writes through **two channels**, and there is a real dependency between them:
+
+- **File changes → git → a PR.** The two caller workflows (§4.8) and, optionally, a seeded
+  `.waiver-stamp.json` (§4.11) are *files*. Setup writes them to a branch and opens a PR the
+  adopter reviews and merges — it never commits to the default branch directly.
+- **Repo config → `gh` / browser, no PR.** Secrets (§4.5), the `waiver-stamp` ruleset (§4.6),
+  and App install (§4.9) are account/repo settings applied via the API or the browser.
+
+The dependency: the `waiver-stamp` **required check can't be usefully enforced until the
+producer workflow has run at least once** — a ruleset requiring a check that has never
+reported would block every PR on a check that never arrives. So the order is:
+
+1. **Open the workflows PR** (the caller files). App install + secrets can proceed in
+   parallel — they don't depend on it.
+2. **Let the producer run once** on that PR, so the `waiver-stamp` check exists on a head SHA.
+3. **Then create the `waiver-stamp` ruleset** requiring it.
+
+`setup-repository` runs as phases around that merge/run boundary: it does everything up to
+and including step 1, then either polls for the producer's first run or exits with a clear
+"merge this PR, then re-run to finish" message and completes steps 2–3 on the resumed run
+(idempotent, §4.12). Creating the ruleset before the check exists is the one ordering mistake
+that would break the adopter's PRs, so it is explicitly gated on the check being present.
+
 ---
 
 ## 5. Security analysis (deltas from the core model)
