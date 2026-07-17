@@ -232,6 +232,26 @@ some edge reason. Empty + non-discoverable ⇒ fail-closed no-op (log: "no requi
 discovered and no override set — not approving"). The old `lockfile-honesty-checks` input is
 **removed** (folded into §2.5).
 
+### 2.8 Documentation strategy
+
+Automation replaces the *manual steps*, not the *documentation*:
+
+- **`docs/auto-approval-setup.md` persists**, as the canonical **manual fallback and
+  explanation**: it is what a non-CLI adopter follows by hand, and simultaneously the
+  reference for *what `waiver setup-repository` does and why*. The detailed App
+  provisioning/install steps (§3) live there too, doubling as the fallback for anyone who
+  can't or won't run the flow.
+- **Installation docs move to the reusable callers.** The pasted ~100-line templates are
+  replaced by the thin callers (§2.1); the security *why* (the checkout/fetch/guard shape)
+  moves out of copy-pasted YAML into inline comments in **our** `ci.yml`/`review.yml` —
+  version-controlled and pinned, so the rationale travels with the code instead of rotting in
+  every adopter's copy.
+- **The README points to `waiver setup-repository`** as the happy path ("run this from your
+  repo") and links the manual instructions beside it.
+
+Net: one automated path, one manual path, one home for each explanation — the automated path
+never re-explains what the manual doc already carries.
+
 ---
 
 ## 3. Component B — App Manifest one-click flow
