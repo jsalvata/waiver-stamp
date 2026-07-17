@@ -68,10 +68,11 @@ jobs:
     uses: jsalvata/waiver-stamp/.github/workflows/ci.yml@v1.16.0
 ```
 
-Reviewer:
+Reviewer (also a standalone file — neither caller touches the adopter's existing CI):
 
 ```yaml
 # .github/workflows/waiver-stamp-review.yml
+name: waiver-stamp-review
 on:
   workflow_run:
     workflows: [CI, waiver-stamp-ci]   # <-- discovered & baked in by `waiver setup-repository`
