@@ -434,8 +434,10 @@ confirm. Idempotent: re-running is a no-op once both checks are present. If the 
 **rulesets** rather than classic protection, edit the ruleset; if classic protection, edit
 that — match whatever is in place, don't migrate them between mechanisms.
 
-`.github/**` protection (CODEOWNERS/ruleset, `docs/auto-approval-setup.md` §7) is
-*recommended, defense-in-depth* behind G1 — offered as an optional add, not forced.
+`.github/**` protection (CODEOWNERS or a ruleset, `docs/auto-approval-setup.md` §7) is
+defense-in-depth behind **G1** — the reviewer guard that already refuses APPROVE if any
+commit in the PR range touches `.github/**` (spec §3.4). It's a **recommendation on the
+hand-off page** (§4.10), not something setup configures or interactively offers.
 
 ### 4.7 commitlint & husky
 
