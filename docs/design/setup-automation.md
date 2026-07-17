@@ -318,10 +318,6 @@ request would transit Pages access logs).
 6. Server writes secrets (§4.5) and serves a "done — now install the App" page linking
    `https://github.com/apps/<slug>/installations/new`.
 
-**Non-CLI adopters** don't get a query-param prefill variant — they follow the fully-manual
-provisioning process, which we document anyway (§2.8 documentation strategy) and which
-doubles as the explanation of what the automated flow does. One less surface to maintain.
-
 ### 3.3 The two irreducible clicks
 
 Both stay human by design, not by omission:
