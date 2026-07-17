@@ -431,14 +431,10 @@ The target repo already has protection. **We never read-modify-write it.** We do
 - Add a **new, dedicated `waiver-stamp` ruleset** requiring the `waiver-stamp` check on the
   default branch — and *only* that check. The adopter's CI checks are already required
   (that's how autodiscovery §2.4 found them), so there is nothing else to add.
-- **Stale approvals — recommend, don't force.** We do *not* flip the repo-wide **"Dismiss
-  stale pull request approvals when new commits are pushed"** (a team may deliberately keep
-  its own trust policy). Instead the reviewer **dismisses its own prior approval** when a new
-  head arrives — it re-evaluates on every push (§2.3), so it calls the dismiss-review API on
-  any earlier waiver-stamp approval before deciding afresh. That bounds the exact risk
-  dismiss-stale covered — a bot APPROVE from a smaller earlier range lingering — without
-  overriding the team. We still *recommend* dismiss-stale on the hand-off page
-  (`docs/auto-approval-setup.md` §4).
+- **Stale approvals:** the reviewer **dismisses its own prior approval** when a new head
+  arrives — it re-evaluates on every push (§2.3) and calls the dismiss-review API on any
+  earlier waiver-stamp approval before deciding afresh. Repo-wide "dismiss stale approvals"
+  stays a hand-off-page recommendation (`docs/auto-approval-setup.md` §4).
 
 This is safe — and simpler than a read-merge-PUT — because rulesets **aggregate**: multiple
 rulesets on the same branch combine (most-restrictive wins), and rulesets **layer with**
