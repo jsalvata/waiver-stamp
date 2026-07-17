@@ -350,9 +350,7 @@ anything:
 - **`git`** present.
 - **Package manager:** the dependency-bump op is **pnpm-only** (`allowBumping` is
   pnpm-lockfile-scoped; README "Scope (v0)"). Detect `pnpm-lock.yaml`; warn (don't hard-fail)
-  if absent, since the rest of the reviewer layer works without that op. No Node-version
-  check — the adopter's repo runtime is irrelevant to the reviewer, which runs waiver-stamp
-  via `npx` on the CI runner with Node pinned by the action, not by the adopter.
+  if absent, since the rest of the reviewer layer works without that op.
 - **Browser openable** (for the manifest flow) — else fall back to printing the URL.
 
 Preflight always runs (it's read-only and cheap) and gates the rest — there is no separate
