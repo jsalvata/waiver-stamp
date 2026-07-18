@@ -37,7 +37,10 @@ const baseDeps = {
   g1: vi.fn(async () => []),
   g2: vi.fn(async () => []),
   postOutcome: vi.fn(async () => {}),
-  inputs: { ciChecks: ['CI'], lockfileHonestyChecks: [] as string[] },
+  resolveRequiredChecks: vi.fn(async () => ({
+    required: ['CI'],
+    lockfileHonestyConfigured: false,
+  })),
 };
 
 describe('run', () => {
