@@ -26,20 +26,24 @@
 
 ## PR Plan
 
-Reasoning order: feature spike → prep → cleanup. Ship order: 0 → 1..N → N+1. (Mirrors spec §8.)
+Reasoning order: feature spike → prep → cleanup. Ship order: 0 → 1..N → N+1. Each feature PR is an independently **end-to-end testable** increment — the CLI is grown one runnable capability at a time rather than landed as one mega-PR (mirrors spec §8, resliced for reviewability).
 
 - **PR 0 — Prep refactor** (`prep-check-resolution` off `main`): extract the reviewer's inline backstop-set + honesty-flag computation (`main.ts:62`, `main.ts:93`) behind a `resolveRequiredChecks` seam that today returns the static inputs. Behavior-preserving, full suite green before/after.
   Removes friction: *"the backstop set and honesty flag are computed inline from inputs, so autodiscovery can't be slotted in without editing `run()`."*
 - **PRs 1..N — Feature:**
-  - **PR 1 — Autodiscovery** (`setup-automation-1` off prep): implement the seam against the rules endpoint (App token), self-exclude `waiver-stamp`, read the honesty-check name from a new `.waiver-stamp.json` field, keep the empty `ci-checks` override, remove `lockfile-honesty-checks`.
-  - **PR 2 — Reusable workflows** (`setup-automation-2` off PR 1): add `.github/workflows/ci.yml` and `review.yml` (`workflow_call`) wrapping the existing actions; multi-workflow trigger; dogfood this repo onto its own callers; update `examples/` and `docs/auto-approval-setup.md`.
-  - **PR 3 — App manifest + loopback core** (`setup-automation-3` off PR 2): manifest builder, loopback server (form page, callback capture, conversion), browser open. Unit-tested against a fake GitHub; no secrets written yet.
-  - **PR 4 — `waiver setup-repository` orchestration** (`setup-automation-4` off PR 3): preflight, target prompt, App reuse/disk/fresh resolution, secret provisioning, additive ruleset, commitlint detection, non-destructive workflow drop, install hand-off, instructions page, `.waiver-stamp.json` seeding. Wired into `cli.ts`. Heaviest PR — split at the provisioning/repo-config seam if it crosses ~1000 lines.
-- **PR N+1 — Cleanup refactor** (`cleanup-setup-automation` off PR 4): remove the now-dead `lockfile-honesty-checks` plumbing and manual-`ci-checks`-list narration from docs/examples/action inputs. Pure removal, suite green before/after.
+  - **PR 1 — Autodiscovery** (`setup-automation-1` off prep): implement the seam against the rules endpoint (App token), self-exclude `waiver-stamp`, read the honesty-check name from a new `.waiver-stamp.json` field, keep the empty `ci-checks` override, remove `lockfile-honesty-checks` — plus the *targeted* doc/example fix that keeps `main` consistent (the removed input can't linger in the example). **E2E:** the reviewer discovers required checks on a test PR.
+  - **PR 2 — Reusable workflows** (`setup-automation-2` off PR 1): reusable `workflow_call` producer/reviewer wrapping the existing actions; multi-workflow trigger; dogfood this repo onto its own callers; full caller-based adopter docs (`examples/`, `docs/auto-approval-setup.md`). **E2E:** the dogfood review posts via the reusable shape.
+  - **PR 3 — Preflight + orchestrator skeleton** (`setup-automation-3` off PR 2): `waiver setup-repository` that validates prerequisites and reports — the CLI wiring, `SetupError`→EXIT 2, and the orchestrator skeleton that PRs 4–6 grow. No repo mutation yet. **E2E:** run it in a real repo, watch it resolve owner/repo/branch/pnpm and print the remaining-steps summary. *(No `--check` flag — spec §4.1 rejects one; this is just the orchestrator's partial first version.)*
+  - **PR 4 — App provisioning, fresh path** (`setup-automation-4` off PR 3): manifest builder + loopback handshake + target choice + secret write, wired into the orchestrator so the command actually creates an App and provisions secrets. **Excludes** reuse/disk (PR 5). **E2E:** run it, click the two GitHub buttons, get a real App and two repo/org secrets.
+  - **PR 5 — App reuse + pem-on-disk** (`setup-automation-5` off PR 4): the idempotent/multi-repo layer on the fresh path — reuse an existing org App with no pem (§4.3), personal pem-on-disk opt-in (§4.4). **E2E:** re-run reuses the org App / loads the disk key instead of re-minting.
+  - **PR 6 — Repo config + phase boundary** (`setup-automation-6` off PR 5): dedicated `waiver-stamp` ruleset, empirical commitlint detection, non-destructive caller-workflow drop, `.waiver-stamp.json` seeding, the instructions hand-off page, and the §4.13 file-PR-then-ruleset ordering. Completes the orchestrator. **E2E:** full flow from `setup-repository` to the hand-off page against a scratch repo.
+- **PR N+1 — Cleanup refactor** (`cleanup-setup-automation` off PR 6): remove the now-dead `lockfile-honesty-checks` plumbing and any final stale narration. Pure removal, suite green before/after.
 
-Candidate prep for next time: if a future op needs more repo-config reads, the `gh`-shelling in PR 4 will want a typed wrapper — note it, don't build it speculatively now.
+**Docs consistency rule (applied throughout):** no PR may leave `main` referencing something it removed or describing behavior it changed. Each PR revises README / `docs/auto-approval-setup.md` / `examples/` *to the extent it changes user-facing behavior* — not a full re-narration every time. PR 1 does a targeted input-removal fix; PR 2 does the caller rewrite; PRs 3–6 add the `waiver setup-repository` story as each capability lands; the cleanup PR sweeps only genuine residue.
 
-**Build-time verification (spec §7):** PR 1 depends on **V1** (does `GET /rules/branches/{branch}` need `administration:read`, or does `contents:read` suffice?). PR 3 depends on **V3** (localhost redirect accepted). PR 4 depends on **V4** (org-secret resolution through `create-github-app-token`) and **V5** (`secrets: inherit` carries App scopes). Resolve each at the top of its PR; where the answer differs from the spec's conservative assumption, adjust that PR's tasks and note it in the PR body.
+Candidate prep for next time: if a future op needs more repo-config reads, the `gh`-shelling in PRs 3–6 will want a typed wrapper (`src/setup/gh.ts` is the seed) — grown as needed, not speculatively.
+
+**Build-time verification (spec §7):** **V1** → PR 1 (does `GET /rules/branches/{branch}` need `administration:read`, or does `contents:read` suffice?). **V3** → PR 4 (localhost redirect accepted). **V4/V5** → PR 4 (org-secret resolution through `create-github-app-token`; `secrets: inherit` carries App scopes into the reusable reviewer — first exercised when secrets actually exist). Resolve each at the top of its PR; where the answer differs from the spec's conservative assumption, adjust that PR's tasks and note it in the PR body.
 
 ---
 
@@ -559,14 +563,23 @@ In `src/action/main.ts` ncc entry, drop `lockfileHonestyChecks` from `inputs`:
 
 Keep the field present as an empty array so `makeResolveRequiredChecks(inputs)` still type-checks (the resolver no longer reads it, but the factory's parameter shape is unchanged this PR). *The field and its parameter are fully removed in the cleanup PR (N+1).*
 
-- [ ] **Step 11: Rebuild the action, run everything**
+- [ ] **Step 11: Keep docs/examples consistent (targeted — this PR removed an input)**
+
+This PR deletes the `lockfile-honesty-checks` action input, so nothing on `main` may still reference it, and the `ci-checks` list is no longer hand-maintained. Make the *minimal* edits that restore consistency (the full caller rewrite is PR 2 — do not do it here):
+
+- `examples/waiver-stamp-review.yml`: delete the `lockfile-honesty-checks: ''` line and its comment block. Leave the rest of the template as-is (it still uses the old paste shape until PR 2).
+- `docs/auto-approval-setup.md`: where it documents `lockfile-honesty-checks`, replace that with one line — the honesty check is now named via `.waiver-stamp.json`'s `lockfileHonestyCheck` field and picked up by autodiscovery. Where it documents hand-maintaining `ci-checks`, note that required checks are now auto-discovered and `ci-checks` is an empty-by-default override. Describe only the current behavior (no "previously you listed…" — no-archaeology).
+
+Do not touch README here (no user-facing command changed yet). Run: `pnpm lint` (markdown/formatting) — no code impact.
+
+- [ ] **Step 12: Rebuild the action, run everything**
 
 Run: `pnpm build:action && pnpm test && pnpm typecheck && pnpm lint`
 Expected: all PASS. Stage the regenerated `dist`.
 
-- [ ] **Step 12: Commit + PR (skills)**
+- [ ] **Step 13: Commit + PR (skills)**
 
-Stage `src/action/discover-checks.ts(.test)`, `src/action/resolve-checks.ts(.test)`, `src/engine/config.ts(.test)`, `schema/waiver-stamp-config.v0.schema.json`, `.github/actions/waiver-stamp-review/action.yml`, `src/action/main.ts`, the rebuilt `dist`. Branch `jordi/setup-automation/setup-automation-1` off the prep branch. PR body: PR 1 of the stack (depends on PR 0), notes the V1 finding.
+Stage `src/action/discover-checks.ts(.test)`, `src/action/resolve-checks.ts(.test)`, `src/engine/config.ts(.test)`, `schema/waiver-stamp-config.v0.schema.json`, `.github/actions/waiver-stamp-review/action.yml`, `src/action/main.ts`, `examples/waiver-stamp-review.yml`, `docs/auto-approval-setup.md`, the rebuilt `dist`. Branch `jordi/setup-automation/setup-automation-1` off the prep branch. PR body: PR 1 of the stack (depends on PR 0), notes the V1 finding.
 
 ---
 
@@ -743,359 +756,45 @@ Branch `jordi/setup-automation/setup-automation-2` off PR 1. PR body: PR 2 of th
 
 ---
 
-## PR 3 — App manifest + loopback core
+## PR 3 — Preflight + orchestrator skeleton
 
-**Intent:** the reusable building blocks Component C orchestrates: build the App manifest (name/scopes/sanitize), run the loopback create→convert handshake, and open the browser. No secrets are written and no repo config is touched in this PR — it is a pure library with unit tests against a fake GitHub, wired into nothing yet.
-
-**Verify first (V3):** confirm GitHub accepts an `http://localhost:<port>` (loopback) `redirect_url` in the manifest flow. Probot relies on it; confirm against the current docs. If GitHub requires `127.0.0.1` literal vs `localhost`, use whichever it accepts consistently in the manifest and the bind.
+**Intent:** ship `waiver setup-repository` as a runnable command that validates prerequisites and reports what it found and what remains — no repo mutation yet. This lands the CLI wiring, the `SetupError`→EXIT 2 mapping, and the orchestrator skeleton that PRs 4–6 grow one capability at a time. There is deliberately **no `--check` flag** (spec §4.1): this is simply the orchestrator's partial first version.
 
 **Files:**
-- Create: `src/setup/manifest.ts`, `src/setup/manifest.test.ts`
-- Create: `src/setup/pages.ts` (HTML for the self-POST form, the "done — install" page)
-- Create: `src/setup/loopback.ts`, `src/setup/loopback.test.ts`
+- Create: `src/setup/run.ts` — the real command-runner seam (execFile), injected everywhere `gh`/`git` is shelled
+- Create: `src/setup/errors.ts` (+ implicitly tested via preflight)
+- Create: `src/setup/preflight.ts`, `src/setup/preflight.test.ts`
+- Create: `src/commands/setup-repository.ts`, `src/commands/setup-repository.test.ts`
+- Modify: `src/cli.ts` — register `setup-repository`, add the `SetupError` branch to `run()`
+- Modify: `.github/workflows/ci.yml` (or `cli.test.ts`) — smoke-test `setup-repository --help`
 
 **Interfaces:**
-- Produces: `appSlugName(owner: string): string` — sanitized `waiver-stamp-<owner>`, slug charset, length-capped with a short hash suffix.
-- Produces: `buildManifest(args: { owner: string; appUrl: string }): AppManifest` — the object POSTed to GitHub.
-- Produces: `runManifestFlow(deps): Promise<{ appId: number; pem: string; slug: string }>` — binds loopback, opens the browser to the self-POST form, captures `?code=&state=`, verifies `state`, POSTs the conversion, returns the credentials. Browser-open and the conversion HTTP call are injected for testability.
-
-- [ ] **Step 1: Failing tests for `appSlugName` + `buildManifest`**
-
-Create `src/setup/manifest.test.ts`:
-
-```ts
-import { describe, expect, it } from 'vitest';
-import { appSlugName, buildManifest } from './manifest.ts';
-
-describe('appSlugName', () => {
-  it('suffixes the owner login in the slug charset', () => {
-    expect(appSlugName('jsalvata')).toBe('waiver-stamp-jsalvata');
-  });
-  it('lowercases and hyphenates non-alphanumerics', () => {
-    expect(appSlugName('My_Org.Name')).toBe('waiver-stamp-my-org-name');
-  });
-  it('caps length and appends a short deterministic hash for long owners', () => {
-    const name = appSlugName('a'.repeat(60));
-    expect(name.length).toBeLessThanOrEqual(34); // GitHub App name cap headroom
-    expect(name.startsWith('waiver-stamp-')).toBe(true);
-  });
-});
-
-describe('buildManifest', () => {
-  it('carries the exact scopes and no events/webhook', () => {
-    const m = buildManifest({ owner: 'jsalvata', appUrl: 'https://github.com/jsalvata/waiver-stamp' });
-    expect(m.name).toBe('waiver-stamp-jsalvata');
-    expect(m.public).toBe(false);
-    expect(m.default_permissions).toEqual({
-      contents: 'write',
-      pull_requests: 'write',
-      administration: 'read',
-    });
-    expect(m.default_events).toEqual([]);
-  });
-});
-```
-
-Run: `pnpm test setup/manifest` → FAIL (module not found).
-
-- [ ] **Step 2: Implement `manifest.ts`**
-
-Create `src/setup/manifest.ts`:
-
-```ts
-import { createHash } from 'node:crypto';
-
-export interface AppManifest {
-  name: string;
-  url: string;
-  public: false;
-  default_permissions: { contents: 'write'; pull_requests: 'write'; administration: 'read' };
-  default_events: [];
-  redirect_url?: string;
-}
-
-const NAME_CAP = 34; // GitHub App names must be ≤ 34 chars; keep headroom for the slug.
-
-/** Deterministic, slug-safe `waiver-stamp-<owner>` (the global-namespace reuse key, spec §3.1). */
-export function appSlugName(owner: string): string {
-  const slug = owner.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  const full = `waiver-stamp-${slug}`;
-  if (full.length <= NAME_CAP) return full;
-  const hash = createHash('sha256').update(owner).digest('hex').slice(0, 6);
-  const keep = NAME_CAP - 'waiver-stamp-'.length - hash.length - 1;
-  return `waiver-stamp-${slug.slice(0, keep)}-${hash}`;
-}
-
-/** The App-Manifest object (spec §3.1). `redirect_url` is filled per-run by the loopback flow. */
-export function buildManifest(args: { owner: string; appUrl: string }): AppManifest {
-  return {
-    name: appSlugName(args.owner),
-    url: args.appUrl,
-    public: false,
-    default_permissions: { contents: 'write', pull_requests: 'write', administration: 'read' },
-    default_events: [],
-  };
-}
-```
-
-Run: `pnpm test setup/manifest` → PASS.
-
-- [ ] **Step 3: Implement the HTML pages (no test — pure strings, exercised via loopback test)**
-
-Create `src/setup/pages.ts`:
-
-```ts
-import type { AppManifest } from './manifest.ts';
-
-/**
- * A self-submitting form that POSTs the manifest to GitHub's App-creation endpoint. GitHub's
- * manifest flow requires a form POST (the manifest rides in a `manifest` field), so the loopback
- * server serves this page and the browser submits it.
- */
-export function formPage(action: string, manifest: AppManifest): string {
-  const json = JSON.stringify(manifest).replace(/</g, '\\u003c');
-  return `<!doctype html><meta charset=utf-8><title>Create waiver-stamp App</title>
-<body onload="document.forms[0].submit()">
-<form action="${action}" method="post">
-<input type="hidden" name="manifest" value='${json.replace(/'/g, '&#39;')}'>
-<noscript><button type="submit">Create the waiver-stamp GitHub App</button></noscript>
-</form>`;
-}
-
-/** Shown after the conversion succeeds; links the interactive install page (spec §3.3). */
-export function donePage(installUrl: string): string {
-  return `<!doctype html><meta charset=utf-8><title>waiver-stamp — install</title>
-<body><h1>App created ✓</h1><p>Last step: <a href="${installUrl}">install it on your repository</a>,
-then return to your terminal.</p>`;
-}
-```
-
-- [ ] **Step 4: Failing test for `runManifestFlow` (loopback handshake)**
-
-Create `src/setup/loopback.test.ts`. Drive the flow end-to-end against the local server by injecting a fake "browser" that performs the GitHub side (submits the form → redirects to the callback with a code) and a fake conversion:
-
-```ts
-import { describe, expect, it, vi } from 'vitest';
-import { runManifestFlow } from './loopback.ts';
-import { buildManifest } from './manifest.ts';
-
-describe('runManifestFlow', () => {
-  it('captures the code on loopback, verifies state, converts, returns credentials', async () => {
-    const manifest = buildManifest({ owner: 'o', appUrl: 'https://github.com/jsalvata/waiver-stamp' });
-    const convert = vi.fn(async (code: string) => {
-      expect(code).toBe('abc123');
-      return { appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' };
-    });
-    // Fake browser: fetch the form page, then hit the callback as GitHub would.
-    const openBrowser = vi.fn(async (formUrl: string) => {
-      const base = new URL(formUrl).origin;
-      const page = await fetch(formUrl).then((r) => r.text());
-      const state = new URL(formUrl).searchParams.get('state');
-      expect(page).toContain('method="post"');
-      await fetch(`${base}/callback?code=abc123&state=${state}`);
-    });
-
-    const creds = await runManifestFlow({
-      target: { kind: 'personal' },
-      manifest,
-      appUrl: 'https://github.com/jsalvata/waiver-stamp',
-      openBrowser,
-      convert,
-    });
-    expect(creds).toEqual({ appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' });
-    expect(convert).toHaveBeenCalledOnce();
-  });
-
-  it('rejects a callback whose state does not match (CSRF guard)', async () => {
-    const manifest = buildManifest({ owner: 'o', appUrl: 'https://x' });
-    const openBrowser = vi.fn(async (formUrl: string) => {
-      const base = new URL(formUrl).origin;
-      await fetch(`${base}/callback?code=abc123&state=WRONG`);
-    });
-    await expect(
-      runManifestFlow({
-        target: { kind: 'personal' },
-        manifest,
-        appUrl: 'https://x',
-        openBrowser,
-        convert: vi.fn(),
-        timeoutMs: 2000,
-      }),
-    ).rejects.toThrow(/state/i);
-  });
-});
-```
-
-Run: `pnpm test setup/loopback` → FAIL (module not found).
-
-- [ ] **Step 5: Implement `loopback.ts`**
-
-Create `src/setup/loopback.ts`:
-
-```ts
-import { randomBytes } from 'node:crypto';
-import { createServer } from 'node:http';
-import { AddressInfo } from 'node:net';
-import type { AppManifest } from './manifest.ts';
-import { donePage, formPage } from './pages.ts';
-
-export interface ManifestFlowDeps {
-  target: { kind: 'personal' } | { kind: 'org'; org: string };
-  manifest: AppManifest;
-  appUrl: string;
-  /** Open the loopback form URL in the user's browser (or print it). */
-  openBrowser: (url: string) => Promise<void>;
-  /** POST /app-manifests/{code}/conversions and return the created App credentials. */
-  convert: (code: string) => Promise<{ appId: number; pem: string; slug: string }>;
-  timeoutMs?: number;
-}
-
-/** GitHub's App-creation POST target for the chosen owner (spec §3.2). */
-function createAction(target: ManifestFlowDeps['target']): string {
-  return target.kind === 'org'
-    ? `https://github.com/organizations/${target.org}/settings/apps/new`
-    : 'https://github.com/settings/apps/new';
-}
-
-/**
- * Run the loopback App-Manifest handshake (spec §3.2). Binds 127.0.0.1 on an ephemeral port,
- * serves a self-POST form carrying the manifest + a loopback `redirect_url`, captures the
- * single-use `code` on `/callback` (verifying `state`), converts it, and returns the App id +
- * pem + slug. The code never leaves the machine; the server is single-shot and short-lived.
- */
-export function runManifestFlow(
-  deps: ManifestFlowDeps,
-): Promise<{ appId: number; pem: string; slug: string }> {
-  const state = randomBytes(16).toString('hex');
-  const timeoutMs = deps.timeoutMs ?? 5 * 60_000;
-
-  return new Promise((resolve, reject) => {
-    const server = createServer((req, res) => {
-      const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
-      if (url.pathname === '/') {
-        const redirect = `http://127.0.0.1:${port}/callback`;
-        const manifest = { ...deps.manifest, redirect_url: redirect };
-        res.writeHead(200, { 'content-type': 'text/html' });
-        res.end(formPage(createAction(deps.target), manifest));
-        return;
-      }
-      if (url.pathname === '/callback') {
-        const code = url.searchParams.get('code');
-        if (url.searchParams.get('state') !== state) {
-          res.writeHead(400).end('state mismatch');
-          finish(new Error('manifest flow: state mismatch (possible CSRF) — aborting'));
-          return;
-        }
-        if (!code) {
-          res.writeHead(400).end('missing code');
-          finish(new Error('manifest flow: no code in callback'));
-          return;
-        }
-        deps
-          .convert(code)
-          .then((creds) => {
-            res.writeHead(200, { 'content-type': 'text/html' });
-            res.end(donePage(`https://github.com/apps/${creds.slug}/installations/new`));
-            finish(null, creds);
-          })
-          .catch((err) => {
-            res.writeHead(500).end('conversion failed');
-            finish(err instanceof Error ? err : new Error(String(err)));
-          });
-        return;
-      }
-      res.writeHead(404).end();
-    });
-
-    let settled = false;
-    const timer = setTimeout(
-      () => finish(new Error('manifest flow: timed out waiting for the browser callback')),
-      timeoutMs,
-    );
-    function finish(err: Error | null, creds?: { appId: number; pem: string; slug: string }) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      server.close();
-      if (err) reject(err);
-      else resolve(creds!);
-    }
-
-    let port = 0;
-    server.listen(0, '127.0.0.1', () => {
-      port = (server.address() as AddressInfo).port;
-      deps.openBrowser(`http://127.0.0.1:${port}/?state=${state}`).catch(finish);
-    });
-  });
-}
-```
-
-Run: `pnpm test setup/loopback`
-Expected: PASS (both cases).
-
-- [ ] **Step 6: Repo checks**
-
-Run: `pnpm test && pnpm typecheck && pnpm lint`
-Expected: PASS. (`AddressInfo` import may need `import type` — adjust to satisfy Biome/tsc: `import type { AddressInfo } from 'node:net';`.)
-
-- [ ] **Step 7: Commit + PR (skills)**
-
-Branch `jordi/setup-automation/setup-automation-3` off PR 2. PR body: PR 3 of the stack; manifest + loopback core, unit-tested against a fake GitHub, wired into nothing yet; note the V3 finding.
-
----
-
-## PR 4 — `waiver setup-repository` orchestration
-
-**Intent:** the interactive command that ties it together. Heaviest PR. Build it as small, individually-tested modules under `src/setup/`, then a thin orchestrator wired into `cli.ts`. **Split marker:** if the diff approaches ~1000 lines, ship the provisioning half (preflight, target, App resolution, secrets — Steps 1–8) as `setup-automation-4a` and the repo-config half (ruleset, commitlint, workflow drop, hand-off — Steps 9–15) as `setup-automation-4b` off it.
-
-**Verify first (V4, V5):** confirm the reviewer's App token is read from org-scoped secrets identically to repo-scoped through `create-github-app-token`, and that `secrets: inherit` carries the App scopes into the reusable reviewer job (PR 2's `reusable-review.yml`). Adjust the secret-provisioning and the reusable reviewer's token step if either differs.
-
-**Files:**
-- Create: `src/setup/preflight.ts` (+ test) — prerequisite checks
-- Create: `src/setup/gh.ts` (+ test) — typed thin wrapper over `gh` shelling (owner/repo, orgs, secrets, ruleset, installation poll)
-- Create: `src/setup/secrets.ts` (+ test) — write the two conventional secrets (org or repo scope)
-- Create: `src/setup/ruleset.ts` (+ test) — the dedicated `waiver-stamp` ruleset (idempotent)
-- Create: `src/setup/workflows.ts` (+ test) — discover CI workflow name(s) + lockfile-assay check name; write the two callers non-destructively
-- Create: `src/setup/commitlint.ts` (+ test) — empirical `body-max-line-length` detection
-- Create: `src/setup/config-seed.ts` (+ test) — seed a closed-by-default `.waiver-stamp.json` only when absent
-- Create: `src/setup/handoff.ts` (+ test) — the instructions-only hand-off page
-- Create: `src/commands/setup-repository.ts` (+ test) — the orchestrator
-- Modify: `src/cli.ts` — register the `setup-repository` command
-- Modify: `README.md` — point the happy path at `waiver setup-repository`
-
-**Interfaces (key signatures the orchestrator consumes):**
-- `preflight(cwd): Promise<{ owner: string; repo: string; defaultBranch: string; pnpm: boolean }>` — throws a `SetupError` (mapped to EXIT 2) on any hard failure.
-- `discoverCiWorkflowNames(dotGithubDir): Promise<string[]>` and `detectLockfileHonestyCheck(dotGithubDir): Promise<string | null>`.
-- `writeCallerWorkflows(dir, { ciWorkflowNames }): Promise<{ written: string[]; skipped: string[] }>` — never overwrites.
-- `provisionSecrets(gh, { target, appId, pem, owner, repo }): Promise<void>`.
-- `ensureWaiverStampRuleset(gh, { owner, repo, defaultBranch }): Promise<'created' | 'exists'>`.
-
-Because PR 4 is large, the steps below are grouped; each group is TDD (failing test → impl → green) and the group's module is committed before the next. Only the load-bearing code is shown in full; prompt/print strings are written inline in the impl step (no placeholders — write the real string).
-
-### PR 4 — Group A: preflight + gh wrapper
+- Produces: `runCommand(cmd, args, opts?): Promise<{ stdout: string; stderr: string; code: number }>` — the shell seam.
+- Produces: `class SetupError extends Error { remediation: string }` — mapped to `EXIT.MALFORMED`.
+- Produces: `preflight(cwd, deps): Promise<RepoContext>` where `RepoContext = { owner; repo; defaultBranch; pnpm }`.
+- Produces: `setupRepository(opts, deps): Promise<void>` — the orchestrator; PR 3 body runs preflight and reports.
 
 - [ ] **Step 1: Failing test for `preflight`**
 
-Create `src/setup/preflight.test.ts` driving a fake `gh`/`git` runner (inject a `run(cmd, args): Promise<{ stdout; code }>` seam so no real shell is needed):
+Create `src/setup/preflight.test.ts` driving a fake runner (no real shell):
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
-import { preflight } from './preflight.ts';
 import { SetupError } from './errors.ts';
+import { preflight } from './preflight.ts';
 
 function runner(map: Record<string, { stdout?: string; code?: number }>) {
   return vi.fn(async (cmd: string, args: string[]) => {
     const key = `${cmd} ${args.join(' ')}`;
     const hit = Object.entries(map).find(([k]) => key.startsWith(k));
     if (!hit) throw new Error(`unexpected: ${key}`);
-    return { stdout: hit[1].stdout ?? '', code: hit[1].code ?? 0 };
+    return { stdout: hit[1].stdout ?? '', stderr: '', code: hit[1].code ?? 0 };
   });
 }
-
 const ok = {
-  'git rev-parse --is-inside-work-tree': { stdout: 'true' },
-  'git remote get-url origin': { stdout: 'https://github.com/jsalvata/demo.git' },
-  'git symbolic-ref refs/remotes/origin/HEAD': { stdout: 'refs/remotes/origin/main' },
+  'git rev-parse --is-inside-work-tree': { stdout: 'true\n' },
+  'git remote get-url origin': { stdout: 'https://github.com/jsalvata/demo.git\n' },
+  'git symbolic-ref refs/remotes/origin/HEAD': { stdout: 'refs/remotes/origin/main\n' },
   'gh auth status': { stdout: 'Logged in' },
 };
 
@@ -1107,23 +806,29 @@ describe('preflight', () => {
     });
     expect(r).toMatchObject({ owner: 'jsalvata', repo: 'demo', defaultBranch: 'main', pnpm: true });
   });
+  it('parses an SSH origin remote', async () => {
+    const r = await preflight('/repo', {
+      run: runner({ ...ok, 'git remote get-url origin': { stdout: 'git@github.com:jsalvata/demo.git\n' } }),
+      exists: async () => false,
+    });
+    expect(r).toMatchObject({ owner: 'jsalvata', repo: 'demo', pnpm: false });
+  });
   it('throws SetupError with remediation when gh is unauthenticated', async () => {
     await expect(
-      preflight('/repo', {
-        run: runner({ ...ok, 'gh auth status': { code: 1 } }),
-        exists: async () => false,
-      }),
+      preflight('/repo', { run: runner({ ...ok, 'gh auth status': { code: 1 } }), exists: async () => false }),
     ).rejects.toBeInstanceOf(SetupError);
   });
 });
 ```
 
-- [ ] **Step 2: `SetupError` + `preflight` impl**
+Run: `pnpm test setup/preflight` → FAIL (modules not found).
+
+- [ ] **Step 2: Implement `errors.ts`, `run.ts`, `preflight.ts`**
 
 Create `src/setup/errors.ts`:
 
 ```ts
-/** A preflight/setup failure with a user-facing remediation. Mapped to EXIT.MALFORMED (spec §4.12). */
+/** A preflight/setup failure carrying a user-facing remediation. Mapped to EXIT.MALFORMED (spec §4.12). */
 export class SetupError extends Error {
   constructor(
     message: string,
@@ -1135,14 +840,48 @@ export class SetupError extends Error {
 }
 ```
 
+Create `src/setup/run.ts`:
+
+```ts
+import { execFile } from 'node:child_process';
+
+export interface RunResult {
+  stdout: string;
+  stderr: string;
+  code: number;
+}
+
+/**
+ * Shell a command and capture its output. The single seam every `gh`/`git` caller injects, so
+ * tests never touch a real shell. A non-zero exit is returned (not thrown) — callers decide what
+ * a failure means. `input`, when set, is written to stdin (used for multiline pem → `gh secret set`).
+ */
+export function runCommand(
+  cmd: string,
+  args: string[],
+  opts: { cwd?: string; input?: string } = {},
+): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const child = execFile(cmd, args, { cwd: opts.cwd }, (err, stdout, stderr) => {
+      const code = err && typeof (err as { code?: number }).code === 'number' ? (err as { code: number }).code : err ? 1 : 0;
+      resolve({ stdout, stderr, code });
+    });
+    if (opts.input !== undefined) {
+      child.stdin?.end(opts.input);
+    }
+  });
+}
+```
+
 Create `src/setup/preflight.ts`:
 
 ```ts
 import { join } from 'node:path';
 import { SetupError } from './errors.ts';
+import type { RunResult } from './run.ts';
 
 export interface PreflightDeps {
-  run: (cmd: string, args: string[]) => Promise<{ stdout: string; code: number }>;
+  run: (cmd: string, args: string[]) => Promise<RunResult>;
   exists: (path: string) => Promise<boolean>;
 }
 export interface RepoContext {
@@ -1178,46 +917,599 @@ export async function preflight(cwd: string, deps: PreflightDeps): Promise<RepoC
 }
 ```
 
-Run: `pnpm test setup/preflight` → PASS.
+Run: `pnpm test setup/preflight` → PASS (3 cases).
 
-- [ ] **Step 3: `gh.ts` wrapper (failing test → impl)**
+- [ ] **Step 3: Failing test for the orchestrator skeleton**
 
-Create `src/setup/gh.test.ts` + `src/setup/gh.ts`: a thin typed wrapper around the injected `run` seam for the calls the orchestrator needs — `listOrgs()`, `setSecret({scope, name, value, repo?, org?})`, `getRuleset/createRuleset`, `getInstallation(owner, repo)`. Each method is a one-liner mapping to `gh api`/`gh secret set` args; the test asserts the argv it builds and parses the JSON stdout. (Write one `it` per method asserting the exact `gh` argv; keep it mechanical.)
+Create `src/commands/setup-repository.test.ts`:
 
-Run: `pnpm test setup/gh` → PASS.
+```ts
+import { describe, expect, it, vi } from 'vitest';
+import { setupRepository } from './setup-repository.ts';
 
-- [ ] **Step 4: Commit Group A (skill)** — `preflight`, `errors`, `gh`, tests.
+const ctx = { owner: 'jsalvata', repo: 'demo', defaultBranch: 'main', pnpm: true };
 
-### PR 4 — Group B: App resolution + secrets
+describe('setupRepository (skeleton)', () => {
+  it('runs preflight and reports the resolved context', async () => {
+    const info = vi.fn();
+    await setupRepository({ cwd: '/repo' }, { preflight: vi.fn(async () => ctx), info, warn: vi.fn() });
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('jsalvata/demo'));
+  });
+  it('warns when pnpm-lock is absent', async () => {
+    const warn = vi.fn();
+    await setupRepository(
+      { cwd: '/repo' },
+      { preflight: vi.fn(async () => ({ ...ctx, pnpm: false })), info: vi.fn(), warn },
+    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('pnpm-lock'));
+  });
+});
+```
 
-- [ ] **Step 5: Failing test for `resolveApp` (reuse → disk → fresh)**
+Run: `pnpm test setup-repository` → FAIL.
 
-Create `src/setup/resolve-app.test.ts` covering the spec §4.3 resolution order: org-with-existing-secrets → skip (no pem); personal-with-disk-file → load; otherwise → run `runManifestFlow`. Inject the manifest flow + a fake disk + `gh`. Assert which branch each scenario takes.
+- [ ] **Step 4: Implement the skeleton orchestrator**
 
-- [ ] **Step 6: Implement `resolve-app.ts`**
+Create `src/commands/setup-repository.ts`. The `SetupDeps` interface starts minimal and gains fields in PRs 4–6; the skeleton only preflights and reports:
 
-`resolveApp(deps): Promise<{ appId?: number; pem?: string; slug: string; source: 'reuse-org' | 'disk' | 'fresh' }>` — implements the §4.3 order, calling `runManifestFlow` (PR 3) for the fresh path and reading/writing `~/.waiver-install/<owner>.json` at `chmod 600` (dir `700`) only for the personal opt-in (§4.4). Never persist for org targets.
+```ts
+import { runCommand } from '../setup/run.ts';
+import { access } from 'node:fs/promises';
+import { preflight, type PreflightDeps, type RepoContext } from '../setup/preflight.ts';
 
-Run: `pnpm test setup/resolve-app` → PASS.
+export interface SetupOptions {
+  yes?: boolean;
+  target?: string;
+  noApp?: boolean;
+  cwd?: string;
+}
 
-- [ ] **Step 7: Failing test for `provisionSecrets`**
+export interface SetupDeps {
+  preflight: (cwd: string, deps: PreflightDeps) => Promise<RepoContext>;
+  info: (msg: string) => void;
+  warn: (msg: string) => void;
+}
 
-Create `src/setup/secrets.test.ts`: org target → `gh secret set --org <org> --repos <repo>` for both `WAIVER_STAMP_APP_ID` and `WAIVER_STAMP_APP_PRIVATE_KEY`; personal target → `gh secret set --repo owner/repo`. Assert the argv and that the pem is passed via stdin, never argv. Assert we only ever write those two names.
+/** Default wiring for the CLI (real shell + fs). PRs 4–6 extend this with provisioning deps. */
+export function makeSetupDeps(): SetupDeps {
+  return {
+    preflight: (cwd) =>
+      preflight(cwd, {
+        run: runCommand,
+        exists: async (p) => access(p).then(() => true).catch(() => false),
+      }),
+    info: (m) => console.log(m),
+    warn: (m) => console.warn(`warning: ${m}`),
+  };
+}
 
-- [ ] **Step 8: Implement `secrets.ts`; commit Group B (skill)**
+export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Promise<void> {
+  const cwd = opts.cwd ?? process.cwd();
+  const ctx = await deps.preflight(cwd, undefined as never); // deps.preflight closes over its own run/exists
+  deps.info(`waiver-stamp setup: ${ctx.owner}/${ctx.repo} (default branch ${ctx.defaultBranch})`);
+  if (!ctx.pnpm)
+    deps.warn('no pnpm-lock.yaml found — the dependency-bump op will be inert (spec §4.1).');
+  deps.info('Preflight OK. Repo provisioning (App, secrets, ruleset, workflows) lands in the next releases; see docs/auto-approval-setup.md for the manual steps until then.');
+}
+```
 
-`provisionSecrets(gh, { target, appId, pem, owner, repo })` — writes exactly the two conventional secrets at the target scope; idempotent (overwriting our own names is fine); touches no other secret (spec §4.5).
+(The test injects `deps.preflight` directly, so its second argument is unused there; the CLI's `makeSetupDeps` supplies the real closure. Adjust the signature to `preflight: (cwd: string) => Promise<RepoContext>` if cleaner — keep test and impl in sync.)
+
+Run: `pnpm test setup-repository` → PASS.
+
+- [ ] **Step 5: Wire the command into `cli.ts`**
+
+Add to `src/cli.ts`:
+
+```ts
+import { makeSetupDeps, setupRepository } from './commands/setup-repository.ts';
+import { SetupError } from './setup/errors.ts';
+```
+
+Register the command (after the `mcp` command):
+
+```ts
+program
+  .command('setup-repository')
+  .description('interactively wire waiver-stamp into the current repo (spec §4)')
+  .option('--yes', 'accept recommended defaults for non-destructive prompts')
+  .option('--target <target>', 'install target: personal or an org login')
+  .option('--no-app', 'skip App provisioning; configure the human-click layer only')
+  .action(async (opts: { yes?: boolean; target?: string; app?: boolean }) => {
+    await run(async () => {
+      await setupRepository(
+        { yes: opts.yes, target: opts.target, noApp: opts.app === false, cwd: process.cwd() },
+        makeSetupDeps(),
+      );
+    });
+  });
+```
+
+Add a `SetupError` branch to `run()`'s catch, before the generic `else`:
+
+```ts
+    } else if (err instanceof SetupError) {
+      console.error(`error: ${err.message}`);
+      console.error(`  ${err.remediation}`);
+      setExit(EXIT.MALFORMED);
+    } else {
+```
+
+(commander maps `--no-app` to `opts.app === false`.)
+
+- [ ] **Step 6: Smoke test + full checks**
+
+Add to the CI `CLI smoke test` step (`.github/workflows/ci.yml`) or `src/cli.test.ts`: assert `node dist/cli.js setup-repository --help` exits 0 and mentions `--no-app`.
+
+Run: `pnpm build && pnpm test && pnpm typecheck && pnpm lint`
+Expected: all PASS.
+
+- [ ] **Step 7: End-to-end**
+
+Run `pnpm dev setup-repository` inside a real checkout with a GitHub `origin`. Expected: prints `waiver-stamp setup: <owner>/<repo> …`, the pnpm note if applicable, and the "provisioning lands next" line; exits 0. Failure modes surface as `SetupError` with remediation (e.g. run it outside a git tree → exit 2). Evidence: the terminal transcript.
+
+- [ ] **Step 8: Commit + PR (skills)**
+
+Branch `jordi/setup-automation/setup-automation-3` off PR 2. PR body: PR 3 of the stack; `waiver setup-repository` validate-and-report skeleton; no `--check` flag (spec §4.1); orchestrator grown in PRs 4–6.
+
+---
+
+## PR 4 — App provisioning (fresh path)
+
+**Intent:** make `waiver setup-repository` actually create a per-adopter App and write its secrets. Lands the manifest builder, the loopback handshake, the install-target choice, the `gh` secrets wrapper, and the fresh-App resolution — wired into the orchestrator. **Excludes** reuse-existing-App and pem-on-disk (PR 5), to keep it bounded.
+
+**Verify first:** **V3** (GitHub accepts an `http://127.0.0.1:<port>` `redirect_url` — Probot relies on it); **V4** (`gh secret set --org … --repos …` resolves for the reviewer identically to repo secrets); **V5** (the reusable reviewer from PR 2 mints an App token from the inherited secrets and it carries App scopes). Confirm each; adjust the loopback bind / secret argv / reusable reviewer token step if any differs.
+
+**Files:**
+- Create: `src/setup/manifest.ts` (+ test)
+- Create: `src/setup/pages.ts`
+- Create: `src/setup/loopback.ts` (+ test)
+- Create: `src/setup/gh.ts` (+ test) — typed wrapper (orgs, secrets)
+- Create: `src/setup/secrets.ts` (+ test)
+- Create: `src/setup/provision-app.ts` (+ test) — target choice + fresh-App flow (reuse/disk stubbed to "fresh" this PR)
+- Modify: `src/commands/setup-repository.ts` (+ test) — call provisioning after preflight
+- Modify: `src/setup/open-browser.ts` — a `spawn`-based opener (macOS `open`, Linux `xdg-open`), injected
+
+**Interfaces:**
+- Produces: `appSlugName(owner): string`, `buildManifest({ owner, appUrl }): AppManifest`.
+- Produces: `runManifestFlow(deps): Promise<{ appId; pem; slug }>`.
+- Produces: `chooseTarget(preferred, gh): Promise<{ kind: 'personal' } | { kind: 'org'; org: string }>`.
+- Produces: `provisionSecrets(gh, { target, appId, pem, owner, repo }): Promise<void>`.
+
+- [ ] **Step 1: Failing tests for `manifest.ts`**
+
+Create `src/setup/manifest.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { appSlugName, buildManifest } from './manifest.ts';
+
+describe('appSlugName', () => {
+  it('suffixes the owner login in the slug charset', () => {
+    expect(appSlugName('jsalvata')).toBe('waiver-stamp-jsalvata');
+  });
+  it('lowercases and hyphenates non-alphanumerics', () => {
+    expect(appSlugName('My_Org.Name')).toBe('waiver-stamp-my-org-name');
+  });
+  it('caps length and appends a short deterministic hash for long owners', () => {
+    const name = appSlugName('a'.repeat(60));
+    expect(name.length).toBeLessThanOrEqual(34);
+    expect(name.startsWith('waiver-stamp-')).toBe(true);
+    expect(appSlugName('a'.repeat(60))).toBe(name); // deterministic
+  });
+});
+
+describe('buildManifest', () => {
+  it('carries the exact scopes and no events/webhook', () => {
+    const m = buildManifest({ owner: 'jsalvata', appUrl: 'https://github.com/jsalvata/waiver-stamp' });
+    expect(m.name).toBe('waiver-stamp-jsalvata');
+    expect(m.public).toBe(false);
+    expect(m.default_permissions).toEqual({ contents: 'write', pull_requests: 'write', administration: 'read' });
+    expect(m.default_events).toEqual([]);
+  });
+});
+```
+
+Run: `pnpm test setup/manifest` → FAIL.
+
+- [ ] **Step 2: Implement `manifest.ts`**
+
+Create `src/setup/manifest.ts`:
+
+```ts
+import { createHash } from 'node:crypto';
+
+export interface AppManifest {
+  name: string;
+  url: string;
+  public: false;
+  default_permissions: { contents: 'write'; pull_requests: 'write'; administration: 'read' };
+  default_events: [];
+  redirect_url?: string;
+}
+
+const NAME_CAP = 34; // GitHub App names must be ≤ 34 chars.
+
+/** Deterministic, slug-safe `waiver-stamp-<owner>` (the global-namespace reuse key, spec §3.1). */
+export function appSlugName(owner: string): string {
+  const slug = owner.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const full = `waiver-stamp-${slug}`;
+  if (full.length <= NAME_CAP) return full;
+  const hash = createHash('sha256').update(owner).digest('hex').slice(0, 6);
+  const keep = NAME_CAP - 'waiver-stamp-'.length - hash.length - 1;
+  return `waiver-stamp-${slug.slice(0, keep)}-${hash}`;
+}
+
+/** The App-Manifest object (spec §3.1). `redirect_url` is filled per-run by the loopback flow. */
+export function buildManifest(args: { owner: string; appUrl: string }): AppManifest {
+  return {
+    name: appSlugName(args.owner),
+    url: args.appUrl,
+    public: false,
+    default_permissions: { contents: 'write', pull_requests: 'write', administration: 'read' },
+    default_events: [],
+  };
+}
+```
+
+Run: `pnpm test setup/manifest` → PASS.
+
+- [ ] **Step 3: Implement `pages.ts` (exercised via the loopback test)**
+
+Create `src/setup/pages.ts`:
+
+```ts
+import type { AppManifest } from './manifest.ts';
+
+/**
+ * A self-submitting form that POSTs the manifest to GitHub's App-creation endpoint (the manifest
+ * rides in a `manifest` field, so the flow requires a form POST). The loopback server serves it
+ * and the browser submits it.
+ */
+export function formPage(action: string, manifest: AppManifest): string {
+  const json = JSON.stringify(manifest).replace(/</g, '\\u003c').replace(/'/g, '&#39;');
+  return `<!doctype html><meta charset=utf-8><title>Create waiver-stamp App</title>
+<body onload="document.forms[0].submit()">
+<form action="${action}" method="post">
+<input type="hidden" name="manifest" value='${json}'>
+<noscript><button type="submit">Create the waiver-stamp GitHub App</button></noscript>
+</form>`;
+}
+
+/** Shown after conversion succeeds; links the interactive install page (spec §3.3). */
+export function donePage(installUrl: string): string {
+  return `<!doctype html><meta charset=utf-8><title>waiver-stamp — install</title>
+<body><h1>App created ✓</h1><p>Last step: <a href="${installUrl}">install it on your repository</a>, then return to your terminal.</p>`;
+}
+```
+
+- [ ] **Step 4: Failing test for `runManifestFlow`**
+
+Create `src/setup/loopback.test.ts`:
+
+```ts
+import { describe, expect, it, vi } from 'vitest';
+import { runManifestFlow } from './loopback.ts';
+import { buildManifest } from './manifest.ts';
+
+describe('runManifestFlow', () => {
+  it('captures the code on loopback, verifies state, converts, returns credentials', async () => {
+    const manifest = buildManifest({ owner: 'o', appUrl: 'https://github.com/jsalvata/waiver-stamp' });
+    const convert = vi.fn(async (code: string) => {
+      expect(code).toBe('abc123');
+      return { appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' };
+    });
+    const openBrowser = vi.fn(async (formUrl: string) => {
+      const u = new URL(formUrl);
+      const page = await fetch(formUrl).then((r) => r.text());
+      expect(page).toContain('method="post"');
+      await fetch(`${u.origin}/callback?code=abc123&state=${u.searchParams.get('state')}`);
+    });
+    const creds = await runManifestFlow({
+      target: { kind: 'personal' },
+      manifest,
+      openBrowser,
+      convert,
+    });
+    expect(creds).toEqual({ appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' });
+    expect(convert).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a callback whose state does not match (CSRF guard)', async () => {
+    const manifest = buildManifest({ owner: 'o', appUrl: 'https://x' });
+    const openBrowser = vi.fn(async (formUrl: string) => {
+      await fetch(`${new URL(formUrl).origin}/callback?code=abc123&state=WRONG`);
+    });
+    await expect(
+      runManifestFlow({ target: { kind: 'personal' }, manifest, openBrowser, convert: vi.fn(), timeoutMs: 2000 }),
+    ).rejects.toThrow(/state/i);
+  });
+});
+```
+
+Run: `pnpm test setup/loopback` → FAIL.
+
+- [ ] **Step 5: Implement `loopback.ts`**
+
+Create `src/setup/loopback.ts`:
+
+```ts
+import { randomBytes } from 'node:crypto';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import type { AppManifest } from './manifest.ts';
+import { donePage, formPage } from './pages.ts';
+
+export interface ManifestFlowDeps {
+  target: { kind: 'personal' } | { kind: 'org'; org: string };
+  manifest: AppManifest;
+  openBrowser: (url: string) => Promise<void>;
+  convert: (code: string) => Promise<{ appId: number; pem: string; slug: string }>;
+  timeoutMs?: number;
+}
+
+function createAction(target: ManifestFlowDeps['target']): string {
+  return target.kind === 'org'
+    ? `https://github.com/organizations/${target.org}/settings/apps/new`
+    : 'https://github.com/settings/apps/new';
+}
+
+/**
+ * Run the loopback App-Manifest handshake (spec §3.2). Binds 127.0.0.1 on an ephemeral port,
+ * serves a self-POST form carrying the manifest + a loopback `redirect_url`, captures the
+ * single-use `code` on `/callback` (verifying `state`), converts it, and returns the App id +
+ * pem + slug. The code never leaves the machine; the server is single-shot and short-lived.
+ */
+export function runManifestFlow(
+  deps: ManifestFlowDeps,
+): Promise<{ appId: number; pem: string; slug: string }> {
+  const state = randomBytes(16).toString('hex');
+  const timeoutMs = deps.timeoutMs ?? 5 * 60_000;
+
+  return new Promise((resolve, reject) => {
+    let port = 0;
+    let settled = false;
+    const server = createServer((req, res) => {
+      const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
+      if (url.pathname === '/') {
+        const manifest = { ...deps.manifest, redirect_url: `http://127.0.0.1:${port}/callback` };
+        res.writeHead(200, { 'content-type': 'text/html' });
+        res.end(formPage(createAction(deps.target), manifest));
+        return;
+      }
+      if (url.pathname === '/callback') {
+        if (url.searchParams.get('state') !== state) {
+          res.writeHead(400).end('state mismatch');
+          return finish(new Error('manifest flow: state mismatch (possible CSRF) — aborting'));
+        }
+        const code = url.searchParams.get('code');
+        if (!code) {
+          res.writeHead(400).end('missing code');
+          return finish(new Error('manifest flow: no code in callback'));
+        }
+        deps.convert(code).then(
+          (creds) => {
+            res.writeHead(200, { 'content-type': 'text/html' });
+            res.end(donePage(`https://github.com/apps/${creds.slug}/installations/new`));
+            finish(null, creds);
+          },
+          (err) => {
+            res.writeHead(500).end('conversion failed');
+            finish(err instanceof Error ? err : new Error(String(err)));
+          },
+        );
+        return;
+      }
+      res.writeHead(404).end();
+    });
+
+    const timer = setTimeout(
+      () => finish(new Error('manifest flow: timed out waiting for the browser callback')),
+      timeoutMs,
+    );
+    function finish(err: Error | null, creds?: { appId: number; pem: string; slug: string }) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      server.close();
+      if (err) reject(err);
+      else resolve(creds!);
+    }
+
+    server.listen(0, '127.0.0.1', () => {
+      port = (server.address() as AddressInfo).port;
+      deps.openBrowser(`http://127.0.0.1:${port}/?state=${state}`).catch(finish);
+    });
+  });
+}
+```
+
+Run: `pnpm test setup/loopback` → PASS.
+
+- [ ] **Step 6: `gh.ts` wrapper (failing test → impl)**
+
+Create `src/setup/gh.test.ts` + `src/setup/gh.ts`. A typed thin wrapper over the injected `run` seam. This PR needs `listOrgs()`, `setSecret({ scope, name, value, repo?, org?, repos? })`, and `appConversion(code)` (POST `/app-manifests/{code}/conversions` via `gh api`). Each method builds `gh` argv and parses JSON stdout; the test asserts the exact argv and stdin (pem via `--input -`/stdin, never argv). Sketch:
+
+```ts
+export interface GhClient {
+  listOrgs(): Promise<string[]>;
+  setSecret(a: { name: string; value: string; scope: 'repo' | 'org'; repo?: string; org?: string; repos?: string[] }): Promise<void>;
+  appConversion(code: string): Promise<{ appId: number; pem: string; slug: string }>;
+}
+
+export function makeGh(run: (cmd: string, args: string[], opts?: { input?: string }) => Promise<RunResult>): GhClient {
+  return {
+    async listOrgs() {
+      const r = await run('gh', ['api', 'user/orgs', '--jq', '.[].login']);
+      return r.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+    },
+    async setSecret(a) {
+      const args = ['secret', 'set', a.name];
+      if (a.scope === 'org') args.push('--org', a.org!, '--repos', (a.repos ?? [a.repo!]).join(','));
+      else args.push('--repo', a.repo!);
+      args.push('--body', '-'); // read value from stdin
+      const r = await run('gh', args, { input: a.value });
+      if (r.code !== 0) throw new SetupError(`failed to set secret ${a.name}`, r.stderr.trim());
+    },
+    async appConversion(code) {
+      const r = await run('gh', ['api', '-X', 'POST', `/app-manifests/${code}/conversions`]);
+      const j = JSON.parse(r.stdout) as { id: number; pem: string; slug: string };
+      return { appId: j.id, pem: j.pem, slug: j.slug };
+    },
+  };
+}
+```
+
+Run: `pnpm test setup/gh` → PASS. *(Adjust `--body -` vs `< file` per the installed `gh` version's stdin handling at build time.)*
+
+- [ ] **Step 7: `provision-app.ts` — target choice + fresh flow (failing test → impl)**
+
+Create `src/setup/provision-app.test.ts` + `src/setup/provision-app.ts`:
+- `chooseTarget(preferred, gh)` — if `preferred` is `'personal'` or an org login, use it; else (interactive) offer personal + `gh.listOrgs()`, org recommended (spec §4.2, D9). For the non-interactive test, pass `preferred` and assert the resolved target.
+- `provisionAppFresh({ target, owner, gh, openBrowser })` — build the manifest, `runManifestFlow` with `convert: gh.appConversion`, return `{ appId, pem, slug }`. (Reuse/disk are **not** consulted this PR — PR 5 wraps this.)
+
+Test asserts: chooseTarget maps `--target myorg` → `{ kind: 'org', org: 'myorg' }`; provisionAppFresh calls `runManifestFlow` and returns the converted creds (inject a fake flow).
+
+Run: `pnpm test setup/provision-app` → PASS.
+
+- [ ] **Step 8: `secrets.ts` (failing test → impl)**
+
+Create `src/setup/secrets.test.ts` + `src/setup/secrets.ts`:
+
+```ts
+import type { GhClient } from './gh.ts';
+
+/** Write the two conventional reviewer secrets at the chosen scope. Idempotent; touches no others. */
+export async function provisionSecrets(
+  gh: GhClient,
+  a: { target: { kind: 'personal' } | { kind: 'org'; org: string }; appId: number; pem: string; owner: string; repo: string },
+): Promise<void> {
+  const common = a.target.kind === 'org'
+    ? { scope: 'org' as const, org: a.target.org, repos: [`${a.owner}/${a.repo}`] }
+    : { scope: 'repo' as const, repo: `${a.owner}/${a.repo}` };
+  await gh.setSecret({ name: 'WAIVER_STAMP_APP_ID', value: String(a.appId), ...common });
+  await gh.setSecret({ name: 'WAIVER_STAMP_APP_PRIVATE_KEY', value: a.pem, ...common });
+}
+```
+
+Test (fake `GhClient`): org target → two `setSecret` calls with `scope: 'org'`; personal → `scope: 'repo'`; asserts exactly those two names, never a third.
 
 Run: `pnpm test setup/secrets` → PASS.
 
-### PR 4 — Group C: repo config (ruleset, commitlint, workflows, config seed)
+- [ ] **Step 9: `open-browser.ts` + wire provisioning into the orchestrator**
 
-- [ ] **Step 9: `ensureWaiverStampRuleset` (failing test → impl)**
+Create `src/setup/open-browser.ts`: `openBrowser(url)` spawning the platform opener (`open` on darwin, `xdg-open` else), falling back to printing the URL. Inject via `makeSetupDeps`.
 
-Create `src/setup/ruleset.test.ts` + `src/setup/ruleset.ts`. The ruleset is a dedicated `waiver-stamp` ruleset on the default branch requiring only the `waiver-stamp` check (spec §4.6). Idempotent: if a ruleset named `waiver-stamp` already exists, return `'exists'` and do not recreate. Test both branches against the fake `gh`.
+Extend `SetupDeps` and `setupRepository` (`src/commands/setup-repository.ts`): after preflight, unless `opts.noApp`, run `chooseTarget` → `provisionAppFresh` → `provisionSecrets`, then `openBrowser(installUrl)`. Update `makeSetupDeps` to supply `gh: makeGh(runCommand)`, `provisionAppFresh`, `provisionSecrets`, `chooseTarget`, `openBrowser`. Update `setup-repository.test.ts` to inject fakes and assert: `--no-app` skips provisioning; the happy path calls `provisionSecrets` once and opens the install URL.
 
 ```ts
-// ruleset.ts core
+// added to setupRepository, after the preflight report:
+if (!opts.noApp) {
+  const target = await deps.chooseTarget(opts.target, deps.gh);
+  const app = await deps.provisionAppFresh({ target, owner: ctx.owner, gh: deps.gh, openBrowser: deps.openBrowser });
+  await deps.provisionSecrets(deps.gh, { target, appId: app.appId, pem: app.pem, owner: ctx.owner, repo: ctx.repo });
+  deps.info(`App ${app.slug} created; secrets written.`);
+  await deps.openBrowser(`https://github.com/apps/${app.slug}/installations/new`);
+} else {
+  deps.info('--no-app: skipping App provisioning (configure the human-click layer manually).');
+}
+```
+
+Run: `pnpm test setup-repository setup/secrets setup/provision-app` → PASS.
+
+- [ ] **Step 10: Docs (targeted) + full checks**
+
+Update `README.md` / `docs/auto-approval-setup.md` to note `waiver setup-repository` now provisions the App and secrets automatically (the create + install clicks stay manual, §3.3). Describe current behavior only.
+
+Run: `pnpm build && pnpm test && pnpm typecheck && pnpm lint`
+Expected: all PASS.
+
+- [ ] **Step 11: End-to-end (with the two clicks)**
+
+Against a real test account/repo, run `pnpm dev setup-repository --target personal`. Click **Create GitHub App** in the browser; confirm the loopback captures the code, conversion returns the pem, and `gh secret list` shows `WAIVER_STAMP_APP_ID` + `WAIVER_STAMP_APP_PRIVATE_KEY`. The install page opens. Evidence: `gh secret list` output + the created App. (The clicks can't be automated — §3.3.)
+
+- [ ] **Step 12: Commit + PR (skills)**
+
+Branch `jordi/setup-automation/setup-automation-4` off PR 3. PR body: PR 4 of the stack; fresh-App provisioning wired end-to-end; excludes reuse/disk (PR 5); records V3/V4/V5 findings.
+
+---
+
+## PR 5 — App reuse + pem-on-disk
+
+**Intent:** the idempotent / multi-repo layer over PR 4's fresh path — so a second repo under the same owner doesn't re-mint. Reuse an already-installed **org** App with no pem needed (org secrets already carry it, §4.3); offer **personal** pem-on-disk persistence and reuse (§4.4). Wraps `provisionAppFresh` behind a `resolveApp` that consults reuse → disk → fresh in order.
+
+**Files:**
+- Create: `src/setup/disk.ts` (+ test) — read/write `~/.waiver-install/<owner>.json` at `chmod 600`
+- Create: `src/setup/resolve-app.ts` (+ test) — the §4.3 resolution order
+- Modify: `src/setup/gh.ts` (+ test) — add `appExists(owner, slug)` / `orgSecretsPresent(org)` reads
+- Modify: `src/commands/setup-repository.ts` (+ test) — call `resolveApp` instead of `provisionAppFresh`; secrets only written when a pem is present
+
+**Interfaces:**
+- Produces: `readDiskApp(owner): Promise<{ appId; pem } | null>`, `writeDiskApp(owner, { appId, pem }): Promise<void>` (dir `700`, file `600`).
+- Produces: `resolveApp(deps): Promise<{ slug; appId?; pem?; source: 'reuse-org' | 'disk' | 'fresh' }>`.
+
+- [ ] **Step 1: `disk.ts` (failing test → impl)**
+
+Create `src/setup/disk.test.ts` + `src/setup/disk.ts`. Test in a tmp `HOME`: `writeDiskApp` then `readDiskApp` round-trips; the file is `0600` and the dir `0700`; a missing file → `null`; never called for org targets (enforced by the caller, asserted in resolve-app). Warn (return a flag) that a private key is on disk.
+
+Run: `pnpm test setup/disk` → PASS.
+
+- [ ] **Step 2: `resolveApp` (failing test → impl)**
+
+Create `src/setup/resolve-app.test.ts` covering §4.3:
+- **org, App exists + org secrets present** → `{ source: 'reuse-org', slug }`, no pem, no manifest flow.
+- **personal, disk file present** → `{ source: 'disk', appId, pem }`, no manifest flow.
+- **personal, no disk, opts to save** → runs `provisionAppFresh`, then `writeDiskApp`; `{ source: 'fresh' }`.
+- **personal, no disk, declines save** → fresh, no disk write.
+
+Inject `provisionAppFresh`, disk fns, and `gh`. Implement `resolve-app.ts` as the ordered resolver.
+
+Run: `pnpm test setup/resolve-app` → PASS.
+
+- [ ] **Step 3: Swap the orchestrator to `resolveApp`; secrets gated on a pem**
+
+In `src/commands/setup-repository.ts`, replace the `provisionAppFresh` call with `deps.resolveApp({ target, owner, gh, openBrowser, saveToDisk })`. Only call `provisionSecrets` when `app.pem` is present (reuse-org path already has org secrets — spec §4.3). Update the test: reuse-org path writes no secrets; fresh/disk path writes them.
+
+Run: `pnpm test setup-repository` → PASS.
+
+- [ ] **Step 4: Docs (targeted) + full checks + E2E**
+
+Doc the reuse/disk options in `docs/auto-approval-setup.md` (§4.3–4.4). Run `pnpm build && pnpm test && pnpm typecheck && pnpm lint`. E2E: run `setup-repository` twice on two repos under one org → second run reports `reuse-org`, writes no new App; and once personal with save → the second personal repo loads the disk key.
+
+- [ ] **Step 5: Commit + PR (skills)**
+
+Branch `jordi/setup-automation/setup-automation-5` off PR 4. PR body: PR 5 of the stack; reuse + pem-on-disk on top of the fresh path.
+
+---
+
+## PR 6 — Repo config + phase boundary
+
+**Intent:** everything the App doesn't cover — the dedicated ruleset, commitlint detection, the non-destructive caller-workflow drop, `.waiver-stamp.json` seeding, the instructions hand-off page — plus the §4.13 ordering (open the workflows PR, let the producer run once, *then* add the required-check ruleset). Completes the orchestrator.
+
+**Files:**
+- Create: `src/setup/ruleset.ts` (+ test)
+- Create: `src/setup/commitlint.ts` (+ test)
+- Create: `src/setup/workflows.ts` (+ test)
+- Create: `src/setup/config-seed.ts` (+ test)
+- Create: `src/setup/handoff.ts` (+ test)
+- Modify: `src/setup/gh.ts` (+ test) — add `listRulesets`, `createRuleset`, `installationPresent(owner, repo)`, `checkRunPresent(owner, repo, sha, name)`
+- Modify: `src/commands/setup-repository.ts` (+ test) — the full phased flow
+- Modify: `README.md` — finalize the happy path
+
+**Interfaces:**
+- Produces: `ensureWaiverStampRuleset(gh, { owner, repo, defaultBranch }): Promise<'created' | 'exists'>`.
+- Produces: `detectCommitlintBodyLimit(cwd, run): Promise<{ blocks: boolean }>`.
+- Produces: `discoverCiWorkflowNames(dir): Promise<string[]>`, `detectLockfileHonestyCheck(dir): Promise<string | null>`, `writeCallerWorkflows(cwd, { ciWorkflowNames }): Promise<{ written: string[]; skipped: string[] }>`.
+- Produces: `seedConfigIfAbsent(cwd, { lockfileHonestyCheck? }): Promise<{ seeded: boolean; existing: boolean }>`.
+- Produces: `handoffPage(args): string`.
+
+- [ ] **Step 1: `ensureWaiverStampRuleset` (failing test → impl)**
+
+Create `src/setup/ruleset.test.ts` + `src/setup/ruleset.ts` (dedicated `waiver-stamp` ruleset requiring only the `waiver-stamp` check; idempotent — existing → `'exists'`):
+
+```ts
+import type { GhClient } from './gh.ts';
+
 export async function ensureWaiverStampRuleset(
   gh: GhClient,
   args: { owner: string; repo: string; defaultBranch: string },
@@ -1243,130 +1535,84 @@ export async function ensureWaiverStampRuleset(
 }
 ```
 
-Run: `pnpm test setup/ruleset` → PASS.
+Test both branches against a fake `gh`. Run: `pnpm test setup/ruleset` → PASS.
 
-- [ ] **Step 10: `detectCommitlintBodyLimit` (empirical, failing test → impl)**
+- [ ] **Step 2: `detectCommitlintBodyLimit` (failing test → impl)**
 
-Create `src/setup/commitlint.test.ts` + `src/setup/commitlint.ts`. Run the repo's `commit-msg` hook (or `npx commitlint`) against a synthetic message with a >100-char body line, read the exit code, **warn** if it rejects (naming the `body-max-line-length: [0]` fix) — never edit their config (spec §4.7). Inject the runner; test the reject → `{ blocks: true }` and pass → `{ blocks: false }` branches. (This repo's own `commitlint.config.js` already sets `body-max-line-length: [0]`, so a self-test would return `blocks: false` — a good integration fixture.)
+Create `src/setup/commitlint.test.ts` + `src/setup/commitlint.ts`. Run the repo's `commit-msg` hook (or `npx commitlint`) against a synthetic >100-char-body message, read the exit code, return `{ blocks }`. **Warn**, never edit their config (§4.7). Inject `run`; test reject → `{ blocks: true }`, pass → `{ blocks: false }`. *(This repo's own `commitlint.config.js` sets `body-max-line-length: [0]`, so an integration self-run returns `blocks: false`.)*
 
 Run: `pnpm test setup/commitlint` → PASS.
 
-- [ ] **Step 11: `workflows.ts` — discovery + non-destructive write (failing test → impl)**
+- [ ] **Step 3: `workflows.ts` — discovery + non-destructive write (failing test → impl)**
 
 Create `src/setup/workflows.test.ts` + `src/setup/workflows.ts`:
-- `discoverCiWorkflowNames(dotGithubDir)` — read `.github/workflows/*.yml` `name:` fields (skip our own `waiver-stamp-*`); return the list to bake into the reviewer caller's `workflow_run.workflows`.
-- `detectLockfileHonestyCheck(dotGithubDir)` — scan workflow YAML for a job using the `lockfile-assay` action/package; return its job/check name or `null`.
-- `writeCallerWorkflows(dir, { ciWorkflowNames })` — write `waiver-stamp-ci.yml` + `waiver-stamp-review.yml` from the PR-2 caller templates with `workflows:` filled; **if either path exists, skip it and record it in `skipped[]`** (never overwrite — spec §4.8). Return `{ written, skipped }`.
+- `discoverCiWorkflowNames(dir)` — read `.github/workflows/*.yml` `name:` fields, skipping our own `waiver-stamp-*`.
+- `detectLockfileHonestyCheck(dir)` — find a job using the `lockfile-assay` action/package; return its job/check name or `null`.
+- `writeCallerWorkflows(cwd, { ciWorkflowNames })` — write `waiver-stamp-ci.yml` + `waiver-stamp-review.yml` from the PR-2 caller templates with `workflows:` filled; **skip (do not overwrite) any path that exists**, recording it in `skipped[]`. Return `{ written, skipped }`.
 
-Test: a fixture `.github/workflows/` dir (via `scaffoldProject`/tmp) with a `CI` workflow and a `lockfile-assay` job → discovery returns `['CI']` and the honesty check name; `writeCallerWorkflows` writes both callers; a second call skips both.
+Test with a scaffolded `.github/workflows/` fixture (a `CI` workflow + a `lockfile-assay` job): discovery returns `['CI']` + the honesty name; first write writes both, second call skips both.
 
 Run: `pnpm test setup/workflows` → PASS.
 
-- [ ] **Step 12: `config-seed.ts` (failing test → impl)**
+- [ ] **Step 4: `config-seed.ts` (failing test → impl)**
 
-Create `src/setup/config-seed.test.ts` + `src/setup/config-seed.ts`. `seedConfigIfAbsent(dir, { lockfileHonestyCheck })`: if `.waiver-stamp.json` is **absent**, write the closed-by-default template (the README's recommended `changeDocs.allow/deny`, `allowBumping: []`, plus `lockfileHonestyCheck` if detected). If it **exists**, do nothing and return `{ seeded: false, existing: true }` (the hand-off page surfaces the suggested edit — spec §4.11). Never widen an existing policy.
+Create `src/setup/config-seed.test.ts` + `src/setup/config-seed.ts`. `seedConfigIfAbsent(cwd, { lockfileHonestyCheck })`: absent → write the closed-by-default template (README `changeDocs.allow/deny`, `allowBumping: []`, plus `lockfileHonestyCheck` if given); present → no-op, return `{ seeded: false, existing: true }`. Never widen an existing policy (§4.11).
 
 Run: `pnpm test setup/config-seed` → PASS.
 
-- [ ] **Step 13: `handoff.ts` (failing test → impl)**
+- [ ] **Step 5: `handoff.ts` (failing test → impl)**
 
-Create `src/setup/handoff.test.ts` + `src/setup/handoff.ts`. `handoffPage({ owner, repo, slug, defaultBranch, installDetected, configExisted, suggestedHonestyCheck })` returns the instructions-only HTML (spec §4.10): confirm install (if not detected), review `.waiver-stamp.json` (+ the suggested `lockfileHonestyCheck` edit if `configExisted` and detected), set merge/rebase (not squash), optional `.github/**` protection — terse imperatives, `owner/repo`/slug/branch interpolated, a single link to `docs/auto-approval-setup.md` at the bottom, no rationale. Test asserts the interpolated repo slug and that each conditional line appears/omits correctly.
+Create `src/setup/handoff.test.ts` + `src/setup/handoff.ts`. `handoffPage({ owner, repo, slug, defaultBranch, installDetected, configExisted, suggestedHonestyCheck })` → instructions-only HTML (§4.10): confirm install (if not detected); review `.waiver-stamp.json` (+ the suggested `lockfileHonestyCheck` edit when `configExisted` and a check was detected); set merge/rebase (not squash); optional `.github/**` protection — terse imperatives, interpolated slug/repo/branch, one link to `docs/auto-approval-setup.md` at the bottom, no rationale. Test the interpolation and the conditional lines.
 
 Run: `pnpm test setup/handoff` → PASS.
 
-- [ ] **Step 14: Commit Group C (skill)** — ruleset, commitlint, workflows, config-seed, handoff + tests.
+- [ ] **Step 6: Full phased orchestrator (failing test → impl)**
 
-### PR 4 — Group D: orchestrator + CLI wiring
+Extend `src/commands/setup-repository.test.ts` for the §4.13 ordering: caller workflows are written **before** the ruleset; the ruleset is gated on the `waiver-stamp` check existing (`gh.checkRunPresent`). Cover: check absent → prints the "merge the PR, then re-run" message and creates **no** ruleset (exit 0); check present → creates the ruleset; re-run with an existing ruleset → `'exists'` no-op; `--no-app` still does the config/workflow half.
 
-- [ ] **Step 15: Failing test for the orchestrator (phased, idempotent)**
-
-Create `src/commands/setup-repository.test.ts`. Inject every collaborator (preflight, resolveApp, provisionSecrets, writeCallerWorkflows, ensureWaiverStampRuleset, openBrowser, gh) and assert the **phase ordering** (spec §4.13): open the workflows PR / write callers **before** the ruleset; the ruleset step is gated on the producer having run (poll installation/check, or exit with the "merge then re-run" message). Cover: fresh run stops at the merge boundary with a clear message (exit 0); resumed run with the check present creates the ruleset. Assert `--no-app` skips App provisioning and takes the override path.
-
-- [ ] **Step 16: Implement `setup-repository.ts`**
-
-Create `src/commands/setup-repository.ts` — the orchestrator calling the Group A–C modules in order, honoring `--yes/--target/--no-app`, printing progress, and ending by opening the hand-off page. Gate the ruleset on the `waiver-stamp` check existing on a recent head SHA; otherwise print `merge the opened PR, then re-run \`waiver setup-repository\` to finish` and return (exit 0). Idempotent: every mutating step checks current state first (workflows skip-if-exists, secrets overwrite-own, ruleset exists→no-op, config seed-if-absent).
+Implement the full flow in `setup-repository.ts`:
 
 ```ts
-export interface SetupOptions {
-  yes?: boolean;
-  target?: string; // 'personal' | '<org>'
-  noApp?: boolean;
-  cwd?: string;
+// after provisioning (PRs 4–5):
+const wf = join(cwd, '.github/workflows');
+const ciNames = await deps.discoverCiWorkflowNames(wf);
+const honesty = await deps.detectLockfileHonestyCheck(wf);
+const drop = await deps.writeCallerWorkflows(cwd, { ciWorkflowNames: ciNames });
+for (const p of drop.skipped) deps.warn(`left existing ${p} untouched — reconcile by hand.`);
+const seed = await deps.seedConfigIfAbsent(cwd, { lockfileHonestyCheck: honesty ?? undefined });
+if ((await deps.detectCommitlintBodyLimit(cwd)).blocks)
+  deps.warn('commitlint rejects long body lines; set `body-max-line-length: [0]` (spec §4.7).');
+
+// §4.13 phase boundary: the required-check ruleset must not precede the producer's first run.
+if (await deps.gh.checkRunPresent(ctx.owner, ctx.repo, /* latest default-branch sha */)) {
+  const r = await deps.ensureWaiverStampRuleset(deps.gh, ctx);
+  deps.info(`waiver-stamp ruleset ${r}.`);
+} else {
+  deps.info('Merge the workflows PR (or push the callers) so the waiver-stamp check runs once, then re-run `waiver setup-repository` to add the required-check ruleset.');
 }
 
-export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Promise<void> {
-  const cwd = opts.cwd ?? process.cwd();
-  const ctx = await deps.preflight(cwd, deps.preflightDeps); // throws SetupError → EXIT 2
-  if (!ctx.pnpm) deps.warn('no pnpm-lock.yaml found — the dependency-bump op will be inert (spec §4.1).');
-
-  const target = await deps.chooseTarget(opts.target, deps.gh); // §4.2 (org recommended)
-  const app = opts.noApp ? null : await deps.resolveApp({ target, owner: ctx.owner, ... });
-  if (app) await deps.provisionSecrets(deps.gh, { target, ...app, owner: ctx.owner, repo: ctx.repo });
-
-  const ciNames = await deps.discoverCiWorkflowNames(join(cwd, '.github/workflows'));
-  const honesty = await deps.detectLockfileHonestyCheck(join(cwd, '.github/workflows'));
-  const drop = await deps.writeCallerWorkflows(cwd, { ciWorkflowNames: ciNames });
-  await deps.seedConfigIfAbsent(cwd, { lockfileHonestyCheck: honesty ?? undefined });
-  const commit = await deps.detectCommitlintBodyLimit(cwd);
-  if (commit.blocks) deps.warn('commitlint rejects long body lines; set `body-max-line-length: [0]` (spec §4.7).');
-
-  if (app) await deps.openBrowser(`https://github.com/apps/${app.slug}/installations/new`);
-
-  // Phase boundary (§4.13): the ruleset requires the producer to have reported once.
-  const checkExists = await deps.waiverStampCheckPresent(deps.gh, ctx);
-  if (!checkExists) {
-    deps.info('Open the workflows PR and merge it, then re-run `waiver setup-repository` to add the required-check ruleset.');
-  } else {
-    await deps.ensureWaiverStampRuleset(deps.gh, ctx);
-  }
-  await deps.openBrowser(deps.handoffPage({ ...ctx, slug: app?.slug, ... }));
-}
+const installed = await deps.gh.installationPresent(ctx.owner, ctx.repo).catch(() => false);
+await deps.openBrowser(
+  deps.handoffPage({
+    owner: ctx.owner, repo: ctx.repo, slug, defaultBranch: ctx.defaultBranch,
+    installDetected: installed, configExisted: seed.existing, suggestedHonestyCheck: seed.existing ? honesty : null,
+  }),
+);
 ```
 
 Run: `pnpm test setup-repository` → PASS.
 
-- [ ] **Step 17: Wire into `cli.ts`**
+- [ ] **Step 7: README finalize + full checks**
 
-Add to `src/cli.ts` (mirroring the existing commands + the `run()` exit-code mapper):
+Point README's happy path at `waiver setup-repository` with the manual doc linked (§2.8). Describe current behavior only. Run: `pnpm build && pnpm test && pnpm typecheck && pnpm lint` → PASS.
 
-```ts
-import { setupRepository } from './commands/setup-repository.ts';
-import { SetupError } from './setup/errors.ts';
-// …
-program
-  .command('setup-repository')
-  .description('interactively wire waiver-stamp into the current repo (spec §4)')
-  .option('--yes', 'accept recommended defaults for non-destructive prompts')
-  .option('--target <target>', 'install target: personal or an org login')
-  .option('--no-app', 'skip App provisioning; configure the human-click layer only')
-  .action(async (opts: { yes?: boolean; target?: string; app?: boolean }) => {
-    await run(async () => {
-      await setupRepository(
-        { yes: opts.yes, target: opts.target, noApp: opts.app === false, cwd: process.cwd() },
-        makeSetupDeps(),
-      );
-    });
-  });
-```
+- [ ] **Step 8: End-to-end (full flow)**
 
-Add a `SetupError` branch to `run()`'s catch (before the generic `else`), mapping to `EXIT.MALFORMED` and printing `error: ${err.message}\n  ${err.remediation}`. (`--no-app` → commander sets `opts.app = false`.)
+Against a scratch repo: `pnpm dev setup-repository`. Confirm — callers written (skipped on re-run), config seeded if absent, commitlint warning if applicable, the phase-boundary message before the producer has run, and the hand-off page opens. After merging the callers and letting the producer run, re-run → the ruleset is created and the run converges to a no-op. Evidence: the written files, the created ruleset (`gh api …/rulesets`), the hand-off page.
 
-- [ ] **Step 18: CLI smoke test + README**
+- [ ] **Step 9: Commit + PR (skills)**
 
-Extend the CI smoke test (or add a `cli.test.ts` case) asserting `node dist/cli.js setup-repository --help` exits 0 and mentions `--no-app`. Update `README.md` to point the happy path at `waiver setup-repository` with a link to `docs/auto-approval-setup.md` (spec §2.8). Do not narrate the old manual flow's removal.
-
-- [ ] **Step 19: Full build + suite + lint + typecheck**
-
-Run: `pnpm build && pnpm test && pnpm typecheck && pnpm lint`
-Expected: all PASS, schema drift-guard green.
-
-- [ ] **Step 20: Behavioral verification (dry-run against a scratch repo)**
-
-Run `waiver setup-repository --no-app` (via `pnpm dev setup-repository --no-app`) inside a throwaway checkout with a GitHub `origin`: confirm preflight resolves owner/repo, the callers are written (and skipped on re-run), the phase-boundary message prints, and the hand-off page opens. Evidence: the terminal transcript + the written files. (Full App path needs a real GitHub account — exercise it manually once, out of band.)
-
-- [ ] **Step 21: Commit + PR (skills)**
-
-Branch `jordi/setup-automation/setup-automation-4` off PR 3. PR body: PR 4 of the stack; the orchestrator + modules; note V4/V5 findings and the split marker if it grew past ~1000 lines.
+Branch `jordi/setup-automation/setup-automation-6` off PR 5. PR body: PR 6 of the stack; repo config + §4.13 phase boundary; completes the orchestrator.
 
 ---
 
@@ -1375,33 +1621,34 @@ Branch `jordi/setup-automation/setup-automation-4` off PR 3. PR body: PR 4 of th
 **Intent:** remove the residue the feature left behind. Pure removal — suite green before and after, no behavior change.
 
 **Files:**
-- Modify: `src/action/main.ts` (drop the vestigial `lockfileHonestyChecks` field from the ncc `inputs` and from `makeResolveRequiredChecks`'s parameter)
-- Modify: `src/action/resolve-checks.ts` (drop the unused `lockfileHonestyChecks` from the factory's parameter type)
-- Modify: `docs/auto-approval-setup.md` (delete the pre-autodiscovery `ci-checks`-required narration; keep only the empty-override note)
-- Modify: `examples/` / any remaining `lockfile-honesty-checks` references
+- Modify: `src/action/main.ts` (drop the vestigial `lockfileHonestyChecks` from the ncc `inputs`)
+- Modify: `src/action/resolve-checks.ts` (drop `lockfileHonestyChecks` from the factory's parameter type)
+- Modify: `src/action/resolve-checks.test.ts` (constructors pass `{ ciChecks }` only)
+- Modify: `docs/auto-approval-setup.md` / `examples/` — any final stale narration the per-PR fixes missed
 
 - [ ] **Step 1: Remove the vestigial honesty-list plumbing**
 
-In `src/action/resolve-checks.ts`, change the factory parameter from `{ ciChecks: string[]; lockfileHonestyChecks: string[] }` to `{ ciChecks: string[] }`. In `src/action/main.ts` ncc entry, change `inputs` to `{ ciChecks: parseList(core.getInput('ci-checks')) }`. Update any test constructing the factory to pass `{ ciChecks: [...] }` only.
+In `src/action/resolve-checks.ts`, change the factory parameter from `{ ciChecks: string[]; lockfileHonestyChecks: string[] }` to `{ ciChecks: string[] }`. In `src/action/main.ts` ncc entry, `inputs` becomes `{ ciChecks: parseList(core.getInput('ci-checks')) }`. Update any test constructing the factory to pass `{ ciChecks: [...] }` only.
 
 - [ ] **Step 2: Run the suite (green — the field was already unread since PR 1)**
 
-Run: `pnpm test && pnpm typecheck && pnpm lint && pnpm build:action`
+Run: `pnpm build:action && pnpm test && pnpm typecheck && pnpm lint`
 Expected: PASS. Stage the rebuilt `dist`.
 
-- [ ] **Step 3: Delete the stale manual-list narration from the docs/examples**
+- [ ] **Step 3: Final doc sweep (residue only)**
 
-In `docs/auto-approval-setup.md`, remove the passages describing the hand-maintained `ci-checks` list and matrix-leg/push-only footguns as *current* steps (autodiscovery replaced them); keep a one-line note that `ci-checks` remains an empty-by-default override for the no-App path. Describe only what is — no "previously" narration (no-archaeology).
+With the per-PR consistency rule, most stale narration is already gone. Scan `docs/auto-approval-setup.md` and `examples/` for any remaining reference to a hand-maintained `ci-checks` list or `lockfile-honesty-checks`; delete it, describing only what is (no-archaeology). Keep the one-line note that `ci-checks` is an empty-by-default override for the no-App path.
 
 - [ ] **Step 4: Repo checks + commit + PR (skills)**
 
-Run: `pnpm test && pnpm lint`. Branch `jordi/setup-automation/cleanup-setup-automation` off PR 4. PR body: cleanup PR (N+1); pure removal of dead honesty-list plumbing and stale doc narration.
+Run: `pnpm test && pnpm lint`. Branch `jordi/setup-automation/cleanup-setup-automation` off PR 6. PR body: cleanup PR (N+1); pure removal of dead honesty-list plumbing and any stale doc residue.
 
 ---
 
 ## Self-review notes
 
-- **Spec coverage:** §2.1 → PR 2; §2.2–2.3 → PR 2 (trigger model) + PR 0/1 (backstop unchanged); §2.4 → PR 1; §2.5 → PR 1 (config field + fail-safe match); §2.6 → PR 1 (App token via the action's `github-token`) + PR 3 manifest scope; §2.7 → PR 1 (`ci-checks` override kept); §2.8 → PR 2/PR 4 docs; §3 → PR 3; §4.1 → PR 4 Group A; §4.2 → Group D `chooseTarget`; §4.3–4.4 → Group B `resolveApp`; §4.5 → Group B `secrets`; §4.6 → Group C `ruleset`; §4.7 → Group C `commitlint`; §4.8 → Group C `workflows`; §4.9 → Group D `openBrowser` install; §4.10 → Group C `handoff`; §4.11 → Group C `config-seed`; §4.12 → CLI wiring + `SetupError`→EXIT 2; §4.13 → Group D phase boundary; §8 → the PR stack.
-- **Verification gates:** V1 (PR 1), V3 (PR 3), V4/V5 (PR 4) each resolved at the top of their PR; the spec's conservative assumption is the default and the PR body records any deviation.
-- **Type consistency:** `ResolvedChecks` / `makeResolveRequiredChecks` signatures match between PR 0 (factory shape) and PR 1 (body); `discoverRequiredChecks` signature is stable; the self-exclusion constant is the single literal `'waiver-stamp'`; secret names are the two literals `WAIVER_STAMP_APP_ID` / `WAIVER_STAMP_APP_PRIVATE_KEY` throughout.
+- **Spec coverage:** §2.1 → PR 2; §2.2–2.3 → PR 2 (trigger model) + PR 0/1 (backstop unchanged); §2.4 → PR 1; §2.5 → PR 1 (config field + fail-safe match); §2.6 → PR 1 (App token via the action's `github-token`) + PR 4 manifest scope; §2.7 → PR 1 (`ci-checks` override kept); §2.8 → PRs 2/4/6 docs; §3 → PR 4 (manifest + loopback + the two clicks); §4.1 → PR 3 (preflight); §4.2 → PR 4 (`chooseTarget`); §4.3–4.4 → PR 5 (`resolveApp`, disk); §4.5 → PR 4 (`secrets`); §4.6 → PR 6 (`ruleset`); §4.7 → PR 6 (`commitlint`); §4.8 → PR 6 (`workflows`); §4.9 → PR 4/6 (install browser hand-off); §4.10 → PR 6 (`handoff`); §4.11 → PR 6 (`config-seed`); §4.12 → PR 3 (CLI wiring + `SetupError`→EXIT 2); §4.13 → PR 6 (phase boundary); §8 → the resliced PR stack.
+- **Verification gates:** V1 (PR 1), V3/V4/V5 (PR 4) each resolved at the top of their PR; the spec's conservative assumption is the default and the PR body records any deviation.
+- **Type consistency:** `ResolvedChecks` / `makeResolveRequiredChecks` signatures match between PR 0 and PR 1; `discoverRequiredChecks` is stable; the self-exclusion constant is the single literal `'waiver-stamp'`; the secret names are the two literals `WAIVER_STAMP_APP_ID` / `WAIVER_STAMP_APP_PRIVATE_KEY` throughout; `RepoContext` / `GhClient` / `SetupDeps` are introduced in PR 3 and only *extended* (never reshaped) by PRs 4–6.
+- **Orchestrator growth:** `src/commands/setup-repository.ts` and its test are touched by PRs 3, 4, 5, 6 — each adds one runnable capability and its wiring, keeping every intermediate `main` state shippable and end-to-end testable.
 - **Naming caution:** PR 2 names the reusable workflows `reusable-ci.yml` / `reusable-review.yml` to avoid colliding with this repo's existing `ci.yml`; the spec's §2.1 example `uses:` refs (`…/ci.yml@vX`) are updated to the `reusable-*` paths — flag this in the PR 2 body since the spec text says `ci.yml`.
