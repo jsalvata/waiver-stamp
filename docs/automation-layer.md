@@ -50,11 +50,12 @@ job. This is the load-bearing decision (security rationale in §3).
 2. **Stage 2 — the `waiver-stamp-review` action (privileged), only submits a review.** When
    a backstop workflow completes it wakes via `workflow_run`, running from the
    **default-branch** definition in base-repo context with a write token. It resolves the PR
-   + head SHA from the event, confirms `ci-checks` + `lockfile-honesty-checks` are green on
-   that SHA (else no-op), locates the `waiver-stamp` producer run for the SHA and downloads +
-   zod-validates its artifact, runs the G1/G2 trust guards (§3), and posts the mapped GitHub
-   review (§5). It **never runs the repo's toolchain**, so the write token never sits next to
-   attacker-influenceable code execution, and it trusts the artifact **only after** the
+   + head SHA from the event, confirms the required checks (autodiscovered from the base
+   branch's protection) are green on that SHA (else no-op), locates the `waiver-stamp`
+   producer run for the SHA and downloads + zod-validates its artifact, runs the G1/G2 trust
+   guards (§3), and posts the mapped GitHub review (§5). It **never runs the repo's
+   toolchain**, so the write token never sits next to attacker-influenceable code execution,
+   and it trusts the artifact **only after** the
    guards re-establish, from git data alone, that it could not have been forged.
 
 The two halves communicate through **one artifact** (`waiver-stamp-report`, schema in §4.3)
@@ -87,7 +88,7 @@ repo's toolchain.
 ### 3.2 The two guards (de-circularizing trust)
 
 The saving fact: a **`workflow_run` workflow always runs the definition from the default
-branch.** The reviewer's own code, its `ci-checks`/`lockfile-honesty-checks` config, and its orchestration are
+branch.** The reviewer's own code, its required-check resolution, and its orchestration are
 tamper-proof from a PR. On top of that fixed point, the reviewer re-establishes trust using
 **only git file data — no untrusted code ever executes in the privileged context:**
 
@@ -155,7 +156,8 @@ product).
   G2 has no safe way to run that analysis and no need to — a resolution-input change is never a
   mechanical refactor, so it refuses the whole category (`RESOLUTION_INPUTS` in `guards.ts`). The
   guard only has to stay *at least as strict* as lockfile-assay's input list; once the firewall is
-  wired in as a `lockfile-honesty-checks` gate, the precise adjudication lives there and this guard
+  wired in as a required lockfile-honesty check (named in `.waiver-stamp.json`'s
+  `lockfileHonestyCheck`), the precise adjudication lives there and this guard
   is a pure backstop.
 
 ### 3.4 Other surfaces & mitigations
@@ -235,18 +237,20 @@ from the engine, and it is unit-testable with vitest against a mocked Octokit.
   any honesty workflow) is what lets the reviewer wake on the **last** green light — not just
   the artifact producer; `workflow_run` also avoids the self-trigger loop a bare `check_suite`
   trigger would cause (rationale in §7).
-- **Inputs:** `ci-checks` and `lockfile-honesty-checks` — two newline/comma lists of
-  check-run names that must each be `success` on the head SHA (both **default empty**).
-  Splitting them makes the lockfile warning *precise* (§7); the `waiver-stamp` check itself
-  is **not** listed (its verdict is the artifact). `github-token` (default `${{ github.token
-  }}`; a repo passes an App / bot-PAT token to make APPROVE count toward branch protection).
+- **Required checks:** **autodiscovered** from the base branch's protection — the rulesets
+  endpoint, falling back to classic branch protection — read under the App token's
+  `administration: read`. The `waiver-stamp` check is self-excluded (its verdict is the
+  artifact). `ci-checks` remains an optional **empty-by-default override** for the no-App /
+  non-discoverable edge. `github-token` (default `${{ github.token }}`; a repo passes an App
+  / bot-PAT token to make APPROVE count and to grant the admin-read autodiscovery needs).
 - **Behaviour:** resolve the PR + `head_sha` from the `workflow_run` event (no-op if no open
-  PR); confirm every `ci-checks` + `lockfile-honesty-checks` entry is `success` on `head_sha`
-  (not all green → no-op; a later completion wakes us); **locate the `waiver-stamp` producer
-  run for `head_sha`** (the triggering run may be CI, not the producer) and download +
-  zod-validate its `waiver-stamp-report` artifact; **independently derive** `base` and
-  cross-check the artifact's SHAs (`head` must equal the event `head_sha`; mismatch → neutral
-  no-op); run **G1** and **G2**; map the verdict to a review per §5; dismiss its own stale
+  PR); confirm every autodiscovered required check (`waiver-stamp` self-excluded) is
+  `success` on `head_sha` (not all green → no-op; a later completion wakes us); **locate the
+  `waiver-stamp` producer run for `head_sha`** (the triggering run may be CI, not the
+  producer) and download + zod-validate its `waiver-stamp-report` artifact; **independently
+  derive** `base` and cross-check the artifact's SHAs (`head` must equal the event
+  `head_sha`; mismatch → neutral no-op); run **G1** and **G2**; map the verdict to a review
+  per §5; dismiss its own stale
   reviews (§6).
 - **Dependencies:** `@actions/core`, `@actions/github`, `zod` (artifact validation),
   `semver` (via the reused `deps.ts` gates). Bundle kept in sync by a CI drift-guard that
@@ -264,7 +268,7 @@ use; the reviewer trusts none of its SHAs without cross-checking against the eve
 - Add the `waiver-stamp` step to this repo's CI (a step in the build job or a dedicated
   `pull_request` job producing the artifact + the `waiver-stamp` check).
 - `/.github/workflows/waiver-stamp-review.yml` — the reviewer caller
-  (`workflow_run` on our CI, `ci-checks: [<our CI check>]`, `lockfile-honesty-checks: []`,
+  (`workflow_run` on our CI; required checks autodiscovered from branch protection;
   `github.token`).
 - `/.waiver-stamp.json` at the repo root — a real config (`allowBumping`, `changeDocs`) so
   the repo *is* a working example.
@@ -279,14 +283,14 @@ and explains itself in the job summary; the **review channel is reserved for the
 layer**. (This is a deliberate, recorded refinement of §17.2's literal "invalid →
 request-changes review" — see §11.)
 
-Rows below assume the artifact is present and zod-valid; **backstop** = `ci-checks` +
-`lockfile-honesty-checks` (the `waiver-stamp` check is **not** in it — its verdict *is* the
+Rows below assume the artifact is present and zod-valid; **backstop** = the autodiscovered
+required checks (the `waiver-stamp` check is **not** in it — its verdict *is* the
 artifact).
 
 | Situation | Reviewer output |
 |---|---|
 | Any backstop check not yet green on `head_sha` | **No-op** — a later `workflow_run` completion wakes us |
-| `APPROVE`, G1+G2 pass, backstop green | **APPROVE** review (+ lockfile warning iff `lockfile-honesty-checks` empty, §7) |
+| `APPROVE`, G1+G2 pass, backstop green | **APPROVE** review (+ lockfile warning unless the base config's `lockfileHonestyCheck` names a required check, §7) |
 | `APPROVE`, G1 or G2 **fails** | **REQUEST_CHANGES** review — "the trusted layer refuted this claim"; **no artifact content echoed** |
 | `COMMENT`, G1+G2 pass, backstop green | **COMMENT** review — the vouched-subset note |
 | `COMMENT`, G1 or G2 **fails** | **COMMENT** review — reviewer-authored generic "couldn't verify these results; full review applies" (**no subset echoed**, so a forged COMMENT can't steer reviewers) |
@@ -320,7 +324,7 @@ required" as a prerequisite regardless.
   native stale-dismissal on push. The reviewer re-evaluates on the new SHA and only ever
   approves once that SHA's checks are green.
 - **Approval gated on green.** The reviewer submits an APPROVE only on a `workflow_run`
-  completion where the full `ci-checks` + `lockfile-honesty-checks` set is green — the last workflow to
+  completion where the full autodiscovered required set is green — the last workflow to
   finish is the wake-up on which the set is finally green. No polling, no waiting.
 - **Idempotency.** A `concurrency` group keyed on the PR serializes review mutations; the
   reviewer keeps a **single** active review (re-submitting or dismissing its own, never
@@ -331,31 +335,32 @@ required" as a prerequisite regardless.
 
 ## 7. Configuration surface
 
-- **`ci-checks` and `lockfile-honesty-checks`** (reviewer inputs, both default empty) — the
-  backstop, split into two lists of check-run names that must each be `success` on the head
-  SHA before an APPROVE is honoured. The split is deliberate: `lockfile-honesty-checks` being
-  empty is the *precise* signal that no honesty gate is wired in, driving the warning below.
-  Both empty ⇒ the caller gated it another way / nothing extra to confirm. The `waiver-stamp`
-  check itself is **not** listed (its verdict is the artifact).
+- **Required checks — autodiscovered.** The backstop set is read from the base branch's
+  protection (the rulesets endpoint, classic protection as fallback), under the App token's
+  `administration: read`. The `waiver-stamp` check is self-excluded (its verdict is the
+  artifact). `ci-checks` remains an optional empty-by-default override for repos without the
+  App or whose required set isn't discoverable.
   *Why not deduce these from the trigger, or trigger on check events?* A trigger's
   `workflows:` are *workflow* names; a backstop is a *check-run* name (one workflow can emit
   many checks) — the mapping isn't 1:1, and the reviewer sees one event at a time, so it
   can't enumerate the set from the trigger. A `check_suite`/`check_run` trigger would spare
   the `workflows:` list but (a) fires on the reviewer's **own** run's suite → a self-trigger
-  loop, and (b) is blind to legacy commit *statuses*. Reading the set from branch protection
-  needs admin scope. So the checks stay explicit inputs.
+  loop, and (b) is blind to legacy commit *statuses*. So the trigger names the explicit
+  producer workflows, and the required-check *set* is read from branch protection rather
+  than hand-listed.
 - **`github-token`** (reviewer input, default `${{ github.token }}`) — GITHUB_TOKEN by
   default (zero setup; a GITHUB_TOKEN APPROVE is visible but does **not** satisfy "required
   approving reviews" branch protection). A repo passes an App / bot-PAT token to make
   APPROVE count. The default's non-counting APPROVE usefully bounds the blast radius of any
   residual forgery until a repo explicitly opts into a counting token.
-- **Lockfile warning (precise).** An APPROVE body carries
-  *"⚠️ waiver-stamp assumes the lockfile is honest; wire a lockfile-honesty check into
-  `lockfile-honesty-checks` to remove this caveat"* **iff `lockfile-honesty-checks` is
-  empty** — an exact condition on a dedicated input, replacing the earlier ≤1-entry
-  heuristic.
-- **`.waiver-stamp.json`** — unchanged from §6.3/§6.5 (`allowBumping`, `changeDocs`), read
-  from base. The reviewer reads base's copy from a throwaway worktree checkout for G2.
+- **Lockfile warning.** An APPROVE body carries
+  *"⚠️ waiver-stamp assumes the lockfile is honest; name your lockfile-honesty check in
+  `.waiver-stamp.json`'s `lockfileHonestyCheck` to remove this caveat"* **unless**
+  `lockfileHonestyCheck` names a check that is in the discovered required set. Fail-safe: the
+  caveat is silenced only on a positive match, so a missing or misnamed field keeps it.
+- **`.waiver-stamp.json`** (`allowBumping`, `changeDocs`, and the optional
+  `lockfileHonestyCheck`), read from base. The reviewer reads base's copy from a throwaway
+  worktree checkout for G2.
 
 ---
 
@@ -369,8 +374,9 @@ and wired into README §20 step 4.
 1. Add the `waiver-stamp` step to CI (after install) — `uses:
    jsalvata/waiver-stamp/.github/actions/waiver-stamp@<full-SHA>`.
 2. Add the reviewer caller workflow — `workflow_run` on all backstop workflows, `uses:
-   jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@<full-SHA>`, set `ci-checks`
-   (and `lockfile-honesty-checks` if you have one).
+   jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@<full-SHA>`; required checks
+   are autodiscovered from branch protection; name your lockfile-honesty check in
+   `.waiver-stamp.json`'s `lockfileHonestyCheck` if you have one.
 3. In branch protection: mark the CI check **and** the `waiver-stamp` check **required**;
    enable **"dismiss stale approvals when new commits are pushed."**
 4. Use **merge or rebase-merge**, not squash, so verified commits land as-is (§17.5); or
@@ -399,9 +405,11 @@ end-to-end test bed (§10).
 - **Unit (vitest, mocked Octokit/`@actions/github`):** verdict → review mapping (every row
   of §5); G1 per-commit detection (including change-and-revert); G2 dependency integrity —
   resolution-input detection (per file type, nested, change-and-revert) and the envelope
-  re-run (in/out of envelope) reusing `deps.ts`; backstop confirmation over `ci-checks` +
-  `lockfile-honesty-checks`; idempotent review update; self-heal dismissal; every
-  fail-closed path (missing artifact, SHA mismatch, API error, head-moved TOCTOU).
+  re-run (in/out of envelope) reusing `deps.ts`; autodiscovery of the required set (rules
+  endpoint, classic fallback, `waiver-stamp` self-exclusion) and the fail-safe honesty flag;
+  backstop confirmation over the discovered set; idempotent review update; self-heal
+  dismissal; every fail-closed path (missing artifact, SHA mismatch, API error, head-moved
+  TOCTOU).
 - **End-to-end, real PRs (the ultimate dogfood):** an acceptance harness (`gh`-driven,
   against a sandbox branch in this repo, since it needs the deployed workflow) that opens a
   real PR for **each** verdict and asserts the posted outcome —
@@ -442,8 +450,10 @@ end-to-end test bed (§10).
   spare naming the producer workflows, but a workflow's own completion (the reviewer's
   included) emits a check suite → a self-trigger loop, and check events are blind to legacy
   commit *statuses*. `workflow_run` naming the explicit producer set avoids both and hands
-  the reviewer run context for artifact retrieval. So the backstop stays two explicit inputs
-  (`ci-checks` / `lockfile-honesty-checks`) rather than being inferred from the trigger.
+  the reviewer run context for artifact retrieval. So the trigger names the explicit
+  producer workflows, while the required-check *set* is autodiscovered from branch
+  protection (under the App's `administration: read`), with `ci-checks` as an empty-default
+  override.
 
 ---
 
@@ -461,5 +471,5 @@ end-to-end test bed (§10).
 None blocking. One consciously-accepted residual remains — in a repo with no branch
 protection, an honest `invalid` surfaces only as a red check (no PR-conversation review) —
 documented, downside-bounded, and covered by the "mark the stamp check required" adoption
-prerequisite. (The lockfile warning is now *precise*, keyed on an empty
-`lockfile-honesty-checks`, so it is no longer a heuristic.)
+prerequisite. (The lockfile warning is *precise*, keyed on whether the base config's
+`lockfileHonestyCheck` names a required check, so it is no longer a heuristic.)
