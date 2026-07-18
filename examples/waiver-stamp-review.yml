@@ -96,8 +96,3 @@ jobs:
           # Do NOT list "waiver-stamp" itself — its verdict IS the artifact this action trusts.
           ci-checks: |  # <-- EDIT: replace `build` below with your check-run name(s), one per line
             build
-          lockfile-honesty-checks: ''  # <-- EDIT (optional): if you have a separate
-                             #     lockfile-honesty check (e.g. lockfile-firewall) wired
-                             #     in as a required check, list its name(s) here to
-                             #     silence the "assumes the lockfile is honest" warning
-                             #     on APPROVE reviews. Leave empty if you don't have one.

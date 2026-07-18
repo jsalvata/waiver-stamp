@@ -114,7 +114,7 @@ export async function run(deps: RunDeps): Promise<void> {
 if (process.env.VITEST === undefined) {
   const inputs = {
     ciChecks: parseList(core.getInput('ci-checks')),
-    lockfileHonestyChecks: parseList(core.getInput('lockfile-honesty-checks')),
+    lockfileHonestyChecks: [] as string[],
   };
   const token = core.getInput('github-token') || process.env.GITHUB_TOKEN || '';
   const octokit = getOctokit(token);

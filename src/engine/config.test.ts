@@ -71,6 +71,15 @@ describe('loadConfig', () => {
       WaiverConfigError,
     );
   });
+
+  it('parses the optional lockfileHonestyCheck field', async () => {
+    const config = await loadConfig(await repoWith('{"lockfileHonestyCheck":"assay"}'));
+    expect(config.lockfileHonestyCheck).toBe('assay');
+  });
+  it('leaves lockfileHonestyCheck undefined when absent', async () => {
+    const config = await loadConfig(await repoWith('{}'));
+    expect(config.lockfileHonestyCheck).toBeUndefined();
+  });
 });
 
 describe('parseConfig', () => {

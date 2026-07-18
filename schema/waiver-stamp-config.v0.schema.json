@@ -44,6 +44,11 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "lockfileHonestyCheck": {
+      "description": "Name of the required check that proves the lockfile is honest (e.g. the lockfile-assay job/check name). When it is a required check, the \"assumes the lockfile is honest\" caveat is dropped from APPROVE reviews (spec §2.5).",
+      "type": "string",
+      "minLength": 1
     }
   },
   "additionalProperties": false
