@@ -359,8 +359,9 @@ required" as a prerequisite regardless.
   `lockfileHonestyCheck` names a check that is in the discovered required set. Fail-safe: the
   caveat is silenced only on a positive match, so a missing or misnamed field keeps it.
 - **`.waiver-stamp.json`** (`allowBumping`, `changeDocs`, and the optional
-  `lockfileHonestyCheck`), read from base. The reviewer reads base's copy from a throwaway
-  worktree checkout for G2.
+  `lockfileHonestyCheck`), read from base. The reviewer reads base's copy as a git blob
+  (`git show <base>:.waiver-stamp.json`, no worktree) — for G2's envelope re-run and the
+  honesty-check lookup.
 
 ---
 
