@@ -6,6 +6,7 @@ import { decideReview } from './decide.ts';
 import type { Outcome } from './decide.ts';
 import { g1WorkflowIntegrity, g2DependencyIntegrity } from './guards.ts';
 import { parseList } from './inputs.ts';
+import { type ResolvedChecks, makeResolveRequiredChecks } from './resolve-checks.ts';
 import { postOutcome } from './review.ts';
 import type { ArtifactReport } from './schema.ts';
 
@@ -43,7 +44,10 @@ export interface RunDeps {
     octokit: Octokit,
     args: { owner: string; repo: string; prNumber: number; headSha: string; outcome: Outcome },
   ) => Promise<void>;
-  inputs: { ciChecks: string[]; lockfileHonestyChecks: string[] };
+  resolveRequiredChecks: (
+    octokit: Octokit,
+    args: { owner: string; repo: string; base: string; repoDir: string },
+  ) => Promise<ResolvedChecks>;
   repoDir?: string;
 }
 
@@ -59,7 +63,13 @@ export async function run(deps: RunDeps): Promise<void> {
     const pr = await deps.resolvePr(owner, repo, headSha);
     if (!pr) return core.info('no open PR for head SHA — nothing to do');
 
-    const required = [...deps.inputs.ciChecks, ...deps.inputs.lockfileHonestyChecks];
+    const dir = deps.repoDir ?? process.cwd();
+    const { required, lockfileHonestyConfigured } = await deps.resolveRequiredChecks(octokit, {
+      owner,
+      repo,
+      base: pr.base,
+      repoDir: dir,
+    });
     const backstop = await deps.confirmChecksGreen(octokit, { owner, repo, headSha, required });
     if (!backstop.ok)
       return core.info(
@@ -73,7 +83,6 @@ export async function run(deps: RunDeps): Promise<void> {
 
     // Guards run base..head off pr.base, never artifact.base. If pr.base isn't reachable from
     // the checked-out default branch, g1/g2 throw and the outer catch fails closed — acceptable.
-    const dir = deps.repoDir ?? process.cwd();
     // Guards return the offending items (commit SHAs / envelope violations / resolution-input
     // touches), not a bool — so a refuted APPROVE can log *what* it refuted to the Actions log
     // before the outcome is decided. (Offenders never reach the review body; §3.4 keeps
@@ -90,7 +99,7 @@ export async function run(deps: RunDeps): Promise<void> {
       verdict: artifact.verdict,
       guardsPass,
       backstopGreen: true,
-      lockfileHonestyConfigured: deps.inputs.lockfileHonestyChecks.length > 0,
+      lockfileHonestyConfigured,
     });
     await deps.postOutcome(octokit, { owner, repo, prNumber: pr.number, headSha, outcome });
   } catch (err) {
@@ -121,6 +130,6 @@ if (process.env.VITEST === undefined) {
     g1: g1WorkflowIntegrity,
     g2: g2DependencyIntegrity,
     postOutcome,
-    inputs,
+    resolveRequiredChecks: makeResolveRequiredChecks(inputs),
   }).catch((err) => core.setFailed(err instanceof Error ? err.message : String(err)));
 }
