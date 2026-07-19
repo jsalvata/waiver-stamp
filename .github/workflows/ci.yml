@@ -84,3 +84,29 @@ jobs:
       - if: steps.stamp.outputs.verdict == 'REQUEST_CHANGES'
         shell: bash
         run: 'echo "waiver claim failed — see the job summary"; exit 1'
+
+  # Separate from `build` so live-API flakiness can't block the unit gate.
+  autodiscovery-e2e:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Live-API autodiscovery integration suite
+        run: pnpm test:integration
+        env:
+          # Default token: metadata reads the rules endpoint; pull-requests:read resolves the PR.
+          # No admin token here, so the classic check (C) self-skips until a WAIVER_E2E_ADMIN_TOKEN
+          # secret is provisioned.
+          GITHUB_TOKEN: ${{ github.token }}
+          WAIVER_E2E_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
