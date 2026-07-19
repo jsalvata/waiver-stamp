@@ -105,8 +105,7 @@ jobs:
       - name: Live-API autodiscovery integration suite
         run: pnpm test:integration
         env:
-          # Default token: metadata reads the rules endpoint; pull-requests:read resolves the PR.
-          # No admin token here, so the classic check (C) self-skips until a WAIVER_E2E_ADMIN_TOKEN
-          # secret is provisioned.
-          GITHUB_TOKEN: ${{ github.token }}
+          # github.token is non-admin: it can't read the classic endpoint (403), so the admin-gated
+          # discovery-success checks (A2/B/C) skip and the resolve/403 checks (A1/D) run here.
+          WAIVER_E2E_NONADMIN_TOKEN: ${{ github.token }}
           WAIVER_E2E_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
