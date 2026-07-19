@@ -207,11 +207,12 @@ honesty moot (G2 refuses every manifest/lockfile/resolution-input change):
 
 ### 2.6 Token & permissions for autodiscovery
 
-Reading required-status-check config needs more than the default token grants. The workflow
-`GITHUB_TOKEN` has **no `administration` permission scope** (it is not among the grantable
-keys), and the rulesets/branch-protection reads require repository **Administration: read**
-for private repos. Therefore autodiscovery reads run under the **App installation token**,
-whose App is granted `administration: read` (§3.1). Concretely:
+Reading required-status-check config splits by mechanism. The **rules** endpoint needs only
+`Metadata: read` — the default `GITHUB_TOKEN` can read it, public or private. **Classic**
+branch-protection reads require repository **Administration: read**, a scope the `GITHUB_TOKEN`
+cannot hold. So autodiscovery runs under the **App installation token**, whose App is granted
+`administration: read` (§3.1), so both halves of the union (§2.4) are always readable.
+Concretely:
 
 - The reviewer uses the App token (when configured) for the autodiscovery read **and** the
   approve post; it uses the default token only for the reads the default token *can* do.
@@ -220,16 +221,11 @@ whose App is granted `administration: read` (§3.1). Concretely:
   default and the manual list is genuinely gone.
 
 **No-App fallback** (an adopter who declines the App and keeps the human click): the default
-token can't read protection, so autodiscovery can't run. In that mode the reviewer falls
-back to the optional override input (§2.7); empty ⇒ fail-closed no-op with a clear log line,
-never a silent approve. This keeps the happy path list-free without stranding the
-default-token path.
-
-> ⚠️ **Verify before build (§7-V1):** whether `GET /rules/branches/{branch}` returns
-> `required_status_checks` contexts to a token with only `contents: read` on a *private*
-> repo, or truly requires `administration: read`. If `contents: read` suffices, autodiscovery
-> also works on the default token and the no-App fallback (§2.7) can be dropped and the App's
-> `administration: read` scope removed. The spec assumes the conservative (admin-read) answer.
+token still autodiscovers **ruleset** checks (metadata suffices) but not **classic**
+protection (admin-only). A repo whose required checks live in classic protection therefore
+falls back to the optional override input (§2.7); empty + non-discoverable ⇒ fail-closed no-op
+with a clear log line, never a silent approve. This keeps the happy path list-free without
+stranding the default-token path.
 
 ### 2.7 Override escape hatch (kept, empty by default)
 
@@ -291,9 +287,9 @@ uses in production).
   manifest kills the "I granted only Pull-requests-write and it silently didn't count"
   footgun.
 - **`pull_requests: write`** — submit the review.
-- **`administration: read`** — read required-status-check config for autodiscovery (§2.6).
-  Read-only repo config; low marginal risk over the write scope already present. Drop it if
-  §7-V1 shows the default token can read rules.
+- **`administration: read`** — read classic branch-protection config for autodiscovery
+  (§2.6); the rules endpoint needs only metadata, but the classic half of the union does not
+  (§7-V1). Read-only repo config; low marginal risk over the write scope already present.
 - **No webhook / no events** — the App is a passive *identity* consumed by the adopter's
   Actions via `actions/create-github-app-token`; it is never a running service. This is the
   key difference from Probot (which wants the webhook secret + a process).
@@ -619,12 +615,11 @@ alternatives → chosen (why)**.
   mechanism, and the two coexist — our setup adds a `waiver-stamp` ruleset atop an adopter's
   possibly-classic CI protection — so both must be read.
 - **D2 — Token for autodiscovery reads.** default `GITHUB_TOKEN` · App token. → **App token.**
-  `GITHUB_TOKEN` has no `administration` scope; the App can hold `administration: read`. Ties
-  autodiscovery to the App path, which `setup` always provisions. (Revisit if §7-V1 shows
-  `contents: read` suffices.)
+  The classic read needs `administration: read`, which `GITHUB_TOKEN` cannot hold; the App can
+  (§7-V1). Ties autodiscovery to the App path, which `setup` always provisions.
 - **D3 — Manifest scopes.** minimal (contents+PR) · add `administration: read`. → **Add
-  `administration: read`** to enable autodiscovery; read-only, low marginal risk. Drop if
-  §7-V1 allows.
+  `administration: read`** — the classic branch-protection read needs it (§7-V1); read-only,
+  low marginal risk.
 - **D4 — Keep any manual check list?** fully remove · keep an empty-by-default override. →
   **Keep an empty override** (`ci-checks`) purely as no-App / edge fallback; happy path writes
   none. Removes the *maintained* list (the user's ask) without stranding the default-token
