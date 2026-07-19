@@ -237,10 +237,13 @@ from the engine, and it is unit-testable with vitest against a mocked Octokit.
   any honesty workflow) is what lets the reviewer wake on the **last** green light — not just
   the artifact producer; `workflow_run` also avoids the self-trigger loop a bare `check_suite`
   trigger would cause (rationale in §7).
-- **Required checks:** **autodiscovered** from the base branch's protection — the rulesets
-  endpoint, falling back to classic branch protection — read under the App token's
-  `administration: read`. The `waiver-stamp` check is self-excluded (its verdict is the
-  artifact). `ci-checks` remains an optional **empty-by-default override** for the no-App /
+- **Required checks:** **autodiscovered** from the base branch's protection — read from
+  **both** the rulesets endpoint and classic branch protection and **unioned**; each surfaces
+  only its own mechanism, so a repo may require checks under either or both (e.g. classic CI
+  checks alongside a dedicated `waiver-stamp` ruleset, exactly what setup adds). The classic
+  read needs the App token's `administration: read`; the rules read needs only
+  `metadata: read`. The `waiver-stamp` check is self-excluded (its verdict is the artifact).
+  `ci-checks` remains an optional **empty-by-default override** for the no-App /
   non-discoverable edge. `github-token` (default `${{ github.token }}`; a repo passes an App
   / bot-PAT token to make APPROVE count and to grant the admin-read autodiscovery needs).
 - **Behaviour:** resolve the PR + `head_sha` from the `workflow_run` event (no-op if no open
@@ -290,7 +293,7 @@ artifact).
 | Situation | Reviewer output |
 |---|---|
 | Any backstop check not yet green on `head_sha` | **No-op** — a later `workflow_run` completion wakes us |
-| `APPROVE`, G1+G2 pass, backstop green | **APPROVE** review (+ lockfile warning unless the base config's `lockfileHonestyCheck` names a required check, §7) |
+| `APPROVE`, G1+G2 pass, backstop green | **APPROVE** review (+ lockfile warning when `allowBumping` is set and no required check matches `lockfileHonestyCheck`, §7) |
 | `APPROVE`, G1 or G2 **fails** | **REQUEST_CHANGES** review — "the trusted layer refuted this claim"; **no artifact content echoed** |
 | `COMMENT`, G1+G2 pass, backstop green | **COMMENT** review — the vouched-subset note |
 | `COMMENT`, G1 or G2 **fails** | **COMMENT** review — reviewer-authored generic "couldn't verify these results; full review applies" (**no subset echoed**, so a forged COMMENT can't steer reviewers) |
@@ -335,11 +338,12 @@ required" as a prerequisite regardless.
 
 ## 7. Configuration surface
 
-- **Required checks — autodiscovered.** The backstop set is read from the base branch's
-  protection (the rulesets endpoint, classic protection as fallback), under the App token's
-  `administration: read`. The `waiver-stamp` check is self-excluded (its verdict is the
-  artifact). `ci-checks` remains an optional empty-by-default override for repos without the
-  App or whose required set isn't discoverable.
+- **Required checks — autodiscovered.** The backstop set is the **union** of the base
+  branch's rulesets endpoint and classic branch protection — each surfaces only its own
+  mechanism, so a repo may require checks under either or both. The classic read needs the
+  App token's `administration: read`. The `waiver-stamp` check is self-excluded (its verdict
+  is the artifact). `ci-checks` remains an optional empty-by-default override for repos
+  without the App or whose required set isn't discoverable.
   *Why not deduce these from the trigger, or trigger on check events?* A trigger's
   `workflows:` are *workflow* names; a backstop is a *check-run* name (one workflow can emit
   many checks) — the mapping isn't 1:1, and the reviewer sees one event at a time, so it
@@ -353,11 +357,13 @@ required" as a prerequisite regardless.
   approving reviews" branch protection). A repo passes an App / bot-PAT token to make
   APPROVE count. The default's non-counting APPROVE usefully bounds the blast radius of any
   residual forgery until a repo explicitly opts into a counting token.
-- **Lockfile warning.** An APPROVE body carries
+- **Lockfile warning.** When `allowBumping` is set, an APPROVE body carries
   *"⚠️ waiver-stamp assumes the lockfile is honest; name your lockfile-honesty check in
   `.waiver-stamp.json`'s `lockfileHonestyCheck` to remove this caveat"* **unless**
-  `lockfileHonestyCheck` names a check that is in the discovered required set. Fail-safe: the
-  caveat is silenced only on a positive match, so a missing or misnamed field keeps it.
+  `lockfileHonestyCheck` names a check that is in the discovered required set. With
+  `allowBumping` empty, G2 refuses every manifest/lockfile/resolution-input change, so
+  lockfile honesty is moot and the caveat never appears. Fail-safe: when bumping is allowed,
+  the caveat is silenced only on a positive match, so a missing or misnamed field keeps it.
 - **`.waiver-stamp.json`** (`allowBumping`, `changeDocs`, and the optional
   `lockfileHonestyCheck`), read from base. The reviewer reads base's copy as a git blob
   (`git show <base>:.waiver-stamp.json`, no worktree) — for G2's envelope re-run and the
@@ -452,8 +458,9 @@ end-to-end test bed (§10).
   included) emits a check suite → a self-trigger loop, and check events are blind to legacy
   commit *statuses*. `workflow_run` naming the explicit producer set avoids both and hands
   the reviewer run context for artifact retrieval. So the trigger names the explicit
-  producer workflows, while the required-check *set* is autodiscovered from branch
-  protection (under the App's `administration: read`), with `ci-checks` as an empty-default
+  producer workflows, while the required-check *set* is the **union** of the rulesets endpoint
+  and classic branch protection — each surfacing only its own mechanism, the classic half
+  read under the App's `administration: read` — with `ci-checks` as an empty-default
   override.
 
 ---
@@ -472,5 +479,5 @@ end-to-end test bed (§10).
 None blocking. One consciously-accepted residual remains — in a repo with no branch
 protection, an honest `invalid` surfaces only as a red check (no PR-conversation review) —
 documented, downside-bounded, and covered by the "mark the stamp check required" adoption
-prerequisite. (The lockfile warning is *precise*, keyed on whether the base config's
-`lockfileHonestyCheck` names a required check, so it is no longer a heuristic.)
+prerequisite. (The lockfile warning is *precise*, keyed on whether `allowBumping` is set and the base
+config's `lockfileHonestyCheck` names a required check, so it is no longer a heuristic.)

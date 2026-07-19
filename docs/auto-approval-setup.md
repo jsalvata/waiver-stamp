@@ -79,9 +79,10 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > This is the only workflow that holds a write token. Its checkout shape is
    > security-load-bearing — read its header before changing anything else.
    >
-   > The reviewer's required-check set is auto-discovered from the base branch's protection
-   > (rules endpoint, falling back to classic protection) — the check-run names, matrix legs
-   > included, need no manual listing. `ci-checks` is an empty-by-default override for the
+   > The reviewer's required-check set is auto-discovered from the base branch's protection —
+   > read from both the rules endpoint and classic protection and unioned, since each surfaces
+   > only its own mechanism — so the check-run names, matrix legs included, need no manual
+   > listing. `ci-checks` is an empty-by-default override for the
    > no-App path (discovery empty ⇒ fall back to this list); if you do set it, it takes
    > **check-run names, not workflow job ids** — they diverge whenever a job sets `name:` or
    > uses a matrix. Read the real names off any recent PR with
@@ -169,14 +170,12 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > This token also runs **our** code with **your** write credential, so this is the case where
    > hash-pinning earns its keep — see [Which ref to pin](#which-ref-to-pin).
 
-9. *(Optional caveat)* **If you set `allowBumping` without a lockfile-honesty check**, know the
-   accepted residual. Name the check via `.waiver-stamp.json`'s `lockfileHonestyCheck` field
-   (e.g. the lockfile-assay job/check name) — autodiscovery then confirms it's a required check.
-   > waiver-stamp assumes the lockfile is honest, so a poisoned tarball behind an allowlisted
-   > package name (version string unchanged) could pass the dependency-bump gates undetected.
-   > The reviewer's APPROVE body names this caveat whenever `lockfileHonestyCheck` is unset, or
-   > names a check that isn't a required check — not silent, but a real gap until a
-   > lockfile-honesty tool (e.g. a lockfile-firewall product) is wired in as a required check.
+9. *(If you set `allowBumping`)* **Name your lockfile-honesty check** in
+   `.waiver-stamp.json`'s `lockfileHonestyCheck` field (e.g. the lockfile-assay job/check
+   name) — autodiscovery then confirms it's a required check.
+   > The APPROVE body carries the "assumes the lockfile is honest" warning only when
+   > `allowBumping` is set and no required check matches `lockfileHonestyCheck`. With
+   > `allowBumping` empty, no bump can ride in, so the caveat never appears.
 
 ## When a waivered PR falls behind `main`
 
