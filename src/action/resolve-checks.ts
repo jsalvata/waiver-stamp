@@ -21,13 +21,17 @@ export interface ResolvedChecks {
  * Resolve the reviewer's required-check set (autodiscovered from base-branch protection, with
  * the `ci-checks` input as the no-App fallback) and the honesty flag (a base-config-named
  * required check silences the APPROVE caveat — fail-safe: only a positive match silences it).
+ *
+ * `base` (the base commit SHA) and `baseRef` (the base branch name) are both needed: branch
+ * protection is keyed on the branch name, but the base-commit config must be read pinned to the
+ * SHA — so discovery uses `baseRef` while `fileAtRef` uses `base`.
  */
 export function makeResolveRequiredChecks(inputs: { ciChecks: string[] }) {
   return async (
     octokit: Octokit,
-    args: { owner: string; repo: string; base: string; repoDir: string },
+    args: { owner: string; repo: string; base: string; baseRef: string; repoDir: string },
   ): Promise<ResolvedChecks> => {
-    const discovered = await discoverRequiredChecks(octokit, args.owner, args.repo, args.base);
+    const discovered = await discoverRequiredChecks(octokit, args.owner, args.repo, args.baseRef);
     const set = discovered.length > 0 ? discovered : inputs.ciChecks;
     const required = set.filter((name) => name !== WAIVER_STAMP_CHECK);
 

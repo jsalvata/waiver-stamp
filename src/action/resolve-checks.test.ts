@@ -7,7 +7,7 @@ import { fileAtRef } from '../git.ts';
 import { discoverRequiredChecks } from './discover-checks.ts';
 
 const octokit = {} as never;
-const args = { owner: 'o', repo: 'r', base: 'b'.repeat(40), repoDir: '/tmp/x' };
+const args = { owner: 'o', repo: 'r', base: 'b'.repeat(40), baseRef: 'main', repoDir: '/tmp/x' };
 
 function setup(discovered: string[], config: object | null) {
   vi.mocked(discoverRequiredChecks).mockResolvedValue(discovered);
@@ -53,5 +53,11 @@ describe('makeResolveRequiredChecks (autodiscovery)', () => {
     setup(['build'], {});
     const r2 = await makeResolveRequiredChecks({ ciChecks: [] })(octokit, args);
     expect(r2.bumpingAllowed).toBe(false);
+  });
+  it('discovers checks against the base ref (branch), reads config off the base SHA', async () => {
+    setup(['build'], {});
+    await makeResolveRequiredChecks({ ciChecks: [] })(octokit, args);
+    expect(discoverRequiredChecks).toHaveBeenCalledWith(octokit, 'o', 'r', 'main');
+    expect(fileAtRef).toHaveBeenCalledWith('/tmp/x', 'b'.repeat(40), expect.any(String));
   });
 });

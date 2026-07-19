@@ -21,14 +21,14 @@ export function makeResolvePr(octokit: Octokit) {
     owner: string,
     repo: string,
     headSha: string,
-  ): Promise<{ number: number; base: string } | null> => {
+  ): Promise<{ number: number; base: string; baseRef: string } | null> => {
     const { data: prs } = await octokit.rest.repos.listPullRequestsAssociatedWithCommit({
       owner,
       repo,
       commit_sha: headSha,
     });
     const pr = prs.find((p) => p.state === 'open');
-    return pr ? { number: pr.number, base: pr.base.sha } : null;
+    return pr ? { number: pr.number, base: pr.base.sha, baseRef: pr.base.ref } : null;
   };
 }
 

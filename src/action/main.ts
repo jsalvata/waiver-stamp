@@ -27,7 +27,7 @@ export interface RunDeps {
     owner: string,
     repo: string,
     headSha: string,
-  ) => Promise<{ number: number; base: string } | null>;
+  ) => Promise<{ number: number; base: string; baseRef: string } | null>;
   confirmChecksGreen: (
     octokit: Octokit,
     args: { owner: string; repo: string; headSha: string; required: readonly string[] },
@@ -46,7 +46,7 @@ export interface RunDeps {
   ) => Promise<void>;
   resolveRequiredChecks: (
     octokit: Octokit,
-    args: { owner: string; repo: string; base: string; repoDir: string },
+    args: { owner: string; repo: string; base: string; baseRef: string; repoDir: string },
   ) => Promise<ResolvedChecks>;
   repoDir?: string;
 }
@@ -65,7 +65,13 @@ export async function run(deps: RunDeps): Promise<void> {
 
     const dir = deps.repoDir ?? process.cwd();
     const { required, lockfileHonestyConfigured, bumpingAllowed } =
-      await deps.resolveRequiredChecks(octokit, { owner, repo, base: pr.base, repoDir: dir });
+      await deps.resolveRequiredChecks(octokit, {
+        owner,
+        repo,
+        base: pr.base,
+        baseRef: pr.baseRef,
+        repoDir: dir,
+      });
     if (required.length === 0)
       return core.info('no required checks discovered and no override set — not approving');
     const backstop = await deps.confirmChecksGreen(octokit, { owner, repo, headSha, required });

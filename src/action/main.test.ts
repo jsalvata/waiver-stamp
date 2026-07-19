@@ -25,7 +25,7 @@ const baseDeps = {
     ({
       /* fake rest surface */
     }) as never,
-  resolvePr: vi.fn(async () => ({ number: 7, base: 'b'.repeat(40) })),
+  resolvePr: vi.fn(async () => ({ number: 7, base: 'b'.repeat(40), baseRef: 'main' })),
   confirmChecksGreen: vi.fn(async () => ({ ok: true, pending: [], failed: [] })),
   fetchArtifact: vi.fn(async () => ({
     verdict: 'APPROVE',
@@ -164,6 +164,14 @@ describe('run', () => {
     await run(deps as never);
     expect(deps.g1).toHaveBeenCalledWith(expect.anything(), 'b'.repeat(40), 'a'.repeat(40));
     expect(deps.g2).toHaveBeenCalledWith(expect.anything(), 'b'.repeat(40), 'a'.repeat(40));
+  });
+  it('resolveRequiredChecks is called with the base ref (branch), not the base SHA', async () => {
+    const deps = { ...baseDeps };
+    await run(deps as never);
+    expect(deps.resolveRequiredChecks).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ base: 'b'.repeat(40), baseRef: 'main' }),
+    );
   });
   it('logs the guard offenders via core.warning when a guard refuses', async () => {
     vi.mocked(core.warning).mockClear();
