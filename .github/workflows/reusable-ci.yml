@@ -1,0 +1,22 @@
+# Reusable producer (design doc §2.1). Adopters call this from a one-line standalone
+# `waiver-stamp-ci.yml`; see examples/waiver-stamp-ci.yml. It runs waiver-stamp as
+# unprivileged pull_request CI and publishes the `waiver-stamp` check plus the
+# `waiver-stamp-report` artifact the reviewer consumes by head SHA. It never needs a write
+# token — forks get the default read-only GITHUB_TOKEN, which is all this job uses.
+name: waiver-stamp-ci-reusable
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+jobs:
+  waiver-stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # required: waiver-stamp walks the full base..head commit range
+          persist-credentials: false
+      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@v1.17.1

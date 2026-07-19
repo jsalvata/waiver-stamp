@@ -11,9 +11,17 @@ import { describe, expect, it } from 'vitest';
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
 
 const TEMPLATES = ['examples/waiver-stamp-ci.yml', 'examples/waiver-stamp-review.yml'] as const;
+// Not copy-pasted, but each carries the action pin the adopter transitively trusts when they
+// call it — so the release must keep it on the same immutable tag as the templates.
+const REUSABLE = [
+  '.github/workflows/reusable-ci.yml',
+  '.github/workflows/reusable-review.yml',
+] as const;
+const PINNED_REFS = [...TEMPLATES, ...REUSABLE] as const;
 
 /**
- * Every `uses: jsalvata/waiver-stamp/...@<ref>` ref in a file — including the ones quoted
+ * Every `uses: jsalvata/waiver-stamp/...@<ref>` ref in a file — the reusable-workflow refs the
+ * templates call and the action refs those reusable workflows wrap — including the ones quoted
  * inside comments, which an adopter is just as likely to copy as the live line.
  *
  * The ref charset is restricted to what a git ref can actually contain, rather than `\S+`:
@@ -21,7 +29,8 @@ const TEMPLATES = ['examples/waiver-stamp-ci.yml', 'examples/waiver-stamp-review
  * into the captured ref.
  */
 function usesRefs(source: string): string[] {
-  const pattern = /jsalvata\/waiver-stamp\/\.github\/actions\/[\w-]+@([\w.\-/]+)/g;
+  const pattern =
+    /jsalvata\/waiver-stamp\/\.github\/(?:actions\/[\w-]+|workflows\/[\w-]+\.yml)@([\w.\-/]+)/g;
   return [...source.matchAll(pattern)].flatMap((m) => m[1] ?? []);
 }
 
@@ -33,25 +42,25 @@ const TAG = /^v\d+\.\d+\.\d+$/;
 // the code holding that token change without the adopter re-pinning. The templates
 // therefore ship pinned to a release tag, kept current by scripts/set-release-version.sh
 // on every release (a `v*` tag is immutable: a repo ruleset restricts update+deletion).
-describe('the copy-paste templates pin an immutable ref', () => {
-  it.each(TEMPLATES)('%s pins every action to a release tag', (file) => {
+describe('the copy-paste templates and reusable workflows pin an immutable ref', () => {
+  it.each(PINNED_REFS)('%s pins every waiver-stamp ref to a release tag', (file) => {
     const refs = usesRefs(read(file));
     expect(refs.length).toBeGreaterThan(0); // regex went stale ⇒ the guard is not guarding
     for (const ref of refs) expect(ref).toMatch(TAG);
   });
 
-  it('pins the same version across every template', () => {
-    const refs = TEMPLATES.flatMap((f) => usesRefs(read(f)));
+  it('pins the same version across every template and reusable workflow', () => {
+    const refs = PINNED_REFS.flatMap((f) => usesRefs(read(f)));
     expect(new Set(refs).size).toBe(1);
   });
 
   it('pins the version this repo last released', () => {
-    // set-release-version.sh (semantic-release `prepare`) rewrites the templates to the
-    // version being published, so the committed tree always agrees with package.json. A
-    // mismatch means the rewrite silently no-op'd and the templates point at an older
-    // release than the docs around them claim.
+    // set-release-version.sh (semantic-release `prepare`) rewrites these files to the version
+    // being published, so the committed tree always agrees with package.json. A mismatch means
+    // the rewrite silently no-op'd and a file points at an older release than the docs around
+    // it claim.
     const version = JSON.parse(read('package.json')).version;
-    const refs = TEMPLATES.flatMap((f) => usesRefs(read(f)));
+    const refs = PINNED_REFS.flatMap((f) => usesRefs(read(f)));
     for (const ref of refs) expect(ref).toBe(`v${version}`);
   });
 });
@@ -62,7 +71,7 @@ describe('the copy-paste templates pin an immutable ref', () => {
 // is authoritative. So assert the whole set moves together. (This is the check that catches
 // set-release-version.sh silently ceasing to cover a file.)
 describe('every version-bearing string tracks the released version', () => {
-  const PINNED = [...TEMPLATES, 'docs/auto-approval-setup.md'] as const;
+  const PINNED = [...PINNED_REFS, 'docs/auto-approval-setup.md'] as const;
 
   // Anchored on their prefixes, so `actions/checkout@v4` and the node versions in the
   // ci-checks matrix example (`integration (9.12.0)`) are correctly left out — they are not

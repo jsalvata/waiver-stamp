@@ -84,6 +84,9 @@ importers:
       vitest:
         specifier: ^2.1.2
         version: 2.1.9(@types/node@24.13.3)
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
 
 packages:
 

@@ -1,15 +1,10 @@
-# Copy-paste template: the adopter's producer workflow.
-#
-# This job runs waiver-stamp as ordinary, unprivileged pull_request CI. It computes the
-# verdict over the PR range and publishes it as a named check ("waiver-stamp") plus a
-# run artifact ("waiver-stamp-report") that the privileged reviewer caller (see
-# waiver-stamp-review.yml in this directory) later consumes. It never needs a write
-# token — forks get the default read-only GITHUB_TOKEN, which is all this job uses.
+# Copy-paste template 1 of 2: the producer. Drop this file in as-is — it's a standalone
+# workflow and touches nothing you already have. It runs waiver-stamp as unprivileged
+# pull_request CI, publishing the `waiver-stamp` check + report artifact the reviewer
+# consumes. The hardened shape lives in the pinned reusable workflow, not here.
 #
 # See docs/auto-approval-setup.md for the full checklist this template is step 1 of.
-
-name: CI  # <-- EDIT: your existing CI workflow name. The reviewer caller's `workflows:`
-          #     list (in waiver-stamp-review.yml) must name this workflow exactly.
+name: waiver-stamp-ci
 
 on:
   pull_request:
@@ -18,26 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  # ── Your existing CI job(s) — lint / typecheck / test / build / … — stay here, unchanged.
-  #    Shown only so it's clear that `waiver-stamp` (below) is a sibling job at this same
-  #    `jobs:` level: keep your own jobs, just add `waiver-stamp` alongside them. waiver-stamp
-  #    needs none of your deps installed — it runs in its own npx sandbox.
-  build:                     # <-- EDIT: your existing job(s); replace with your real pipeline
-    runs-on: ubuntu-latest
-    steps:
-      - run: "..."           # <-- your lint / typecheck / test / build steps
-
   waiver-stamp:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # required: waiver-stamp walks the full base..head commit range
-          persist-credentials: false
-
-      - name: waiver-stamp
-        # Safe to paste as-is: we keep `v*` tags immutable (a repo ruleset). Prefer a full SHA
-        # if your policy is hash-pin-only — `gh api repos/jsalvata/waiver-stamp/commits/v1.17.1
-        # --jq .sha`. The pin also fixes the CLI version (it ships at this ref), so no `with:`.
-        uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@v1.17.1
+    # Immutable tag (we keep `v*` tags immutable via a repo ruleset). If your policy is
+    # hash-pin-only, swap the ref for the SHA it points at:
+    #   gh api repos/jsalvata/waiver-stamp/commits/v1.17.1 --jq .sha
+    uses: jsalvata/waiver-stamp/.github/workflows/reusable-ci.yml@v1.17.1

@@ -4,10 +4,11 @@
 # Rewrites every version-bearing string in the artifacts an adopter copy-pastes, so a
 # pasted template pins a ref that exists and the prose around it agrees:
 #
-#   examples/waiver-stamp-ci.yml      producer `uses:` pin
-#   examples/waiver-stamp-review.yml  reviewer `uses:` pin (incl. the copy quoted in the
-#                                     SECURITY header)
-#   docs/auto-approval-setup.md       the pin named in the setup guide
+#   examples/waiver-stamp-ci.yml            producer caller's reusable-workflow `uses:` pin
+#   examples/waiver-stamp-review.yml        reviewer caller's reusable-workflow `uses:` pin
+#   .github/workflows/reusable-ci.yml       the action pin the producer reusable wraps
+#   .github/workflows/reusable-review.yml   the action pin the reviewer reusable wraps
+#   docs/auto-approval-setup.md             the pin named in the setup guide
 #
 # Two distinct shapes carry the version, and MISSING ONE is the failure mode this script
 # exists to prevent — a template pinned to the new release while the `gh api …/commits/vX`
@@ -32,6 +33,8 @@ VER="${1:?usage: set-release-version.sh <version>}"
 FILES=(
   examples/waiver-stamp-ci.yml
   examples/waiver-stamp-review.yml
+  .github/workflows/reusable-ci.yml
+  .github/workflows/reusable-review.yml
   docs/auto-approval-setup.md
 )
 
