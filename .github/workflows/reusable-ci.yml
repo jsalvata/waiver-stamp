@@ -19,4 +19,4 @@ jobs:
         with:
           fetch-depth: 0  # required: waiver-stamp walks the full base..head commit range
           persist-credentials: false
-      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@v1.17.1
+      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp@v1.18.0
