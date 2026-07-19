@@ -241,11 +241,14 @@ from the engine, and it is unit-testable with vitest against a mocked Octokit.
   **both** the rulesets endpoint and classic branch protection and **unioned**; each surfaces
   only its own mechanism, so a repo may require checks under either or both (e.g. classic CI
   checks alongside a dedicated `waiver-stamp` ruleset, exactly what setup adds). The classic
-  read needs the App token's `administration: read`; the rules read needs only
-  `metadata: read`. The `waiver-stamp` check is self-excluded (its verdict is the artifact).
-  `ci-checks` remains an optional **empty-by-default override** for the no-App /
-  non-discoverable edge. `github-token` (default `${{ github.token }}`; a repo passes an App
-  / bot-PAT token to make APPROVE count and to grant the admin-read autodiscovery needs).
+  read needs the App token's `administration: read` and 403s a token lacking it (a permission
+  check before the existence check), which fails the whole union; the rules read needs only
+  `metadata: read`. So discovery only succeeds with the App token — a non-admin token's 403
+  makes discovery fail and the reviewer falls back to `ci-checks`, an optional
+  **empty-by-default override** (empty ⇒ fail-closed). The `waiver-stamp` check is
+  self-excluded (its verdict is the artifact). `github-token` (default `${{ github.token }}`;
+  a repo passes an App / bot-PAT token to make APPROVE count and to grant the admin-read
+  autodiscovery needs).
 - **Behaviour:** resolve the PR + `head_sha` from the `workflow_run` event (no-op if no open
   PR); confirm every autodiscovered required check (`waiver-stamp` self-excluded) is
   `success` on `head_sha` (not all green → no-op; a later completion wakes us); **locate the
@@ -341,9 +344,11 @@ required" as a prerequisite regardless.
 - **Required checks — autodiscovered.** The backstop set is the **union** of the base
   branch's rulesets endpoint and classic branch protection — each surfaces only its own
   mechanism, so a repo may require checks under either or both. The classic read needs the
-  App token's `administration: read`. The `waiver-stamp` check is self-excluded (its verdict
-  is the artifact). `ci-checks` remains an optional empty-by-default override for repos
-  without the App or whose required set isn't discoverable.
+  App token's `administration: read` and 403s a token lacking it (before the existence
+  check), which fails the whole union read — so a non-admin token can't autodiscover at all.
+  On that failure the reviewer falls back to `ci-checks`, an optional empty-by-default
+  override (empty ⇒ fail-closed). The `waiver-stamp` check is self-excluded (its verdict is
+  the artifact).
   *Why not deduce these from the trigger, or trigger on check events?* A trigger's
   `workflows:` are *workflow* names; a backstop is a *check-run* name (one workflow can emit
   many checks) — the mapping isn't 1:1, and the reviewer sees one event at a time, so it

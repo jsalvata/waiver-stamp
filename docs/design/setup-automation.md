@@ -207,34 +207,35 @@ honesty moot (G2 refuses every manifest/lockfile/resolution-input change):
 
 ### 2.6 Token & permissions for autodiscovery
 
-Reading required-status-check config splits by mechanism. The **rules** endpoint needs only
-`Metadata: read` — the default `GITHUB_TOKEN` can read it, public or private. **Classic**
-branch-protection reads require repository **Administration: read**, a scope the `GITHUB_TOKEN`
-cannot hold. So autodiscovery runs under the **App installation token**, whose App is granted
-`administration: read` (§3.1), so both halves of the union (§2.4) are always readable.
-Concretely:
+Reading required-status-check config splits by mechanism, but the union read is one operation.
+The **rules** endpoint needs only `Metadata: read`. The **classic** branch-protection endpoint
+requires repository **Administration: read** — and enforces that as a permission check *before*
+the existence check, so a token lacking it gets a **403** even on a repo with no classic
+protection at all. That 403 fails the union read outright. So autodiscovery requires the **App
+installation token**, whose App is granted `administration: read` (§3.1) — full stop; there is
+no partial (rules-only) autodiscovery. Concretely:
 
 - The reviewer uses the App token (when configured) for the autodiscovery read **and** the
-  approve post; it uses the default token only for the reads the default token *can* do.
+  approve post.
 - Because `waiver setup-repository` always provisions the App (§4.3), the setup-produced configuration
   always has an `administration: read`-capable token — so autodiscovery is available by
   default and the manual list is genuinely gone.
 
 **No-App fallback** (an adopter who declines the App and keeps the human click): the default
-token still autodiscovers **ruleset** checks (metadata suffices) but not **classic**
-protection (admin-only). A repo whose required checks live in classic protection therefore
-falls back to the optional override input (§2.7); empty + non-discoverable ⇒ fail-closed no-op
-with a clear log line, never a silent approve. This keeps the happy path list-free without
-stranding the default-token path.
+token **cannot** autodiscover — the classic read 403s, which fails the whole union — so the
+reviewer falls back to the optional override input (§2.7); empty ⇒ fail-closed no-op with a
+clear log line, never a silent approve. Autodiscovery is an App-token capability; without the
+App, checks must be listed via the override.
 
 ### 2.7 Override escape hatch (kept, empty by default)
 
 Retain a single optional input `ci-checks` on `review.yml`, **empty by default**. It is not
-part of the setup-produced happy path — `waiver setup-repository` writes no list. It exists only for
-(a) the no-App fallback of §2.6, and (b) repos whose required set isn't discoverable for
-some edge reason. Empty + non-discoverable ⇒ fail-closed no-op (log: "no required checks
-discovered and no override set — not approving"). The old `lockfile-honesty-checks` input is
-**removed** (folded into §2.5).
+part of the setup-produced happy path — `waiver setup-repository` writes no list. The reviewer
+consults it whenever discovery doesn't produce a set: the no-App fallback of §2.6 (a
+non-admin token 403s on the classic read), and any other discovery failure (e.g. a transient
+read error). Empty ⇒ fail-closed no-op (log: "no required checks discovered and no override
+set — not approving"). The old `lockfile-honesty-checks` input is **removed** (folded into
+§2.5).
 
 ### 2.8 Documentation strategy
 
@@ -663,9 +664,13 @@ alternatives → chosen (why)**.
 
 - **V1 — `/rules/branches/{branch}` permission (resolved).** The rules endpoint requires only
   `Metadata: read` and works on the default token, public or private repo; classic protection
-  requires `administration: read`. The rules endpoint does not surface classic checks, so
-  discovery reads both endpoints and unions the results (§2.4). The App keeps
-  `administration: read` (conservative) because the classic read needs it.
+  requires `administration: read`, enforced as a permission check *before* the existence
+  check — a token without it gets a **403** on the classic endpoint even where no classic
+  protection exists. The rules endpoint does not surface classic checks, so discovery reads
+  both endpoints and unions the results (§2.4); without admin, that union read fails entirely
+  and the reviewer falls back to the override (§2.7). Autodiscovery is therefore an App-token
+  capability, not a default-token one — the App keeps `administration: read` (§3.1) so the
+  classic read always succeeds.
 - **V3 — localhost as manifest `redirect_url`.** Confirm GitHub accepts an
   `http://localhost:<port>` redirect in the manifest flow (Probot relies on it — high
   confidence, verify at build).

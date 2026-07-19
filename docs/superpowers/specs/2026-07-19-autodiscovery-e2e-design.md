@@ -34,33 +34,45 @@ A new integration suite, isolated from the offline unit tests.
 
 ### 1. `src/action/discover-checks.integration.test.ts` (new)
 
-Three checks, each hitting real GitHub:
+Five checks hitting real GitHub, split by token scope: the classic endpoint 403s a non-admin
+token (a permission check before the existence check), so the discovery-**success** checks need
+an admin token while the resolve seam and the 403 itself are exercised with a non-admin token.
 
-- **Check A — full `resolve → discover` chain (the regression the bug needed).** Requires a real
-  open PR's head SHA, supplied via `WAIVER_E2E_HEAD_SHA` (in CI: the PR event's
-  `pull_request.head.sha`). `makeResolvePr(octokit)(owner, repo, headSha)` → assert `baseRef`
-  is a real ref (does **not** match `/^[0-9a-f]{40}$/`) and `base` **does** match a 40-hex SHA;
-  then `discoverRequiredChecks(octokit, owner, repo, baseRef)` and, when `baseRef === 'main'`,
-  assert the result contains `lockfile-assay`. Feeding a SHA to the endpoint (the original bug)
-  makes this fail. `it.skipIf(!process.env.WAIVER_E2E_HEAD_SHA)`.
-- **Check B — rules endpoint, this repo.** `discoverRequiredChecks(octokit, 'jsalvata',
-  'waiver-stamp', 'main')` → `toContain('lockfile-assay')`. Runs whenever the suite runs (the
-  repo is public — the rules endpoint is readable even unauthenticated). Confirms the real read
-  + parse independent of a PR context.
-- **Check C — classic endpoint, admin-gated.** With an admin token,
-  `discoverRequiredChecks(adminOctokit, 'mixmaxhq', 'monorepo-experimental', 'main')` →
-  non-empty (its real classic required checks; asserting non-emptiness, not exact names, to
-  avoid brittleness against a repo we don't own). `it.skipIf(!process.env.WAIVER_E2E_ADMIN_TOKEN)`.
+- **Check A1 — resolve seam (non-admin).** `makeResolvePr(octokit)(owner, repo, headSha)` needs
+  only `pull-requests: read`. Requires a real open PR's head SHA, supplied via
+  `WAIVER_E2E_HEAD_SHA` (in CI: the PR event's `pull_request.head.sha`). Asserts `baseRef` is a
+  real ref (does **not** match `/^[0-9a-f]{40}$/`) and `base` **does** match a 40-hex SHA — the
+  sha/ref regression the bug needed. `it.skipIf(!WAIVER_E2E_NONADMIN_TOKEN || !WAIVER_E2E_HEAD_SHA)`.
+- **Check A2 — full `resolve → discover` chain (admin).** Same resolve, then
+  `discoverRequiredChecks(octokit, owner, repo, pr.baseRef)`; when `baseRef === 'main'`, assert
+  the result contains `lockfile-assay`. `it.skipIf(!WAIVER_E2E_ADMIN_TOKEN || !WAIVER_E2E_HEAD_SHA)`.
+- **Check B — rules endpoint, this repo (admin).** `discoverRequiredChecks(adminOctokit,
+  'jsalvata', 'waiver-stamp', 'main')` → `toContain('lockfile-assay')`. Confirms the real read +
+  parse independent of a PR context. `it.skipIf(!WAIVER_E2E_ADMIN_TOKEN)`.
+- **Check C — classic endpoint, admin-gated.** `discoverRequiredChecks(adminOctokit,
+  'mixmaxhq', 'monorepo-experimental', 'main')` → non-empty (its real classic required checks;
+  asserting non-emptiness, not exact names, to avoid brittleness against a repo we don't own).
+  `it.skipIf(!WAIVER_E2E_ADMIN_TOKEN)`.
+- **Check D — the 403 the override fallback exists for (non-admin).**
+  `discoverRequiredChecks(nonadminOctokit, 'jsalvata', 'waiver-stamp', 'main')` rejects — the
+  classic read 403s a non-admin token before the union can return.
+  `it.skipIf(!WAIVER_E2E_NONADMIN_TOKEN)`.
 
 Octokit is built from `@actions/github`'s `getOctokit(token)`. Token resolution:
-- Checks A/B: `process.env.GITHUB_TOKEN` if present, else an unauthenticated Octokit (public
-  rules endpoint).
-- Check C: `getOctokit(process.env.WAIVER_E2E_ADMIN_TOKEN)`.
+- `WAIVER_E2E_ADMIN_TOKEN` — a known-admin token (holds `administration: read`) — gates A2, B, C.
+- `WAIVER_E2E_NONADMIN_TOKEN` — a known-non-admin token — gates A1, D. In CI: the default
+  `github.token`.
+- `WAIVER_E2E_HEAD_SHA` — a real open PR's head SHA — gates A1, A2.
+
+The split exists because discovery-success needs admin (the classic endpoint 403s a non-admin
+token), while the resolve seam and the 403 itself are exercised with the non-admin token — so
+CI (default `github.token`) runs A1 + D on every PR, and the admin-gated checks (A2, B, C) run
+locally or once an admin secret exists.
 
 `WAIVER_E2E_ADMIN_TOKEN` is **any** token holding `administration: read` on the classic target —
 NOT the reviewer App secrets (those are a per-adopter-repo credential, scoped to a
 rulesets-only repo, and don't exist until setup). Locally: `WAIVER_E2E_ADMIN_TOKEN=$(gh auth
-token)`. In CI: a dedicated PAT/App secret, added later; until then check C auto-skips.
+token)`. In CI: a dedicated PAT/App secret, added later; until then A2/B/C auto-skip.
 
 ### 2. Vitest wiring
 
@@ -71,18 +83,20 @@ token)`. In CI: a dedicated PAT/App secret, added later; until then check C auto
 ### 3. CI wiring
 
 - A **dedicated CI job** (separate from the unit `build` job so live-API flakiness can't block
-  unrelated work) that runs `pnpm test:integration`, passing
-  `WAIVER_E2E_HEAD_SHA: ${{ github.event.pull_request.head.sha }}` on PR events so check A runs.
-- The job needs no extra secret for A/B (default `GITHUB_TOKEN`). Check C stays skipped until a
-  `WAIVER_E2E_ADMIN_TOKEN` secret is provided.
+  unrelated work) that runs `pnpm test:integration`, passing `WAIVER_E2E_NONADMIN_TOKEN: ${{
+  github.token }}` and `WAIVER_E2E_HEAD_SHA: ${{ github.event.pull_request.head.sha }}` on PR
+  events — so checks A1 and D run on every PR.
+- The admin-gated checks (A2, B, C) stay skipped until a `WAIVER_E2E_ADMIN_TOKEN` secret is
+  provided.
 
 ## Data flow
 
 ```
-CI (PR event) ──WAIVER_E2E_HEAD_SHA──▶ Check A: makeResolvePr(headSha) ─▶ {base:SHA, baseRef:ref}
-                                                     └─▶ discoverRequiredChecks(baseRef) ─▶ real checks
-default GITHUB_TOKEN ─▶ Check B: discoverRequiredChecks('main') ─▶ ['lockfile-assay', …]
-WAIVER_E2E_ADMIN_TOKEN ─▶ Check C: discoverRequiredChecks(monorepo-experimental,'main') ─▶ non-empty
+CI (PR event) ──WAIVER_E2E_NONADMIN_TOKEN=github.token──▶ A1: makeResolvePr(headSha) ─▶ {base:SHA, baseRef:ref}
+                                                       └─▶ D: discoverRequiredChecks('main') ─▶ rejects (403)
+WAIVER_E2E_ADMIN_TOKEN ─▶ A2: resolve(headSha) → discoverRequiredChecks(baseRef) ─▶ real checks
+                       ─▶ B: discoverRequiredChecks('main') ─▶ ['lockfile-assay', …]
+                       ─▶ C: discoverRequiredChecks(monorepo-experimental,'main') ─▶ non-empty
 ```
 
 ## Error / flakiness handling
@@ -96,9 +110,10 @@ WAIVER_E2E_ADMIN_TOKEN ─▶ Check C: discoverRequiredChecks(monorepo-experimen
 
 ## Testing (of this test)
 
-The integration suite *is* the test. Its own correctness is verified by running it: check B and
-(with `$(gh auth token)`) check C locally, and check A by pushing a PR (its own PR exercises A,
-base `main`, expecting `lockfile-assay`).
+The integration suite *is* the test. Its own correctness is verified by running it: checks D
+and (with `$(gh auth token)` as `WAIVER_E2E_ADMIN_TOKEN`) B and C locally, and A1/A2 by pushing
+a PR (its own PR exercises the resolve→discover chain, base `main`, expecting
+`lockfile-assay`).
 
 ## Placement
 
