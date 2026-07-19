@@ -49,6 +49,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "lint": "biome check .",
     "format": "biome format --write .",
     "prepare": "husky",
