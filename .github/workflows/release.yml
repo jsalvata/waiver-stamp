@@ -44,6 +44,10 @@ jobs:
           permission-contents: write
           permission-issues: write
           permission-pull-requests: write
+          # The release commit rewrites the version pins inside the reusable workflows
+          # (.github/workflows/reusable-*.yml). GitHub refuses a push from an App that touches
+          # .github/workflows/** without this permission — the App must also be granted it.
+          permission-workflows: write
 
       - name: Release
         run: pnpm exec semantic-release
