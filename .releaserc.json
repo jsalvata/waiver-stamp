@@ -20,6 +20,8 @@
           "package.json",
           "examples/waiver-stamp-ci.yml",
           "examples/waiver-stamp-review.yml",
+          ".github/workflows/reusable-ci.yml",
+          ".github/workflows/reusable-review.yml",
           "docs/auto-approval-setup.md"
         ],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"

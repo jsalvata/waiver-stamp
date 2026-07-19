@@ -85,6 +85,32 @@ describe('every version-bearing string tracks the released version', () => {
   });
 });
 
+// A file `set-release-version.sh` rewrites but `.releaserc.json` does NOT list as a git asset is
+// the trap this catches: the `prepare` step edits it on disk, but `@semantic-release/git` only
+// commits its `assets`, so the rewrite is silently dropped — the release ships that file pointing
+// at the PREVIOUS version while package.json and the committed assets moved on. The script's own
+// verify step can't see it (the file is correct on disk when it runs); only the mismatch between
+// the two lists reveals it. So assert every rewritten file is committed.
+describe('every rewritten file is a release asset', () => {
+  it('set-release-version.sh FILES ⊆ .releaserc.json git assets', () => {
+    const script = read('scripts/set-release-version.sh');
+    const filesBlock = script.match(/FILES=\(([^)]*)\)/)?.[1] ?? '';
+    const rewritten = filesBlock
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    expect(rewritten.length).toBeGreaterThan(0); // regex went stale ⇒ the guard is not guarding
+
+    const config = JSON.parse(read('.releaserc.json'));
+    const gitPlugin = config.plugins.find(
+      (p: unknown) => Array.isArray(p) && p[0] === '@semantic-release/git',
+    ) as [string, { assets: string[] }] | undefined;
+    const assets = new Set(gitPlugin?.[1]?.assets ?? []);
+
+    for (const file of rewritten) expect(assets).toContain(file);
+  });
+});
+
 // The sharpest edge in the repo (fixed in #32): the producer action installs the CLI at run
 // time, so if it installed an UNPINNED package the adopter's careful `@v1.11.2` would pin the
 // action but not the code that computes the verdict — the tool would float with npm's `latest`
