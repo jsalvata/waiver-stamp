@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Called by semantic-release (prepare) with the version it is about to publish.
 #
-# Rewrites every version-bearing string in the artifacts an adopter copy-pastes, so a
-# pasted template pins a ref that exists and the prose around it agrees:
+# Rewrites every version-bearing string across the adopter-facing files that carry a pin — the
+# templates an adopter copies AND the reusable workflows those templates call:
 #
 #   examples/waiver-stamp-ci.yml            producer caller's reusable-workflow `uses:` pin
 #   examples/waiver-stamp-review.yml        reviewer caller's reusable-workflow `uses:` pin

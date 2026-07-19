@@ -1,18 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-// Grep-level guards over the artifacts an adopter copy-pastes. Nothing exercises the
-// pins or the templates: the dogfood `waiver-stamp` job stamps with `node dist/cli.js`
-// from the source under test, and the action-selftest workflow runs the composite action
-// but against this PR's own range, not the pinned templates. So a broken pin here passes
-// every other check and ships. These tests are the only thing standing between a bad pin
-// and an adopter's write token.
+// Grep-level guards over every version pin an adopter trusts: the refs in the templates they
+// copy, and the action refs inside the reusable workflows those templates call (not copied, but
+// transitively trusted the moment a caller pins one). Nothing exercises the pins or the
+// templates: the dogfood `waiver-stamp` job stamps with `node dist/cli.js` from the source
+// under test, and the action-selftest workflow runs the composite action but against this PR's
+// own range, not the pinned templates. So a broken pin here passes every other check and ships.
+// These tests are the only thing standing between a bad pin and an adopter's write token.
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
 
 const TEMPLATES = ['examples/waiver-stamp-ci.yml', 'examples/waiver-stamp-review.yml'] as const;
-// Not copy-pasted, but each carries the action pin the adopter transitively trusts when they
-// call it — so the release must keep it on the same immutable tag as the templates.
 const REUSABLE = [
   '.github/workflows/reusable-ci.yml',
   '.github/workflows/reusable-review.yml',
