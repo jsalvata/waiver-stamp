@@ -1,8 +1,8 @@
-# Reusable producer (design doc §2.1). Adopters call this from a one-line standalone
+# Reusable producer (design doc §2.1). Adopters call this from a thin standalone
 # `waiver-stamp-ci.yml`; see examples/waiver-stamp-ci.yml. It runs waiver-stamp as
 # unprivileged pull_request CI and publishes the `waiver-stamp` check plus the
 # `waiver-stamp-report` artifact the reviewer consumes by head SHA. It never needs a write
-# token — forks get the default read-only GITHUB_TOKEN, which is all this job uses.
+# token — gets the default read-only GITHUB_TOKEN, which is all it needs.
 name: waiver-stamp-ci-reusable
 
 on:
