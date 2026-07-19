@@ -7,7 +7,7 @@
 #
 # WHY THIS SHAPE (the pwn-request defense, design doc §3.4):
 #
-#   1. `uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.16.0` is pinned to
+#   1. `uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.17.0` is pinned to
 #      an immutable ref of an EXTERNAL repo (the `v*` tags are protected against being moved
 #      or deleted by a repo ruleset; a full commit SHA is the hash-pinned alternative). That
 #      makes the action's code trusted — a PR against YOUR repo cannot alter what this job
@@ -79,8 +79,8 @@ jobs:
 
       # Immutable tag (see the SECURITY header). Paste as-is; or, if your policy is
       # hash-pin-only, swap in the SHA it points at:
-      #   gh api repos/jsalvata/waiver-stamp/commits/v1.16.0 --jq .sha
-      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.16.0
+      #   gh api repos/jsalvata/waiver-stamp/commits/v1.17.0 --jq .sha
+      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.17.0
         with:
           # These are CHECK-RUN names that must be green on the head SHA — NOT workflow job ids.
           # The two differ whenever a job sets `name:` or uses a matrix:

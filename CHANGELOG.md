@@ -1,3 +1,19 @@
+# [1.17.0](https://github.com/jsalvata/waiver-stamp/compare/v1.16.0...v1.17.0) (2026-07-19)
+
+
+### Bug Fixes
+
+* discover required checks by base ref, not SHA ([adcb0a9](https://github.com/jsalvata/waiver-stamp/commit/adcb0a9e52844ad8914e249faf203aa4acd0293d))
+* fail closed on non-404 discovery read errors ([ed0e46e](https://github.com/jsalvata/waiver-stamp/commit/ed0e46e102dc7ccfaf045b83aa3fcb19aae8b84b))
+* fail closed when no required checks are discovered ([51ed23f](https://github.com/jsalvata/waiver-stamp/commit/51ed23f46650bbe56154f7ae0a875a4398244f58))
+* union rules and classic required checks ([f2f6736](https://github.com/jsalvata/waiver-stamp/commit/f2f673686a6a26b6fdc5ef10cc2780ca62281aaa))
+
+
+### Features
+
+* autodiscover required checks from branch protection ([84852ec](https://github.com/jsalvata/waiver-stamp/commit/84852ecdf570518c0765d665a44eaccb13b51254))
+* warn about lockfile honesty only when bumping is allowed ([00058ca](https://github.com/jsalvata/waiver-stamp/commit/00058cacf948328e72e7b1f288ecd9ac5931a69a))
+
 # [1.16.0](https://github.com/jsalvata/waiver-stamp/compare/v1.15.0...v1.16.0) (2026-07-16)
 
 
