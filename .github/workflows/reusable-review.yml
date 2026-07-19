@@ -1,6 +1,6 @@
 # Reusable privileged reviewer (design doc §2.1, §3.4). Adopters pin this at an immutable
-# @vX ref and call it from a one-line `waiver-stamp-review.yml` (see examples/). It holds a
-# pull-requests: write token — the credential that removes human review by posting an
+# @vX ref and call it from a thin `waiver-stamp-review.yml` (see examples/). It holds a
+# pull-requests: write token — the credential that can replace human review by posting an
 # APPROVE — so the pwn-request defense lives here, centrally, where an adopter's thin caller
 # cannot misconfigure it.
 #
