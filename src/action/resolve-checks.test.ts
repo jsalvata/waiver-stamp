@@ -60,4 +60,18 @@ describe('makeResolveRequiredChecks (autodiscovery)', () => {
     expect(discoverRequiredChecks).toHaveBeenCalledWith(octokit, 'o', 'r', 'main');
     expect(fileAtRef).toHaveBeenCalledWith('/tmp/x', 'b'.repeat(40), expect.any(String));
   });
+  it('falls back to the ci-checks override when discovery fails (e.g. a non-admin 403)', async () => {
+    vi.mocked(discoverRequiredChecks).mockRejectedValue(
+      Object.assign(new Error('403'), { status: 403 }),
+    );
+    vi.mocked(fileAtRef).mockResolvedValue('{}');
+    const r = await makeResolveRequiredChecks({ ciChecks: ['build'] })(octokit, args);
+    expect(r.required).toEqual(['build']);
+  });
+  it('fails closed (empty required) when discovery fails and no override is set', async () => {
+    vi.mocked(discoverRequiredChecks).mockRejectedValue(new Error('boom'));
+    vi.mocked(fileAtRef).mockResolvedValue('{}');
+    const r = await makeResolveRequiredChecks({ ciChecks: [] })(octokit, args);
+    expect(r.required).toEqual([]);
+  });
 });
