@@ -8,11 +8,13 @@ interface BranchRule {
 }
 
 /**
- * The required status-check contexts for `base`, read from the rulesets endpoint (which
- * surfaces both classic protection and rulesets), falling back to classic protection when the
- * rules endpoint yields none. Both reads need repo-config read access — in the setup-produced
- * config the action's token is the App token with `administration: read` (spec §2.6). Any read
- * error is swallowed to `[]`; an empty set is fail-closed upstream (no-op, never approve).
+ * The required status-check contexts for `base`, read from BOTH the rulesets endpoint and
+ * classic branch protection and unioned — each surfaces only its own mechanism, and a repo can
+ * require checks under either or both (e.g. classic CI checks plus a dedicated `waiver-stamp`
+ * ruleset, which is exactly what our setup creates). Both reads need repo-config read access —
+ * in the setup-produced config the action's token is the App token with `administration: read`
+ * (spec §2.6). Each source's read error is swallowed to `[]`; an empty union is fail-closed
+ * upstream (no-op, never approve).
  */
 export async function discoverRequiredChecks(
   octokit: Octokit,
@@ -20,9 +22,11 @@ export async function discoverRequiredChecks(
   repo: string,
   base: string,
 ): Promise<string[]> {
-  const fromRules = await readRules(octokit, owner, repo, base);
-  if (fromRules.length > 0) return fromRules;
-  return readClassic(octokit, owner, repo, base);
+  const [fromRules, fromClassic] = await Promise.all([
+    readRules(octokit, owner, repo, base),
+    readClassic(octokit, owner, repo, base),
+  ]);
+  return [...new Set([...fromRules, ...fromClassic])];
 }
 
 async function readRules(

@@ -12,6 +12,9 @@ function octo(handlers: Record<string, unknown | (() => never)>) {
 }
 const RULES = 'GET /repos/{owner}/{repo}/rules/branches/{branch}';
 const CLASSIC = 'GET /repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks';
+const throwing = () => {
+  throw new Error('404');
+};
 
 describe('discoverRequiredChecks', () => {
   it('collects contexts from required_status_checks rules (incl. matrix legs)', async () => {
@@ -29,6 +32,7 @@ describe('discoverRequiredChecks', () => {
           },
         },
       ],
+      [CLASSIC]: throwing,
     });
     expect(await discoverRequiredChecks(o, 'o', 'r', 'main')).toEqual([
       'build',
@@ -36,19 +40,48 @@ describe('discoverRequiredChecks', () => {
       'integration (10.0.0)',
     ]);
   });
-  it('falls back to classic protection when the rules endpoint yields none', async () => {
-    const o = octo({ [RULES]: [], [CLASSIC]: { contexts: ['build'] } });
+  it('unions rules and classic when both are non-empty and disjoint', async () => {
+    const o = octo({
+      [RULES]: [
+        {
+          type: 'required_status_checks',
+          parameters: { required_status_checks: [{ context: 'a' }] },
+        },
+      ],
+      [CLASSIC]: { contexts: ['b'] },
+    });
+    expect(await discoverRequiredChecks(o, 'o', 'r', 'main')).toEqual(['a', 'b']);
+  });
+  it('unions and dedups overlapping contexts', async () => {
+    const o = octo({
+      [RULES]: [
+        {
+          type: 'required_status_checks',
+          parameters: { required_status_checks: [{ context: 'a' }, { context: 'b' }] },
+        },
+      ],
+      [CLASSIC]: { contexts: ['b', 'c'] },
+    });
+    expect(await discoverRequiredChecks(o, 'o', 'r', 'main')).toEqual(['a', 'b', 'c']);
+  });
+  it('rules non-empty, classic 404s → rules only', async () => {
+    const o = octo({
+      [RULES]: [
+        {
+          type: 'required_status_checks',
+          parameters: { required_status_checks: [{ context: 'a' }] },
+        },
+      ],
+      [CLASSIC]: throwing,
+    });
+    expect(await discoverRequiredChecks(o, 'o', 'r', 'main')).toEqual(['a']);
+  });
+  it('classic non-empty, rules 404s → classic only', async () => {
+    const o = octo({ [RULES]: throwing, [CLASSIC]: { contexts: ['build'] } });
     expect(await discoverRequiredChecks(o, 'o', 'r', 'main')).toEqual(['build']);
   });
   it('returns [] when neither endpoint yields checks (both throw / empty)', async () => {
-    const o = octo({
-      [RULES]: () => {
-        throw new Error('404');
-      },
-      [CLASSIC]: () => {
-        throw new Error('404');
-      },
-    });
+    const o = octo({ [RULES]: throwing, [CLASSIC]: throwing });
     expect(await discoverRequiredChecks(o, 'o', 'r', 'main')).toEqual([]);
   });
 });
