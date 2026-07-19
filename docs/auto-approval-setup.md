@@ -72,21 +72,20 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
 
 2. **Add the privileged reviewer caller.** Copy
    [`examples/waiver-stamp-review.yml`](../examples/waiver-stamp-review.yml) in as-is,
-   editing its marked `# <-- EDIT` points: your CI workflow name(s) and `ci-checks` (plus
-   `lockfile-honesty-checks` if you have a lockfile-honesty gate). The `uses:` ref already
+   editing its marked `# <-- EDIT` point: your CI workflow name(s). The `uses:` ref already
    points at the current release; if your policy is hash-pin-only you can't paste it verbatim —
    also swap its `uses:` refs (the action and `actions/checkout`) for SHAs. See
    [Which ref to pin](#which-ref-to-pin).
    > This is the only workflow that holds a write token. Its checkout shape is
    > security-load-bearing — read its header before changing anything else.
    >
-   > `ci-checks` takes **check-run names, not workflow job ids** — they diverge whenever a job
-   > sets `name:` or uses a matrix. A matrix job `integration` over two Node versions produces
-   > `integration (9.12.0)` and `integration (10.0.0)`, and each leg needs its own entry; the
-   > bare id `integration` matches nothing, and the reviewer then waits forever rather than
-   > approve on an unverified check (fail-closed). For the same reason, list only checks that
-   > run on pull requests — a push-only job like `release` never reports on the PR head SHA, so
-   > listing it hangs the reviewer just as surely. Read the real names off any recent PR with
+   > The reviewer's required-check set is auto-discovered from the base branch's protection —
+   > read from both the rules endpoint and classic protection and unioned, since each surfaces
+   > only its own mechanism — so the check-run names, matrix legs included, need no manual
+   > listing. `ci-checks` is an empty-by-default override for the
+   > no-App path (discovery empty ⇒ fall back to this list); if you do set it, it takes
+   > **check-run names, not workflow job ids** — they diverge whenever a job sets `name:` or
+   > uses a matrix. Read the real names off any recent PR with
    > `gh api repos/OWNER/REPO/commits/<head-sha>/check-runs --jq '.check_runs[].name'`.
 
 3. **Decide your `.waiver-stamp.json` policy — or knowingly skip it.** The file is optional and
@@ -171,13 +170,12 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > This token also runs **our** code with **your** write credential, so this is the case where
    > hash-pinning earns its keep — see [Which ref to pin](#which-ref-to-pin).
 
-9. *(Optional caveat)* **If you set `allowBumping` without wiring a lockfile-honesty check**
-   into `lockfile-honesty-checks`, know the accepted residual.
-   > waiver-stamp assumes the lockfile is honest, so a poisoned tarball behind an allowlisted
-   > package name (version string unchanged) could pass the dependency-bump gates undetected.
-   > The reviewer's APPROVE body names this caveat whenever `lockfile-honesty-checks` is empty —
-   > not silent, but a real gap until a lockfile-honesty tool (e.g. a lockfile-firewall product)
-   > is wired in as a required check.
+9. *(If you set `allowBumping`)* **Name your lockfile-honesty check** in
+   `.waiver-stamp.json`'s `lockfileHonestyCheck` field (e.g. the lockfile-assay job/check
+   name) — autodiscovery then confirms it's a required check.
+   > The APPROVE body carries the "assumes the lockfile is honest" warning only when
+   > `allowBumping` is set and no required check matches `lockfileHonestyCheck`. With
+   > `allowBumping` empty, no bump can ride in, so the caveat never appears.
 
 ## When a waivered PR falls behind `main`
 

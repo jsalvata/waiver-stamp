@@ -31,4 +31,3 @@ jobs:
       - uses: ./.github/actions/waiver-stamp-review   # trusted default-branch action code
         with:
           ci-checks: build          # the backstop only; NOT the waiver-stamp check (its verdict is the artifact, §4.2)
-          lockfile-honesty-checks: ''

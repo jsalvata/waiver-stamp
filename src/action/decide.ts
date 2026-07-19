@@ -5,6 +5,8 @@ export interface DecideInput {
   guardsPass: boolean;
   backstopGreen: boolean;
   lockfileHonestyConfigured: boolean;
+  /** Whether the base config allows any dependency bump (empty ⇒ lockfile honesty is moot). */
+  bumpingAllowed: boolean;
 }
 export interface Outcome {
   action: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT' | 'NONE';
@@ -39,7 +41,7 @@ export function decideReview(i: DecideInput): Outcome {
   if (!i.backstopGreen) return { action: 'NONE', body: '' };
 
   if (i.verdict === 'APPROVE') {
-    const warn = i.lockfileHonestyConfigured ? '' : LOCKFILE_WARNING;
+    const warn = i.bumpingAllowed && !i.lockfileHonestyConfigured ? LOCKFILE_WARNING : '';
     return {
       action: 'APPROVE',
       body: `waiver-stamp: every commit is mechanically stamped — this PR is fully accounted for.${warn}`,

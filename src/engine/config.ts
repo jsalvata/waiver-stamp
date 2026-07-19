@@ -50,6 +50,13 @@ export const ConfigSchema = z
       .array(z.string().min(1))
       .default([])
       .describe('The dependency-bump allow-list: scope prefixes or exact names (§6.3).'),
+    lockfileHonestyCheck: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Name of the required check that proves the lockfile is honest (e.g. the lockfile-assay job/check name). When it is a required check, the "assumes the lockfile is honest" caveat is dropped from APPROVE reviews (spec §2.5).',
+      ),
   })
   .strict()
   .describe('Project config at .waiver-stamp.json (repo root); each key is a standing policy.');

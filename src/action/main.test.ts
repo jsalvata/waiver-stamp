@@ -25,7 +25,7 @@ const baseDeps = {
     ({
       /* fake rest surface */
     }) as never,
-  resolvePr: vi.fn(async () => ({ number: 7, base: 'b'.repeat(40) })),
+  resolvePr: vi.fn(async () => ({ number: 7, base: 'b'.repeat(40), baseRef: 'main' })),
   confirmChecksGreen: vi.fn(async () => ({ ok: true, pending: [], failed: [] })),
   fetchArtifact: vi.fn(async () => ({
     verdict: 'APPROVE',
@@ -40,6 +40,7 @@ const baseDeps = {
   resolveRequiredChecks: vi.fn(async () => ({
     required: ['CI'],
     lockfileHonestyConfigured: false,
+    bumpingAllowed: true,
   })),
 };
 
@@ -58,12 +59,61 @@ describe('run', () => {
     await run(deps as never);
     expect(deps.postOutcome).not.toHaveBeenCalled();
   });
+  it('no required checks discovered → no-op (fail-closed, never vacuously green)', async () => {
+    const deps = {
+      ...baseDeps,
+      resolveRequiredChecks: vi.fn(async () => ({
+        required: [],
+        lockfileHonestyConfigured: false,
+        bumpingAllowed: false,
+      })),
+      confirmChecksGreen: vi.fn(async () => ({ ok: true, pending: [], failed: [] })),
+      postOutcome: vi.fn(async () => {}),
+    };
+    await run(deps as never);
+    expect(deps.postOutcome).not.toHaveBeenCalled();
+    expect(deps.confirmChecksGreen).not.toHaveBeenCalled();
+  });
   it('happy path posts an APPROVE outcome', async () => {
     const deps = { ...baseDeps, postOutcome: vi.fn(async () => {}) };
     await run(deps as never);
     expect(deps.postOutcome).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ outcome: expect.objectContaining({ action: 'APPROVE' }) }),
+    );
+  });
+  it('bumpingAllowed:true + no honesty check includes the lockfile caveat', async () => {
+    const deps = { ...baseDeps, postOutcome: vi.fn(async () => {}) };
+    await run(deps as never);
+    expect(deps.postOutcome).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        outcome: expect.objectContaining({
+          action: 'APPROVE',
+          body: expect.stringContaining('assumes the lockfile is honest'),
+        }),
+      }),
+    );
+  });
+  it('bumpingAllowed:false from resolveRequiredChecks suppresses the lockfile caveat', async () => {
+    const deps = {
+      ...baseDeps,
+      resolveRequiredChecks: vi.fn(async () => ({
+        required: ['CI'],
+        lockfileHonestyConfigured: false,
+        bumpingAllowed: false,
+      })),
+      postOutcome: vi.fn(async () => {}),
+    };
+    await run(deps as never);
+    expect(deps.postOutcome).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        outcome: expect.objectContaining({
+          action: 'APPROVE',
+          body: expect.not.stringContaining('assumes the lockfile is honest'),
+        }),
+      }),
     );
   });
   it('a collaborator error is fail-closed (no review posted)', async () => {
@@ -114,6 +164,14 @@ describe('run', () => {
     await run(deps as never);
     expect(deps.g1).toHaveBeenCalledWith(expect.anything(), 'b'.repeat(40), 'a'.repeat(40));
     expect(deps.g2).toHaveBeenCalledWith(expect.anything(), 'b'.repeat(40), 'a'.repeat(40));
+  });
+  it('resolveRequiredChecks is called with the base ref (branch), not the base SHA', async () => {
+    const deps = { ...baseDeps };
+    await run(deps as never);
+    expect(deps.resolveRequiredChecks).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ base: 'b'.repeat(40), baseRef: 'main' }),
+    );
   });
   it('logs the guard offenders via core.warning when a guard refuses', async () => {
     vi.mocked(core.warning).mockClear();

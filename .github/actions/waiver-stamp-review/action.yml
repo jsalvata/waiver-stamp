@@ -5,10 +5,6 @@ inputs:
     description: Newline/comma list of check-run names that must be success on the head SHA.
     required: false
     default: ''
-  lockfile-honesty-checks:
-    description: Newline/comma list of lockfile-honesty check-run names (empty ⇒ warn on approve).
-    required: false
-    default: ''
   github-token:
     description: Token that posts the review. Pass an App/bot-PAT to make APPROVE count.
     required: false

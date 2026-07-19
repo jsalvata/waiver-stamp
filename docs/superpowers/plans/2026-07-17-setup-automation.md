@@ -31,7 +31,7 @@ Reasoning order: feature spike → prep → cleanup. Ship order: 0 → 1..N → 
 - **PR 0 — Prep refactor** (`prep-check-resolution` off `main`): extract the reviewer's inline backstop-set + honesty-flag computation (`main.ts:62`, `main.ts:93`) behind a `resolveRequiredChecks` seam that today returns the static inputs. Behavior-preserving, full suite green before/after.
   Removes friction: *"the backstop set and honesty flag are computed inline from inputs, so autodiscovery can't be slotted in without editing `run()`."*
 - **PRs 1..N — Feature:**
-  - **PR 1 — Autodiscovery** (`setup-automation-1` off prep): implement the seam against the rules endpoint (App token), self-exclude `waiver-stamp`, read the honesty-check name from a new `.waiver-stamp.json` field, keep the empty `ci-checks` override, remove `lockfile-honesty-checks` — plus the *targeted* doc/example fix that keeps `main` consistent (the removed input can't linger in the example). **E2E:** the reviewer discovers required checks on a test PR.
+  - **PR 1 — Autodiscovery** (`setup-automation-1` off prep): implement the seam against the rules endpoint (App token), self-exclude `waiver-stamp`, read the honesty-check name from a new `.waiver-stamp.json` field, keep the empty `ci-checks` override, remove `lockfile-honesty-checks` — plus the *targeted* doc/example fix that keeps `main` consistent (the removed input can't linger in the example). **E2E:** the reviewer discovers required checks on a test PR. Landed in PR 1: union discovery (rules endpoint + classic protection, unioned), empty-union fail-closed, the `allowBumping`-gated lockfile caveat, and the `lockfileHonestyChecks` param removal — narrowing the cleanup PR's (N+1) remaining scope.
   - **PR 2 — Reusable workflows** (`setup-automation-2` off PR 1): reusable `workflow_call` producer/reviewer wrapping the existing actions; multi-workflow trigger; dogfood this repo onto its own callers; full caller-based adopter docs (`examples/`, `docs/auto-approval-setup.md`). **E2E:** the dogfood review posts via the reusable shape.
   - **PR 3 — Preflight + orchestrator skeleton** (`setup-automation-3` off PR 2): `waiver setup-repository` that validates prerequisites and reports — the CLI wiring, `SetupError`→EXIT 2, and the orchestrator skeleton that PRs 4–6 grow. No repo mutation yet. **E2E:** run it in a real repo, watch it resolve owner/repo/branch/pnpm and print the remaining-steps summary. *(No `--check` flag — spec §4.1 rejects one; this is just the orchestrator's partial first version.)*
   - **PR 4 — App provisioning, fresh path** (`setup-automation-4` off PR 3): manifest builder + loopback handshake + target choice + secret write, wired into the orchestrator so the command actually creates an App and provisions secrets. **Excludes** reuse/disk (PR 5). **E2E:** run it, click the two GitHub buttons, get a real App and two repo/org secrets.
@@ -255,7 +255,7 @@ Branch `jordi/setup-automation/prep-check-resolution` off up-to-date `main`. PR 
 - Modify: `.github/actions/waiver-stamp-review/dist` (rebuilt)
 
 **Interfaces:**
-- Produces: `discoverRequiredChecks(octokit, owner, repo, base): Promise<string[]>` — rules endpoint first, classic protection fallback, `[]` if neither yields checks.
+- Produces: `discoverRequiredChecks(octokit, owner, repo, base): Promise<string[]>` — reads the rules endpoint and classic protection and unions the results, `[]` if neither yields checks.
 - Produces: new optional config field `lockfileHonestyCheck?: string` on `WaiverConfig`.
 - Consumes: `fileAtRef` + `parseConfig` from `src/git.ts` / `src/engine/config.ts` (same base-config read `guards.ts:65` uses).
 
@@ -302,7 +302,7 @@ describe('discoverRequiredChecks', () => {
       'integration (10.0.0)',
     ]);
   });
-  it('falls back to classic protection when the rules endpoint yields none', async () => {
+  it('unions in classic protection contexts when the rules endpoint yields none', async () => {
     const o = octo({ [RULES]: [], [CLASSIC]: { contexts: ['build'] } });
     expect(await discoverRequiredChecks(o, 'o', 'r', 'main')).toEqual(['build']);
   });
@@ -340,11 +340,11 @@ interface BranchRule {
 }
 
 /**
- * The required status-check contexts for `base`, read from the rulesets endpoint (which
- * surfaces both classic protection and rulesets), falling back to classic protection when the
- * rules endpoint yields none. Both reads need repo-config read access — in the setup-produced
- * config the action's token is the App token with `administration: read` (spec §2.6). Any read
- * error is swallowed to `[]`; an empty set is fail-closed upstream (no-op, never approve).
+ * The required status-check contexts for `base` — the union of the rulesets endpoint and
+ * classic branch protection; each surfaces only its own mechanism, so a repo may require
+ * checks under either or both. The classic read needs `administration: read` (the App
+ * token, spec §2.6); the rules read needs only `metadata: read`. Any read error is swallowed
+ * to `[]`; an empty union is fail-closed upstream (no-op, never approve).
  */
 export async function discoverRequiredChecks(
   octokit: Octokit,
@@ -352,9 +352,11 @@ export async function discoverRequiredChecks(
   repo: string,
   base: string,
 ): Promise<string[]> {
-  const fromRules = await readRules(octokit, owner, repo, base);
-  if (fromRules.length > 0) return fromRules;
-  return readClassic(octokit, owner, repo, base);
+  const [fromRules, fromClassic] = await Promise.all([
+    readRules(octokit, owner, repo, base),
+    readClassic(octokit, owner, repo, base),
+  ]);
+  return [...new Set([...fromRules, ...fromClassic])];
 }
 
 async function readRules(

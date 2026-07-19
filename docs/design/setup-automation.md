@@ -142,16 +142,22 @@ it's deferred, not adopted here.
 ### 2.4 Check autodiscovery (removes the manual `ci-checks` list)
 
 The reviewer discovers the set of required checks instead of reading a hand-maintained
-input. Source of truth: the base branch's **required status checks**, read from the
-rulesets endpoint (which surfaces both classic branch protection and rulesets):
+input. Source of truth: the base branch's **required status checks**, read from **both**
 
 ```
 GET /repos/{owner}/{repo}/rules/branches/{base}
 ```
 
-collecting every `required_status_checks` rule's `context` values. Fallback to the classic
-`GET /repos/{owner}/{repo}/branches/{base}/protection/required_status_checks` if the rules
-endpoint yields none (repo still on legacy protection).
+and
+
+```
+GET /repos/{owner}/{repo}/branches/{base}/protection/required_status_checks
+```
+
+and **unioned**. Each endpoint surfaces only its own mechanism — a repo may require checks
+under either or both (e.g. classic CI checks alongside a dedicated `waiver-stamp` ruleset,
+exactly what setup adds) — so both are always read: collect every `required_status_checks`
+rule's `context` values from the rules endpoint plus every context from classic protection.
 
 This dissolves the two footguns `docs/auto-approval-setup.md` warns about:
 
@@ -186,23 +192,27 @@ Resolution: read the honesty check name from an **optional `lockfileHonestyCheck
 `.waiver-stamp.json`** (default absent). This is consistent with how the reviewer already
 reads policy from the base commit, so it can't be widened by a PR. `waiver setup-repository` fills it
 by detecting the adopter's lockfile-assay workflow and extracting its job/check name (§4.8).
-Behavior:
+Behavior — gated on `allowBumping`, since an empty `allowBumping` already makes lockfile
+honesty moot (G2 refuses every manifest/lockfile/resolution-input change):
 
-- **Matched** (a discovered required check equals `lockfileHonestyCheck`) ⇒
-  `lockfileHonestyConfigured := true`, caveat silenced.
-- **Unset or unmatched** ⇒ `lockfileHonestyConfigured := false` — the APPROVE body keeps the
-  caveat. This is the **fail-safe** default: the flag only toggles a *warning string*, and
-  wrongly *silencing* it is the only harmful direction, so we silence only on a positive
-  match. `lockfile-assay` is the assumed tool per directive, but its check *name* is
-  discovered, never assumed.
+- **`allowBumping` empty** ⇒ the caveat is suppressed regardless of `lockfileHonestyConfigured`
+  — no bump can ride in.
+- **`allowBumping` non-empty, matched** (a discovered required check equals
+  `lockfileHonestyCheck`) ⇒ `lockfileHonestyConfigured := true`, caveat silenced.
+- **`allowBumping` non-empty, unset or unmatched** ⇒ `lockfileHonestyConfigured := false` —
+  the APPROVE body keeps the caveat. This is the **fail-safe** default: the flag only toggles
+  a *warning string*, and wrongly *silencing* it is the only harmful direction, so we silence
+  only on a positive match. `lockfile-assay` is the assumed tool per directive, but its check
+  *name* is discovered, never assumed.
 
 ### 2.6 Token & permissions for autodiscovery
 
-Reading required-status-check config needs more than the default token grants. The workflow
-`GITHUB_TOKEN` has **no `administration` permission scope** (it is not among the grantable
-keys), and the rulesets/branch-protection reads require repository **Administration: read**
-for private repos. Therefore autodiscovery reads run under the **App installation token**,
-whose App is granted `administration: read` (§3.1). Concretely:
+Reading required-status-check config splits by mechanism. The **rules** endpoint needs only
+`Metadata: read` — the default `GITHUB_TOKEN` can read it, public or private. **Classic**
+branch-protection reads require repository **Administration: read**, a scope the `GITHUB_TOKEN`
+cannot hold. So autodiscovery runs under the **App installation token**, whose App is granted
+`administration: read` (§3.1), so both halves of the union (§2.4) are always readable.
+Concretely:
 
 - The reviewer uses the App token (when configured) for the autodiscovery read **and** the
   approve post; it uses the default token only for the reads the default token *can* do.
@@ -211,16 +221,11 @@ whose App is granted `administration: read` (§3.1). Concretely:
   default and the manual list is genuinely gone.
 
 **No-App fallback** (an adopter who declines the App and keeps the human click): the default
-token can't read protection, so autodiscovery can't run. In that mode the reviewer falls
-back to the optional override input (§2.7); empty ⇒ fail-closed no-op with a clear log line,
-never a silent approve. This keeps the happy path list-free without stranding the
-default-token path.
-
-> ⚠️ **Verify before build (§7-V1):** whether `GET /rules/branches/{branch}` returns
-> `required_status_checks` contexts to a token with only `contents: read` on a *private*
-> repo, or truly requires `administration: read`. If `contents: read` suffices, autodiscovery
-> also works on the default token and the no-App fallback (§2.7) can be dropped and the App's
-> `administration: read` scope removed. The spec assumes the conservative (admin-read) answer.
+token still autodiscovers **ruleset** checks (metadata suffices) but not **classic**
+protection (admin-only). A repo whose required checks live in classic protection therefore
+falls back to the optional override input (§2.7); empty + non-discoverable ⇒ fail-closed no-op
+with a clear log line, never a silent approve. This keeps the happy path list-free without
+stranding the default-token path.
 
 ### 2.7 Override escape hatch (kept, empty by default)
 
@@ -282,9 +287,9 @@ uses in production).
   manifest kills the "I granted only Pull-requests-write and it silently didn't count"
   footgun.
 - **`pull_requests: write`** — submit the review.
-- **`administration: read`** — read required-status-check config for autodiscovery (§2.6).
-  Read-only repo config; low marginal risk over the write scope already present. Drop it if
-  §7-V1 shows the default token can read rules.
+- **`administration: read`** — read classic branch-protection config for autodiscovery
+  (§2.6); the rules endpoint needs only metadata, but the classic half of the union does not
+  (§7-V1). Read-only repo config; low marginal risk over the write scope already present.
 - **No webhook / no events** — the App is a passive *identity* consumed by the adopter's
   Actions via `actions/create-github-app-token`; it is never a running service. This is the
   key difference from Probot (which wants the webhook secret + a process).
@@ -606,15 +611,15 @@ Recorded per the "choose an answer, log the question" directive. Format: **quest
 alternatives → chosen (why)**.
 
 - **D1 — Autodiscovery source.** classic branch-protection endpoint · rulesets
-  `/rules/branches/{base}` endpoint. → **Rules endpoint, classic as fallback.** Rulesets are
-  the modern mechanism and the endpoint surfaces both; classic covers legacy repos.
+  `/rules/branches/{base}` endpoint. → **Union of both.** Each endpoint surfaces only its own
+  mechanism, and the two coexist — our setup adds a `waiver-stamp` ruleset atop an adopter's
+  possibly-classic CI protection — so both must be read.
 - **D2 — Token for autodiscovery reads.** default `GITHUB_TOKEN` · App token. → **App token.**
-  `GITHUB_TOKEN` has no `administration` scope; the App can hold `administration: read`. Ties
-  autodiscovery to the App path, which `setup` always provisions. (Revisit if §7-V1 shows
-  `contents: read` suffices.)
+  The classic read needs `administration: read`, which `GITHUB_TOKEN` cannot hold; the App can
+  (§7-V1). Ties autodiscovery to the App path, which `setup` always provisions.
 - **D3 — Manifest scopes.** minimal (contents+PR) · add `administration: read`. → **Add
-  `administration: read`** to enable autodiscovery; read-only, low marginal risk. Drop if
-  §7-V1 allows.
+  `administration: read`** — the classic branch-protection read needs it (§7-V1); read-only,
+  low marginal risk.
 - **D4 — Keep any manual check list?** fully remove · keep an empty-by-default override. →
   **Keep an empty override** (`ci-checks`) purely as no-App / edge fallback; happy path writes
   none. Removes the *maintained* list (the user's ask) without stranding the default-token
@@ -656,10 +661,11 @@ alternatives → chosen (why)**.
 
 ## 7. Open verification items (resolve during build, not blocking design)
 
-- **V1 — `/rules/branches/{branch}` permission.** Does it return `required_status_checks`
-  contexts to a `contents: read` token on a private repo, or require `administration: read`?
-  Determines whether §2.6 default-token autodiscovery is possible and whether the App needs
-  `administration: read` (§3.1/D3). Spec assumes admin-read (conservative).
+- **V1 — `/rules/branches/{branch}` permission (resolved).** The rules endpoint requires only
+  `Metadata: read` and works on the default token, public or private repo; classic protection
+  requires `administration: read`. The rules endpoint does not surface classic checks, so
+  discovery reads both endpoints and unions the results (§2.4). The App keeps
+  `administration: read` (conservative) because the classic read needs it.
 - **V3 — localhost as manifest `redirect_url`.** Confirm GitHub accepts an
   `http://localhost:<port>` redirect in the manifest flow (Probot relies on it — high
   confidence, verify at build).
