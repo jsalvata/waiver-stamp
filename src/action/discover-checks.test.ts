@@ -13,7 +13,10 @@ function octo(handlers: Record<string, unknown | (() => never)>) {
 const RULES = 'GET /repos/{owner}/{repo}/rules/branches/{branch}';
 const CLASSIC = 'GET /repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks';
 const throwing = () => {
-  throw new Error('404');
+  throw Object.assign(new Error('Not Found'), { status: 404 });
+};
+const throwingServerError = () => {
+  throw Object.assign(new Error('boom'), { status: 500 });
 };
 
 describe('discoverRequiredChecks', () => {
@@ -80,8 +83,16 @@ describe('discoverRequiredChecks', () => {
     const o = octo({ [RULES]: throwing, [CLASSIC]: { contexts: ['build'] } });
     expect(await discoverRequiredChecks(o, 'o', 'r', 'main')).toEqual(['build']);
   });
-  it('returns [] when neither endpoint yields checks (both throw / empty)', async () => {
+  it('returns [] when neither endpoint yields checks (both 404)', async () => {
     const o = octo({ [RULES]: throwing, [CLASSIC]: throwing });
     expect(await discoverRequiredChecks(o, 'o', 'r', 'main')).toEqual([]);
+  });
+  it('a non-404 error from a reader fails closed (rejects, no silent under-count)', async () => {
+    const o = octo({ [RULES]: throwingServerError, [CLASSIC]: throwing });
+    await expect(discoverRequiredChecks(o, 'o', 'r', 'main')).rejects.toThrow('boom');
+  });
+  it('a non-404 error rejects even when the other reader has checks (fail-closed, not a partial union)', async () => {
+    const o = octo({ [RULES]: throwingServerError, [CLASSIC]: { contexts: ['build'] } });
+    await expect(discoverRequiredChecks(o, 'o', 'r', 'main')).rejects.toThrow('boom');
   });
 });

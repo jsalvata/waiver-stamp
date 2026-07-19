@@ -13,8 +13,9 @@ interface BranchRule {
  * require checks under either or both (e.g. classic CI checks plus a dedicated `waiver-stamp`
  * ruleset, which is exactly what our setup creates). Both reads need repo-config read access —
  * in the setup-produced config the action's token is the App token with `administration: read`
- * (spec §2.6). Each source's read error is swallowed to `[]`; an empty union is fail-closed
- * upstream (no-op, never approve).
+ * (spec §2.6). A 404 (mechanism/branch not configured here) contributes `[]`; any other read
+ * error propagates and fails closed upstream (no-op, never approve) — a transient 500/403/network
+ * error must never be silently treated as "no checks required".
  */
 export async function discoverRequiredChecks(
   octokit: Octokit,
@@ -27,6 +28,15 @@ export async function discoverRequiredChecks(
     readClassic(octokit, owner, repo, base),
   ]);
   return [...new Set([...fromRules, ...fromClassic])];
+}
+
+function isNotFound(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'status' in err &&
+    (err as { status: unknown }).status === 404
+  );
 }
 
 async function readRules(
@@ -47,8 +57,9 @@ async function readRules(
       .flatMap((r) => r.parameters?.required_status_checks ?? [])
       .map((c) => c.context);
     return [...new Set(contexts)];
-  } catch {
-    return [];
+  } catch (err) {
+    if (isNotFound(err)) return [];
+    throw err;
   }
 }
 
@@ -64,7 +75,8 @@ async function readClassic(
       { owner, repo, branch },
     );
     return (data as { contexts?: string[] }).contexts ?? [];
-  } catch {
-    return [];
+  } catch (err) {
+    if (isNotFound(err)) return [];
+    throw err;
   }
 }
