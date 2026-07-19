@@ -70,6 +70,8 @@ export async function run(deps: RunDeps): Promise<void> {
       base: pr.base,
       repoDir: dir,
     });
+    if (required.length === 0)
+      return core.info('no required checks discovered and no override set — not approving');
     const backstop = await deps.confirmChecksGreen(octokit, { owner, repo, headSha, required });
     if (!backstop.ok)
       return core.info(

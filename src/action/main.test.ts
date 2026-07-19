@@ -58,6 +58,21 @@ describe('run', () => {
     await run(deps as never);
     expect(deps.postOutcome).not.toHaveBeenCalled();
   });
+  it('no required checks discovered → no-op (fail-closed, never vacuously green)', async () => {
+    const deps = {
+      ...baseDeps,
+      resolveRequiredChecks: vi.fn(async () => ({
+        required: [],
+        lockfileHonestyConfigured: false,
+        bumpingAllowed: false,
+      })),
+      confirmChecksGreen: vi.fn(async () => ({ ok: true, pending: [], failed: [] })),
+      postOutcome: vi.fn(async () => {}),
+    };
+    await run(deps as never);
+    expect(deps.postOutcome).not.toHaveBeenCalled();
+    expect(deps.confirmChecksGreen).not.toHaveBeenCalled();
+  });
   it('happy path posts an APPROVE outcome', async () => {
     const deps = { ...baseDeps, postOutcome: vi.fn(async () => {}) };
     await run(deps as never);
