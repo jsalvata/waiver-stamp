@@ -1,3 +1,10 @@
+## [1.17.1](https://github.com/jsalvata/waiver-stamp/compare/v1.17.0...v1.17.1) (2026-07-19)
+
+
+### Bug Fixes
+
+* fall back to the ci-checks override when discovery fails ([2be4f47](https://github.com/jsalvata/waiver-stamp/commit/2be4f47a6195cdc1f51fadb09294246323fbeac5))
+
 # [1.17.0](https://github.com/jsalvata/waiver-stamp/compare/v1.16.0...v1.17.0) (2026-07-19)
 
 
