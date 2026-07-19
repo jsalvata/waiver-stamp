@@ -25,9 +25,9 @@ describe('decideReview (§5 matrix)', () => {
   it('APPROVE + bumping not allowed → APPROVE without the warning, regardless of honesty check', () => {
     const noBump = { ...base, bumpingAllowed: false, verdict: 'APPROVE' as const };
     expect(decideReview(noBump).body).not.toContain('assumes the lockfile is honest');
-    expect(
-      decideReview({ ...noBump, lockfileHonestyConfigured: true }).body,
-    ).not.toContain('assumes the lockfile is honest');
+    expect(decideReview({ ...noBump, lockfileHonestyConfigured: true }).body).not.toContain(
+      'assumes the lockfile is honest',
+    );
   });
   it('APPROVE + guards fail → REQUEST_CHANGES, no artifact content echoed', () => {
     const o = decideReview({ ...base, verdict: 'APPROVE', guardsPass: false });

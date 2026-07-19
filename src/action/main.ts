@@ -111,10 +111,7 @@ export async function run(deps: RunDeps): Promise<void> {
 
 // ncc entry: invoke unless imported by a test.
 if (process.env.VITEST === undefined) {
-  const inputs = {
-    ciChecks: parseList(core.getInput('ci-checks')),
-    lockfileHonestyChecks: [] as string[],
-  };
+  const inputs = { ciChecks: parseList(core.getInput('ci-checks')) };
   const token = core.getInput('github-token') || process.env.GITHUB_TOKEN || '';
   const octokit = getOctokit(token);
 

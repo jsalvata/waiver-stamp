@@ -22,10 +22,7 @@ export interface ResolvedChecks {
  * the `ci-checks` input as the no-App fallback) and the honesty flag (a base-config-named
  * required check silences the APPROVE caveat — fail-safe: only a positive match silences it).
  */
-export function makeResolveRequiredChecks(inputs: {
-  ciChecks: string[];
-  lockfileHonestyChecks: string[];
-}) {
+export function makeResolveRequiredChecks(inputs: { ciChecks: string[] }) {
   return async (
     octokit: Octokit,
     args: { owner: string; repo: string; base: string; repoDir: string },
