@@ -1,0 +1,86 @@
+# Reusable privileged reviewer (design doc §2.1, §3.4). Adopters pin this at an immutable
+# @vX ref and call it from a thin `waiver-stamp-review.yml` (see examples/). It holds a
+# pull-requests: write token — the credential that can replace human review by posting an
+# APPROVE — so the pwn-request defense lives here, centrally, where an adopter's thin caller
+# cannot misconfigure it.
+#
+# WHY THIS SHAPE (the pwn-request defense):
+#
+#   1. The reviewer action below is pinned FULLY-QUALIFIED to this external repo at an
+#      immutable @vX ref (`v*` tags are protected against being moved or deleted by a repo
+#      ruleset; a full commit SHA is the hash-pinned alternative). A local `uses: ./…` here
+#      would resolve against the ADOPTER's checkout — handing a PR author's own code this
+#      write token. A reusable workflow MUST pin fully-qualified; that is the whole reason the
+#      dogfood in this repo keeps its own inline reviewer (a local `uses: ./…` is only safe in
+#      a top-level workflow, where `./` is this repo) instead of routing through this file.
+#   2. The checkout targets `${{ github.event.repository.default_branch }}` — the caller's
+#      default branch — never the PR head. `persist-credentials: false` means even that
+#      checkout can't leak a push-capable credential.
+#   3. The PR head commit arrives via a separate `git fetch`, purely as DATA (objects in the
+#      git store) — never checked out, never executed. The action reads those commits via git
+#      plumbing (diffs, `git show`) to run its trust guards (G1: no `.github/**` edit anywhere
+#      in the range; G2: any manifest/lockfile change is an honest, allowlisted, up-moving
+#      bump) — all git DATA reads, zero code execution from the PR.
+name: waiver-stamp-review-reusable
+
+on:
+  workflow_call:
+    inputs:
+      ci-checks:
+        description: >-
+          Optional newline/comma list of required check-run names that must be success on the
+          head SHA. Empty ⇒ autodiscover from the base branch's protection (needs the App's
+          administration:read token; without it, discovery fails and this override is the only
+          path — empty override ⇒ fail-closed).
+        required: false
+        type: string
+        default: ''
+    secrets:
+      # Underscored, not hyphenated: `secrets: inherit` maps a caller's APP_ID / APP_PRIVATE_KEY
+      # here by case-insensitive name, and secret names cannot contain hyphens.
+      app_id:
+        description: >-
+          GitHub App ID whose token posts the review. Empty ⇒ the default GITHUB_TOKEN, which
+          can neither post nor count an APPROVE, so the layer leaves the approving click to a
+          human and publishes the green `waiver-stamp` check as its trust signal.
+        required: false
+      app_private_key:
+        description: The GitHub App private key (PEM). Required when app_id is set.
+        required: false
+
+permissions:
+  pull-requests: write
+  checks: read
+  contents: read
+  actions: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: waiver-stamp-review-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    env:
+      APP_ID: ${{ secrets.app_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch the PR head commits (data for G1/G2 — never executed)
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: git fetch --no-tags --force origin "$HEAD_SHA"
+      - name: Mint the App token (when configured)
+        id: app-token
+        if: env.APP_ID != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+          permission-pull-requests: write
+      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.17.1
+        with:
+          ci-checks: ${{ inputs.ci-checks }}
+          github-token: ${{ steps.app-token.outputs.token || github.token }}

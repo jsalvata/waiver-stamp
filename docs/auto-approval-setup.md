@@ -37,22 +37,23 @@ PR. On top of that, it re-derives trust from git data alone, via two guards:
 
 Concretely: the reviewer job checks out **your default branch** (trusted code) and pulls
 the PR's head commit in with a plain `git fetch` — never a checkout, never an execution —
-so the guards above can read it as data. This is the load-bearing property of the two
-templates; see the inline comments in
-[`examples/waiver-stamp-review.yml`](../examples/waiver-stamp-review.yml) for the full
-reasoning, the design doc §3.4 for the threat model this defends against (the classic
-GitHub Actions "pwn request"), and [`automation-layer.md`](automation-layer.md) for the
-complete design rationale.
+so the guards above can read it as data. This shape is the load-bearing property of the
+reviewer, and it lives in the pinned reusable workflow your caller invokes — versioned and
+unforkable, so a paste-and-edit can't reopen the hole. See that workflow's header
+(`jsalvata/waiver-stamp` → `.github/workflows/reusable-review.yml`) for the full reasoning,
+the design doc §3.4 for the threat model this defends against (the classic GitHub Actions
+"pwn request"), and [`automation-layer.md`](automation-layer.md) for the complete rationale.
 
 ## Which ref to pin
 
-The templates ship pinned to a release tag (`@v1.17.1`, kept current on every release), so **you
+Each caller ships pinned to a release tag (`@v1.17.1`, kept current on every release), so **you
 can paste them as-is** — we keep `v*` tags immutable via a repo ruleset. If your policy is
 hash-pin-only (e.g. [zizmor](https://github.com/zizmorcore/zizmor)'s default `unpinned-uses`), or
 you'd rather not rely on a setting you can't see, swap in the SHA the tag points at:
-`gh api repos/jsalvata/waiver-stamp/commits/v1.17.1 --jq .sha`. You pin twice — the producer's
-`uses:` (in `waiver-stamp-ci.yml`) and the reviewer's (in `waiver-stamp-review.yml`); keep both on
-the same ref, and never a mutable one (a branch, `@main`).
+`gh api repos/jsalvata/waiver-stamp/commits/v1.17.1 --jq .sha`. Each caller has exactly one
+`uses:` ref — the reusable workflow — so you pin one ref per file (two total); keep both on the
+same ref, and never a mutable one (a branch, `@main`). The pinned reusable workflow pins the
+action and `actions/checkout` internally, so you don't.
 
 Either way the pin also fixes the CLI version — it ships at the ref you pinned — so the verdict is
 fully reproducible, not just the shell script. Upgrading means bumping those two pins to the new
@@ -63,30 +64,29 @@ release.
 Each step is one action; the indented note under it is the *why*, there only if you want
 it. The two workflow files it refers to are in [`examples/`](../examples/).
 
-1. **Run the `waiver-stamp` job on every PR.** Add the `waiver-stamp` job from
-   [`examples/waiver-stamp-ci.yml`](../examples/waiver-stamp-ci.yml) to your CI (it's shown
-   as a whole workflow, but only the `waiver-stamp` job is new — merge it into your existing
-   `pull_request` workflow, or add it as a standalone one).
+1. **Add the producer.** Drop
+   [`examples/waiver-stamp-ci.yml`](../examples/waiver-stamp-ci.yml) into `.github/workflows/`
+   as-is — a standalone `pull_request` workflow that touches nothing you already have.
    > It runs unprivileged, computes the verdict over the PR range, and publishes the check
    > + report artifact the reviewer consumes.
 
-2. **Add the privileged reviewer caller.** Copy
-   [`examples/waiver-stamp-review.yml`](../examples/waiver-stamp-review.yml) in as-is,
-   editing its marked `# <-- EDIT` point: your CI workflow name(s). The `uses:` ref already
-   points at the current release; if your policy is hash-pin-only you can't paste it verbatim —
-   also swap its `uses:` refs (the action and `actions/checkout`) for SHAs. See
+2. **Add the privileged reviewer caller.** Drop
+   [`examples/waiver-stamp-review.yml`](../examples/waiver-stamp-review.yml) in, editing its
+   one `# <-- EDIT` point: your CI workflow name(s). The `uses:` ref already points at the
+   current release; if your policy is hash-pin-only, swap that single ref for its SHA. See
    [Which ref to pin](#which-ref-to-pin).
-   > This is the only workflow that holds a write token. Its checkout shape is
-   > security-load-bearing — read its header before changing anything else.
+   > This caller holds the write token, but its security-load-bearing checkout shape lives in
+   > the pinned reusable workflow it calls — read that workflow's header, not this caller,
+   > before relying on it.
    >
    > The reviewer's required-check set is auto-discovered from the base branch's protection —
    > read from both the rules endpoint and classic protection and unioned, since each surfaces
    > only its own mechanism — so the check-run names, matrix legs included, need no manual
-   > listing. `ci-checks` is an empty-by-default override for the
-   > no-App path (discovery empty ⇒ fall back to this list); if you do set it, it takes
-   > **check-run names, not workflow job ids** — they diverge whenever a job sets `name:` or
-   > uses a matrix. Read the real names off any recent PR with
-   > `gh api repos/OWNER/REPO/commits/<head-sha>/check-runs --jq '.check_runs[].name'`.
+   > listing. Autodiscovery needs the App's `administration: read` token (step 8); without it
+   > the read fails and the reviewer falls back to the optional `ci-checks` override (empty ⇒
+   > fail-closed). If you set `ci-checks`, it takes **check-run names, not workflow job ids** —
+   > they diverge whenever a job sets `name:` or uses a matrix. Read the real names off any
+   > recent PR with `gh api repos/OWNER/REPO/commits/<head-sha>/check-runs --jq '.check_runs[].name'`.
 
 3. **Decide your `.waiver-stamp.json` policy — or knowingly skip it.** The file is optional and
    **every policy in it is closed by default**: with no config, `changeDocs.allow` is empty, so
@@ -145,10 +145,11 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    >
    > For the App path, **two things must both hold**, and it's easy to get only the first:
    >
-   > 1. **Mint an App token and pass it as `github-token`.** Add an `environment:`, a
-   >    `create-github-app-token` step, and wire its output into the action's `github-token`
-   >    input. Scope the mint — zizmor's `github-app` audit (High) flags an unscoped one and
-   >    wants a `permission-*` input — with `permission-pull-requests: write`.
+   > 1. **Give the caller the App credentials.** Set repo/environment secrets `APP_ID` and
+   >    `APP_PRIVATE_KEY`, and uncomment `secrets: inherit` in your `waiver-stamp-review.yml`.
+   >    The reusable workflow mints the token, scopes it (`permission-pull-requests: write`, so
+   >    zizmor's `github-app` audit stays clean), and wires it into the action's `github-token`
+   >    — you don't add a `create-github-app-token` step yourself.
    > 2. **Grant the App `Contents: write`, *not just* `Pull requests: write`.** GitHub counts an
    >    approving review only from an identity with **repository write access**, which for a
    >    GitHub App *is* `Contents: write`. With `pull_requests`-only the App can *submit* the
