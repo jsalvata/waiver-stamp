@@ -40,6 +40,7 @@ const baseDeps = {
   resolveRequiredChecks: vi.fn(async () => ({
     required: ['CI'],
     lockfileHonestyConfigured: false,
+    bumpingAllowed: true,
   })),
 };
 
@@ -79,6 +80,40 @@ describe('run', () => {
     expect(deps.postOutcome).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ outcome: expect.objectContaining({ action: 'APPROVE' }) }),
+    );
+  });
+  it('bumpingAllowed:true + no honesty check includes the lockfile caveat', async () => {
+    const deps = { ...baseDeps, postOutcome: vi.fn(async () => {}) };
+    await run(deps as never);
+    expect(deps.postOutcome).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        outcome: expect.objectContaining({
+          action: 'APPROVE',
+          body: expect.stringContaining('assumes the lockfile is honest'),
+        }),
+      }),
+    );
+  });
+  it('bumpingAllowed:false from resolveRequiredChecks suppresses the lockfile caveat', async () => {
+    const deps = {
+      ...baseDeps,
+      resolveRequiredChecks: vi.fn(async () => ({
+        required: ['CI'],
+        lockfileHonestyConfigured: false,
+        bumpingAllowed: false,
+      })),
+      postOutcome: vi.fn(async () => {}),
+    };
+    await run(deps as never);
+    expect(deps.postOutcome).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        outcome: expect.objectContaining({
+          action: 'APPROVE',
+          body: expect.not.stringContaining('assumes the lockfile is honest'),
+        }),
+      }),
     );
   });
   it('a collaborator error is fail-closed (no review posted)', async () => {

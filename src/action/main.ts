@@ -64,12 +64,8 @@ export async function run(deps: RunDeps): Promise<void> {
     if (!pr) return core.info('no open PR for head SHA — nothing to do');
 
     const dir = deps.repoDir ?? process.cwd();
-    const { required, lockfileHonestyConfigured } = await deps.resolveRequiredChecks(octokit, {
-      owner,
-      repo,
-      base: pr.base,
-      repoDir: dir,
-    });
+    const { required, lockfileHonestyConfigured, bumpingAllowed } =
+      await deps.resolveRequiredChecks(octokit, { owner, repo, base: pr.base, repoDir: dir });
     if (required.length === 0)
       return core.info('no required checks discovered and no override set — not approving');
     const backstop = await deps.confirmChecksGreen(octokit, { owner, repo, headSha, required });
@@ -102,6 +98,7 @@ export async function run(deps: RunDeps): Promise<void> {
       guardsPass,
       backstopGreen: true,
       lockfileHonestyConfigured,
+      bumpingAllowed,
     });
     await deps.postOutcome(octokit, { owner, repo, prNumber: pr.number, headSha, outcome });
   } catch (err) {

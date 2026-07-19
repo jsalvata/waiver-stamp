@@ -55,4 +55,27 @@ describe('makeResolveRequiredChecks (autodiscovery)', () => {
     );
     expect(r.required).toEqual(['build']);
   });
+  it('bumpingAllowed true when the base config lists an allowBumping entry', async () => {
+    setup(['build'], { allowBumping: ['lodash'] });
+    const r = await makeResolveRequiredChecks({ ciChecks: [], lockfileHonestyChecks: [] })(
+      octokit,
+      args,
+    );
+    expect(r.bumpingAllowed).toBe(true);
+  });
+  it('bumpingAllowed false when allowBumping is empty or unset', async () => {
+    setup(['build'], { allowBumping: [] });
+    const r = await makeResolveRequiredChecks({ ciChecks: [], lockfileHonestyChecks: [] })(
+      octokit,
+      args,
+    );
+    expect(r.bumpingAllowed).toBe(false);
+
+    setup(['build'], {});
+    const r2 = await makeResolveRequiredChecks({ ciChecks: [], lockfileHonestyChecks: [] })(
+      octokit,
+      args,
+    );
+    expect(r2.bumpingAllowed).toBe(false);
+  });
 });

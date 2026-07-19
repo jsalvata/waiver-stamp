@@ -13,6 +13,8 @@ export interface ResolvedChecks {
   required: string[];
   /** Whether a required lockfile-honesty check is present (silences the APPROVE caveat). */
   lockfileHonestyConfigured: boolean;
+  /** Whether the base config allows any dependency bump (empty ⇒ lockfile honesty is moot). */
+  bumpingAllowed: boolean;
 }
 
 /**
@@ -35,7 +37,8 @@ export function makeResolveRequiredChecks(inputs: {
     const config = parseConfig(await fileAtRef(args.repoDir, args.base, CONFIG_FILENAME));
     const honesty = config.lockfileHonestyCheck;
     const lockfileHonestyConfigured = honesty !== undefined && required.includes(honesty);
+    const bumpingAllowed = (config.allowBumping ?? []).length > 0;
 
-    return { required, lockfileHonestyConfigured };
+    return { required, lockfileHonestyConfigured, bumpingAllowed };
   };
 }
