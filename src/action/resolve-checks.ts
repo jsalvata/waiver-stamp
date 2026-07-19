@@ -25,13 +25,26 @@ export interface ResolvedChecks {
  * `base` (the base commit SHA) and `baseRef` (the base branch name) are both needed: branch
  * protection is keyed on the branch name, but the base-commit config must be read pinned to the
  * SHA — so discovery uses `baseRef` while `fileAtRef` uses `base`.
+ *
+ * Discovery failure (e.g. a non-admin token gets a 403 on the classic branch-protection endpoint)
+ * also falls back to the `ci-checks` override, same as an empty discovered set — so autodiscovery
+ * needs the App's `administration: read`; without it the override is the only path to a non-empty
+ * required set.
  */
 export function makeResolveRequiredChecks(inputs: { ciChecks: string[] }) {
   return async (
     octokit: Octokit,
     args: { owner: string; repo: string; base: string; baseRef: string; repoDir: string },
   ): Promise<ResolvedChecks> => {
-    const discovered = await discoverRequiredChecks(octokit, args.owner, args.repo, args.baseRef);
+    let discovered: string[] = [];
+    try {
+      discovered = await discoverRequiredChecks(octokit, args.owner, args.repo, args.baseRef);
+    } catch {
+      // Couldn't fully read branch protection (e.g. a non-admin token gets 403 on the classic
+      // endpoint — a permission check before existence). Don't trust a partial read: fall back to
+      // the explicit `ci-checks` override (empty ⇒ required is [] ⇒ fail-closed in run()).
+      discovered = [];
+    }
     const set = discovered.length > 0 ? discovered : inputs.ciChecks;
     const required = set.filter((name) => name !== WAIVER_STAMP_CHECK);
 
