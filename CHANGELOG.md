@@ -1,3 +1,12 @@
+## [1.18.1](https://github.com/jsalvata/waiver-stamp/compare/v1.18.0...v1.18.1) (2026-07-19)
+
+
+### Bug Fixes
+
+* commit reusable-workflow pins on release ([4176a49](https://github.com/jsalvata/waiver-stamp/commit/4176a49304c460348ccc0ce801c534d077a8bd89)), closes [#47](https://github.com/jsalvata/waiver-stamp/issues/47)
+* exempt release commits from commitlint ([f9f6cd4](https://github.com/jsalvata/waiver-stamp/commit/f9f6cd42717920daf2d9014f322dd9cd9d8f30e4))
+* let the release App update workflow pins ([e419e82](https://github.com/jsalvata/waiver-stamp/commit/e419e82cf5669da4c68029e55f73b2fa858b8af1))
+
 # [1.18.0](https://github.com/jsalvata/waiver-stamp/compare/v1.17.1...v1.18.0) (2026-07-19)
 
 
