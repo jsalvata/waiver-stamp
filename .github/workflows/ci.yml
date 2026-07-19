@@ -42,6 +42,7 @@ jobs:
           node dist/cli.js --help | grep -q ' verify '
           node dist/cli.js --help | grep -q ' stamp '
           node dist/cli.js verify --help >/dev/null
+          node dist/cli.js setup-repository --help | grep -q ' --no-app '
 
   # Dogfood producer. This intentionally does NOT reuse the published composite action
   # (.github/actions/waiver-stamp) the way examples/waiver-stamp-ci.yml does — because this
