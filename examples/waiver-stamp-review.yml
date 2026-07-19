@@ -30,8 +30,8 @@ jobs:
   review:
     # Immutable tag (we keep `v*` tags immutable via a repo ruleset). If your policy is
     # hash-pin-only, swap the ref for the SHA it points at:
-    #   gh api repos/jsalvata/waiver-stamp/commits/v1.17.1 --jq .sha
-    uses: jsalvata/waiver-stamp/.github/workflows/reusable-review.yml@v1.17.1
+    #   gh api repos/jsalvata/waiver-stamp/commits/v1.18.0 --jq .sha
+    uses: jsalvata/waiver-stamp/.github/workflows/reusable-review.yml@v1.18.0
     # secrets: inherit  # <-- uncomment only for the App-token path (step 8): forwards
     #                   #     app-id / app-private-key secrets to the reusable reviewer.
     # with:

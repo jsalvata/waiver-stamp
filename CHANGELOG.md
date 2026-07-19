@@ -1,3 +1,10 @@
+# [1.18.0](https://github.com/jsalvata/waiver-stamp/compare/v1.17.1...v1.18.0) (2026-07-19)
+
+
+### Features
+
+* add reusable workflows adopters call ([76d3eae](https://github.com/jsalvata/waiver-stamp/commit/76d3eaea0342a159633be5fca5c19a5e622c0ac1))
+
 ## [1.17.1](https://github.com/jsalvata/waiver-stamp/compare/v1.17.0...v1.17.1) (2026-07-19)
 
 
