@@ -11,9 +11,9 @@ export interface ProvisionSecretsArgs {
 
 /** Write the two conventional reviewer secrets at the chosen scope. Idempotent; touches no others. */
 export async function provisionSecrets(gh: GhClient, a: ProvisionSecretsArgs): Promise<void> {
-  const common: Pick<SetSecretArgs, 'scope' | 'org' | 'repos' | 'repo'> =
+  const common: Pick<SetSecretArgs, 'scope' | 'org' | 'repo'> =
     a.target.kind === 'org'
-      ? { scope: 'org', org: a.target.org, repos: [`${a.owner}/${a.repo}`] }
+      ? { scope: 'org', org: a.target.org, repo: `${a.owner}/${a.repo}` }
       : { scope: 'repo', repo: `${a.owner}/${a.repo}` };
   await gh.setSecret({ name: 'WAIVER_STAMP_APP_ID', value: String(a.appId), ...common });
   await gh.setSecret({ name: 'WAIVER_STAMP_APP_PRIVATE_KEY', value: a.pem, ...common });

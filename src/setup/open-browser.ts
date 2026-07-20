@@ -25,7 +25,7 @@ export function openBrowser(url: string, deps: OpenBrowserDeps = {}): Promise<vo
     try {
       const child = spawnProcess(opener, [url], { stdio: 'ignore' });
       child.on('error', fallback);
-      child.on('spawn', () => resolve());
+      child.on('spawn', resolve);
     } catch {
       fallback();
     }

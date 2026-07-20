@@ -13,7 +13,6 @@ export interface SetSecretArgs {
   scope: 'repo' | 'org';
   repo?: string;
   org?: string;
-  repos?: string[];
 }
 
 export interface GhClient {
@@ -36,17 +35,14 @@ export function makeGh(run: Run): GhClient {
     async setSecret(a) {
       const args = ['secret', 'set', a.name];
       if (a.scope === 'org') {
-        if (!a.org)
+        if (!a.org || !a.repo)
           throw new SetupError(
-            'org-scope secret needs an org',
+            'org-scope secret needs an org and a repo',
             'Report this — internal wiring bug.',
           );
-        // `--repos` grants the org secret to specific repositories. gh accepts the bare repo
-        // name for org secrets; we pass `owner/repo` for symmetry with the repo scope. Only
-        // exercised for org targets (the personal/repo path is what the E2E covers), so revisit
-        // the bare-name vs owner/repo form when the org path is first run for real.
-        const repos = a.repos ?? (a.repo ? [a.repo] : []);
-        args.push('--org', a.org, '--repos', repos.join(','));
+        // Scope the org secret to just this repo. Installing on further repos under the org is a
+        // re-run of setup-repository (which reuse makes idempotent), so no multi-repo list here.
+        args.push('--org', a.org, '--repos', a.repo);
       } else {
         if (!a.repo)
           throw new SetupError(
@@ -72,14 +68,15 @@ export function makeGh(run: Run): GhClient {
       if (r.code !== 0)
         throw new SetupError(
           'GitHub App creation did not complete',
-          r.stderr.trim() ||
-            'The one-time setup code may have expired — re-run and complete the browser step promptly.',
+          'The one-time setup code may have expired — re-run and complete the browser step promptly. If it recurs, report the details at https://github.com/jsalvata/waiver-stamp/issues.',
+          r.stderr.trim() || r.stdout.trim() || undefined,
         );
       const j = JSON.parse(r.stdout) as { id?: number; pem?: string; slug?: string };
       if (typeof j.id !== 'number' || !j.pem || !j.slug)
         throw new SetupError(
           'GitHub App conversion returned no credentials',
-          'Re-run setup; if it recurs, report the `gh api /app-manifests/.../conversions` response.',
+          'Re-run setup; if it recurs, report the details at https://github.com/jsalvata/waiver-stamp/issues.',
+          r.stdout.trim(),
         );
       return { appId: j.id, pem: j.pem, slug: j.slug };
     },

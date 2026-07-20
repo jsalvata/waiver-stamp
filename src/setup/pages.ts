@@ -18,5 +18,5 @@ export function formPage(action: string, manifest: AppManifest): string {
 /** Shown after conversion succeeds; links the interactive install page (spec §3.3). */
 export function donePage(installUrl: string): string {
   return `<!doctype html><meta charset=utf-8><title>waiver-stamp — install</title>
-<body><h1>App created ✓</h1><p>Last step: <a href="${installUrl}">install it on your repository</a>, then return to your terminal.</p>`;
+<body><h1>App created ✓</h1><p>Next step: <a href="${installUrl}">install it on your repository</a>, then return to your terminal.</p>`;
 }

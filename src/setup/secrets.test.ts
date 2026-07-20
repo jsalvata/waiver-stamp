@@ -48,7 +48,7 @@ describe('provisionSecrets', () => {
     for (const [arg] of (gh.setSecret as ReturnType<typeof vi.fn>).mock.calls) {
       expect(arg.scope).toBe('org');
       expect(arg.org).toBe('acme');
-      expect(arg.repos).toEqual(['acme/demo']);
+      expect(arg.repo).toBe('acme/demo');
     }
   });
 });

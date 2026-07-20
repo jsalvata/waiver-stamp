@@ -139,10 +139,11 @@ To turn a correctly waivered PR into an auto-approved one, wire `waiver stamp --
 your CI and add a privileged reviewer workflow that posts the mapped GitHub review. See
 [`docs/auto-approval-setup.md`](docs/auto-approval-setup.md) for full instructions.
 
-`waiver setup-repository` runs the preflight and, for the App-token path, creates a
-per-repo GitHub App and writes its `WAIVER_STAMP_APP_ID` / `WAIVER_STAMP_APP_PRIVATE_KEY`
-secrets. The **Create GitHub App** and **Install** clicks stay manual — it opens the
-browser at each. Pass `--no-app` to skip provisioning and configure the layer by hand.
+`waiver setup-repository` checks the current repository configuration is supported and, for
+the App-token path, creates a per-owner `waiver-stamp-<owner>` GitHub App and writes its
+`WAIVER_STAMP_APP_ID` / `WAIVER_STAMP_APP_PRIVATE_KEY` secrets. The **Create GitHub App** and
+**Install** clicks stay manual — it opens the browser at each. Pass `--no-app` to skip
+provisioning and leave the auto-approval layer unconfigured.
 
 ## CLI
 

@@ -56,10 +56,12 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   const ctx = await deps.preflight(cwd);
   deps.info(`waiver-stamp setup: ${ctx.owner}/${ctx.repo} (default branch ${ctx.defaultBranch})`);
   if (!ctx.pnpm)
-    deps.warn('no pnpm-lock.yaml found — the dependency-bump op will be inert (spec §4.1).');
+    deps.warn('no `pnpm-lock.yaml` found — `allowBumping` in `.waiver-stamp.json` will be inert.');
 
   if (opts.noApp) {
-    deps.info('--no-app: skipping App provisioning (configure the human-click layer manually).');
+    deps.info(
+      '--no-app: skipping App provisioning — configure the auto-approval layer yourself, or leave it unconfigured.',
+    );
     return;
   }
 

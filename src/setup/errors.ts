@@ -4,6 +4,8 @@ export class SetupError extends Error {
   constructor(
     message: string,
     readonly remediation: string,
+    /** Raw underlying output (e.g. a failed `gh` response) to include when asking the user to report it. */
+    readonly details?: string,
   ) {
     super(message);
   }

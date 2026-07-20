@@ -47,6 +47,7 @@ async function run(body: () => Promise<void>): Promise<void> {
     } else if (err instanceof SetupError) {
       console.error(`error: ${err.message}`);
       console.error(`  ${err.remediation}`);
+      if (err.details) console.error(`  details: ${err.details}`);
       setExit(EXIT.MALFORMED);
     } else {
       console.error(`internal error: ${err instanceof Error ? err.message : String(err)}`);

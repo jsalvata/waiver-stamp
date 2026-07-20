@@ -43,7 +43,7 @@ describe('makeGh', () => {
       value: '42',
       scope: 'org',
       org: 'acme',
-      repos: ['acme/demo'],
+      repo: 'acme/demo',
     });
     const [, args, opts] = run.mock.calls[0] ?? [];
     expect(args).toEqual([
@@ -85,12 +85,14 @@ describe('makeGh', () => {
     ]);
   });
 
-  it('appConversion fails closed (SetupError) when the code has expired', async () => {
+  it('appConversion fails closed (SetupError) when the code has expired, carrying the response', async () => {
     const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 404: Not Found', code: 1 }));
     const gh = makeGh(run);
-    await expect(gh.appConversion('stale')).rejects.toMatchObject({
-      name: 'SetupError',
-      remediation: 'HTTP 404: Not Found',
-    });
+    const err = await gh.appConversion('stale').catch((e: unknown) => e);
+    expect(err).toMatchObject({ name: 'SetupError', details: 'HTTP 404: Not Found' });
+    // The raw response rides in `details` (structured), and the remediation says where to report.
+    expect((err as { remediation: string }).remediation).toContain(
+      'github.com/jsalvata/waiver-stamp/issues',
+    );
   });
 });
