@@ -1,3 +1,11 @@
+# [1.21.0](https://github.com/jsalvata/waiver-stamp/compare/v1.20.0...v1.21.0) (2026-07-20)
+
+
+### Features
+
+* cover dep bumps in lockfile-less repos ([57990f1](https://github.com/jsalvata/waiver-stamp/commit/57990f17a44e46a39371d9715333a08c7294d445))
+* drop setup warning + dead pnpm detection ([89b1659](https://github.com/jsalvata/waiver-stamp/commit/89b1659cd2ffc8969f9b9e70340be9dff2d726a9))
+
 # [1.20.0](https://github.com/jsalvata/waiver-stamp/compare/v1.19.0...v1.20.0) (2026-07-20)
 
 
