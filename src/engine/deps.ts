@@ -168,8 +168,6 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
   // `pnpm-lock.yaml`, so its absence means no pinned closure; a bare `package-lock.json`/
   // `yarn.lock` under some other manager would not be honest-by-absence.
   if (!(await exists(join(ctx.oDir, LOCKFILE)))) {
-    // A freshly *added* lockfile pins the whole closure as new, unvouched bytes with no
-    // external gate to catch tampering — never blanket-accept it; fall to review.
     if (await exists(join(ctx.headDir, LOCKFILE))) {
       return `${LOCKFILE} added in head — a new lockfile is an unvouched supply-chain surface (§6.3 step 5)`;
     }
