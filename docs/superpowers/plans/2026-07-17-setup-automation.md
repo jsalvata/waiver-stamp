@@ -1486,14 +1486,16 @@ Branch `jordi/setup-automation/setup-automation-5` off PR 4. PR body: PR 5 of th
 
 ## PR 6 — Repo config + phase boundary
 
-**Intent:** everything the App doesn't cover — the dedicated ruleset, commitlint detection, the non-destructive caller-workflow drop, `.waiver-stamp.json` seeding, the instructions hand-off page — plus the §4.13 ordering (open the workflows PR, let the producer run once, *then* add the required-check ruleset). Completes the orchestrator.
+**Intent:** everything the App doesn't cover — the dedicated ruleset, commitlint and linter detection, the non-destructive caller-workflow drop, `.waiver-stamp.json` seeding, the instructions hand-off page — plus the §4.13 ordering (open the workflows PR, let the producer run once, *then* add the required-check ruleset). Completes the orchestrator.
 
 **Files:**
 - Create: `src/setup/ruleset.ts` (+ test)
 - Create: `src/setup/commitlint.ts` (+ test)
+- Create: `src/setup/lint.ts` (+ test)
 - Create: `src/setup/workflows.ts` (+ test)
 - Create: `src/setup/config-seed.ts` (+ test)
 - Create: `src/setup/handoff.ts` (+ test)
+- Modify: `src/engine/ops/lint-fix.ts` — export the linter catalog so the setup advisory reads the same source of truth the op resolves against (no second copy in `src/setup/`)
 - Modify: `src/setup/gh.ts` (+ test) — add `listRulesets`, `createRuleset`, `installationPresent(owner, repo)`, `checkRunPresent(owner, repo, sha, name)`
 - Modify: `src/commands/setup-repository.ts` (+ test) — the full phased flow
 - Modify: `README.md` — finalize the happy path
@@ -1501,6 +1503,7 @@ Branch `jordi/setup-automation/setup-automation-5` off PR 4. PR body: PR 5 of th
 **Interfaces:**
 - Produces: `ensureWaiverStampRuleset(gh, { owner, repo, defaultBranch }): Promise<'created' | 'exists'>`.
 - Produces: `detectCommitlintBodyLimit(cwd, run): Promise<{ blocks: boolean }>`.
+- Produces: `detectLintFixLinter(cwd): Promise<{ status: 'resolved' | 'none' | 'ambiguous'; declared: string[] }>`.
 - Produces: `discoverCiWorkflowNames(dir): Promise<string[]>`, `detectLockfileHonestyCheck(dir): Promise<string | null>`, `writeCallerWorkflows(cwd, { ciWorkflowNames }): Promise<{ written: string[]; skipped: string[] }>`.
 - Produces: `seedConfigIfAbsent(cwd, { lockfileHonestyCheck? }): Promise<{ seeded: boolean; existing: boolean }>`.
 - Produces: `handoffPage(args): string`.
@@ -1545,6 +1548,16 @@ Create `src/setup/commitlint.test.ts` + `src/setup/commitlint.ts`. Run the repo'
 
 Run: `pnpm test setup/commitlint` → PASS.
 
+- [ ] **Step 2b: `detectLintFixLinter` (failing test → impl)**
+
+The `lint-fix` op resolves the repo's linter from its committed `package.json` and **fails closed** on either miss — none declared, or more than one (`resolveLinter`, `src/engine/ops/lint-fix.ts`). This advisory surfaces that at setup time instead of at the first `lint-fix` attempt; it is **warn-only** (never an error), because either state disables only the one op — every other op still works, so a repo mid-linter-migration or one that never uses `lint-fix` must not be blocked from adopting.
+
+First export the catalog from `src/engine/ops/lint-fix.ts` as the single source of truth — a `declaredLinters(cwd): LinterSpec[]` helper (reusing the existing `SUPPORTED_LINTERS` + manifest read) so setup never re-lists `@biomejs/biome`/`eslint`. A second copy would drift from the op (see the pending `2026-07-07-eslint-lint-fix.md` catalog change and future rows).
+
+Create `src/setup/lint.test.ts` + `src/setup/lint.ts`. `detectLintFixLinter(cwd)` calls `declaredLinters(cwd)` and maps count → `{ status, declared }`: 1 → `'resolved'`, 0 → `'none'`, ≥2 → `'ambiguous'` (with the declared package names). Declaration is the source of truth (§6.1) — this is a config advisory, so no binary-presence check (that's the op's apply-time concern). Test all three counts against `package.json` fixtures (reuse `FIXTURE_BIOME_JSON` / `FIXTURE_ESLINT_PACKAGE_JSON` from `src/test-helpers.ts`, plus a both-declared and a neither fixture).
+
+Run: `pnpm test setup/lint` → PASS.
+
 - [ ] **Step 3: `workflows.ts` — discovery + non-destructive write (failing test → impl)**
 
 Create `src/setup/workflows.test.ts` + `src/setup/workflows.ts`:
@@ -1584,6 +1597,11 @@ for (const p of drop.skipped) deps.warn(`left existing ${p} untouched — reconc
 const seed = await deps.seedConfigIfAbsent(cwd, { lockfileHonestyCheck: honesty ?? undefined });
 if ((await deps.detectCommitlintBodyLimit(cwd)).blocks)
   deps.warn('commitlint rejects long body lines; set `body-max-line-length: [0]` (spec §4.7).');
+const lint = await deps.detectLintFixLinter(cwd);
+if (lint.status === 'none')
+  deps.warn('no supported linter (biome/eslint) declared — the lint-fix op is unavailable (spec §6.1).');
+else if (lint.status === 'ambiguous')
+  deps.warn(`multiple linters declared (${lint.declared.join(', ')}); lint-fix fails closed until you narrow to one (spec §6.1).`);
 
 // §4.13 phase boundary: the required-check ruleset must not precede the producer's first run.
 if (await deps.gh.checkRunPresent(ctx.owner, ctx.repo, /* latest default-branch sha */)) {
@@ -1610,7 +1628,7 @@ Point README's happy path at `waiver setup-repository` with the manual doc linke
 
 - [ ] **Step 8: End-to-end (full flow)**
 
-Against a scratch repo: `pnpm dev setup-repository`. Confirm — callers written (skipped on re-run), config seeded if absent, commitlint warning if applicable, the phase-boundary message before the producer has run, and the hand-off page opens. After merging the callers and letting the producer run, re-run → the ruleset is created and the run converges to a no-op. Evidence: the written files, the created ruleset (`gh api …/rulesets`), the hand-off page.
+Against a scratch repo: `pnpm dev setup-repository`. Confirm — callers written (skipped on re-run), config seeded if absent, commitlint and linter warnings if applicable (drop/duplicate the linter devDep to exercise the none/ambiguous branches), the phase-boundary message before the producer has run, and the hand-off page opens. After merging the callers and letting the producer run, re-run → the ruleset is created and the run converges to a no-op. Evidence: the written files, the created ruleset (`gh api …/rulesets`), the hand-off page.
 
 - [ ] **Step 9: Commit + PR (skills)**
 
