@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/jsalvata/waiver-stamp/compare/v1.18.1...v1.19.0) (2026-07-20)
+
+
+### Features
+
+* add setup-repository preflight command ([82685fb](https://github.com/jsalvata/waiver-stamp/commit/82685fb44315a1dba2478875820be1fee660008d))
+
 ## [1.18.1](https://github.com/jsalvata/waiver-stamp/compare/v1.18.0...v1.18.1) (2026-07-19)
 
 

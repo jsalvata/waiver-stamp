@@ -80,7 +80,7 @@ jobs:
           app-id: ${{ secrets.app_id }}
           private-key: ${{ secrets.app_private_key }}
           permission-pull-requests: write
-      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.18.1
+      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.19.0
         with:
           ci-checks: ${{ inputs.ci-checks }}
           github-token: ${{ steps.app-token.outputs.token || github.token }}
