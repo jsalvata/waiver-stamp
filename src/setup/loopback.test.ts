@@ -1,3 +1,4 @@
+import { type Socket, connect } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { runManifestFlow } from './loopback.ts';
 import { buildManifest } from './manifest.ts';
@@ -31,6 +32,30 @@ describe('runManifestFlow', () => {
     });
     expect(creds).toEqual({ appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' });
     expect(convert).toHaveBeenCalledOnce();
+  });
+
+  it('closes lingering browser connections on success so the process can exit', async () => {
+    const manifest = buildManifest({ owner: 'o', appUrl: 'https://x' });
+    // A real browser leaves an idle TCP socket to the loopback (a preconnect, or the socket left
+    // after the form page self-POSTs and navigates away) with no request in flight. server.close()
+    // never reaps those, so the CLI hangs after "secrets written" — teardown must destroy them.
+    let idle: Socket | undefined;
+    const openBrowser = vi.fn(async (formUrl: string) => {
+      const u = new URL(formUrl);
+      const state = u.searchParams.get('state');
+      idle = connect(Number(u.port), u.hostname);
+      await new Promise<void>((r) => idle?.once('connect', () => r()));
+      await fetch(`${u.origin}/callback?code=abc123&state=${state}`);
+    });
+    await runManifestFlow({
+      target: { kind: 'personal' },
+      manifest,
+      openBrowser,
+      convert: async () => ({ appId: 1, pem: 'p', slug: 's' }),
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(idle?.destroyed).toBe(true);
+    idle?.destroy();
   });
 
   it('rejects a callback whose state does not match (CSRF guard)', async () => {

@@ -124,6 +124,10 @@ export function runManifestFlow(deps: ManifestFlowDeps): Promise<AppCredentials>
       if (timer) clearTimeout(timer);
       disposeAbort?.();
       server.close();
+      // The browser leaves idle sockets to the loopback (preconnects, or the form-page socket
+      // after it navigates away) with no request in flight. server.close() waits on those forever,
+      // so the CLI would hang after "secrets written" — drop them and let the process exit.
+      server.closeAllConnections();
     }
     function fail(err: Error): void {
       if (settled) return;
