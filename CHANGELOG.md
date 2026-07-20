@@ -1,3 +1,16 @@
+# [1.20.0](https://github.com/jsalvata/waiver-stamp/compare/v1.19.0...v1.20.0) (2026-07-20)
+
+
+### Bug Fixes
+
+* correct lockfile warning + trim comments ([c7af570](https://github.com/jsalvata/waiver-stamp/commit/c7af570ab7a398a5cb72490f2a8eb4983822c271))
+* refine setup provisioning per review ([21b47f6](https://github.com/jsalvata/waiver-stamp/commit/21b47f64bbcc79d5810115e3b450b2f1e10b1f3d))
+
+
+### Features
+
+* provision app + secrets on setup ([82c5b33](https://github.com/jsalvata/waiver-stamp/commit/82c5b33212515d2a90a903f37a66de144a71fb4b))
+
 # [1.19.0](https://github.com/jsalvata/waiver-stamp/compare/v1.18.1...v1.19.0) (2026-07-20)
 
 
