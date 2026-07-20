@@ -32,8 +32,12 @@ jobs:
     # hash-pin-only, swap the ref for the SHA it points at:
     #   gh api repos/jsalvata/waiver-stamp/commits/v1.19.0 --jq .sha
     uses: jsalvata/waiver-stamp/.github/workflows/reusable-review.yml@v1.19.0
-    # secrets: inherit  # <-- uncomment only for the App-token path (step 8): forwards
-    #                   #     app-id / app-private-key secrets to the reusable reviewer.
+    # App-token path (step 8) only — the namespaced secret names don't match the reusable
+    # workflow's inputs by `secrets: inherit`, so map them explicitly. Drop this block for
+    # the no-App path.
+    secrets:
+      app_id: ${{ secrets.WAIVER_STAMP_APP_ID }}
+      app_private_key: ${{ secrets.WAIVER_STAMP_APP_PRIVATE_KEY }}
     # with:
     #   ci-checks: |    # <-- optional override for the no-App path (empty ⇒ autodiscover).
     #     build         #     CHECK-RUN names, not job ids — one per matrix leg.

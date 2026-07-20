@@ -36,8 +36,9 @@ on:
         type: string
         default: ''
     secrets:
-      # Underscored, not hyphenated: `secrets: inherit` maps a caller's APP_ID / APP_PRIVATE_KEY
-      # here by case-insensitive name, and secret names cannot contain hyphens.
+      # Internal input names. Adopters store `WAIVER_STAMP_APP_ID` / `WAIVER_STAMP_APP_PRIVATE_KEY`
+      # and map them here via an explicit `secrets:` block (not `inherit`) — the namespaced names
+      # don't match these inputs by case-insensitive name, so `inherit` wouldn't forward them.
       app_id:
         description: >-
           GitHub App ID whose token posts the review. Empty ⇒ the default GITHUB_TOKEN, which

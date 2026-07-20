@@ -145,8 +145,14 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    >
    > For the App path, **two things must both hold**, and it's easy to get only the first:
    >
-   > 1. **Give the caller the App credentials.** Set repo/environment secrets `APP_ID` and
-   >    `APP_PRIVATE_KEY`, and uncomment `secrets: inherit` in your `waiver-stamp-review.yml`.
+   > 1. **Give the caller the App credentials.** `waiver setup-repository` creates the App and
+   >    writes these two secrets for you (you still click **Create GitHub App** and **Install** in
+   >    the browser it opens — §3.3). To do it by hand: set repo/environment secrets
+   >    `WAIVER_STAMP_APP_ID` and `WAIVER_STAMP_APP_PRIVATE_KEY`, and map them to the reusable
+   >    workflow's inputs with an explicit `secrets:` block in your `waiver-stamp-review.yml`
+   >    (`app_id: ${{ secrets.WAIVER_STAMP_APP_ID }}`,
+   >    `app_private_key: ${{ secrets.WAIVER_STAMP_APP_PRIVATE_KEY }}`) — the namespaced names
+   >    won't forward by `secrets: inherit`.
    >    The reusable workflow mints the token, scopes it (`permission-pull-requests: write`, so
    >    zizmor's `github-app` audit stays clean), and wires it into the action's `github-token`
    >    — you don't add a `create-github-app-token` step yourself.
