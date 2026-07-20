@@ -1,4 +1,3 @@
-import { access } from 'node:fs/promises';
 import { type GhClient, makeGh } from '../setup/gh.ts';
 import type { AppCredentials } from '../setup/loopback.ts';
 import { openBrowser } from '../setup/open-browser.ts';
@@ -27,27 +26,18 @@ export interface SetupDeps {
   provisionSecrets: (gh: GhClient, a: ProvisionSecretsArgs) => Promise<void>;
   openBrowser: (url: string) => Promise<void>;
   info: (msg: string) => void;
-  warn: (msg: string) => void;
 }
 
 /** Default wiring for the CLI (real shell + fs). PRs 5–6 extend App resolution (reuse/disk). */
 export function makeSetupDeps(): SetupDeps {
   return {
-    preflight: (cwd) =>
-      preflight(cwd, {
-        run: runCommand,
-        exists: async (p) =>
-          access(p)
-            .then(() => true)
-            .catch(() => false),
-      }),
+    preflight: () => preflight({ run: runCommand }),
     gh: makeGh(runCommand),
     chooseTarget,
     provisionAppFresh,
     provisionSecrets,
     openBrowser,
     info: (m) => console.log(m),
-    warn: (m) => console.warn(`warning: ${m}`),
   };
 }
 
@@ -55,10 +45,6 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   const cwd = opts.cwd ?? process.cwd();
   const ctx = await deps.preflight(cwd);
   deps.info(`waiver-stamp setup: ${ctx.owner}/${ctx.repo} (default branch ${ctx.defaultBranch})`);
-  if (!ctx.pnpm)
-    deps.warn(
-      'no `pnpm-lock.yaml` found — dependency bumps can’t be waived; a waivered commit that changes `package.json` will be rejected.',
-    );
 
   if (opts.noApp) {
     deps.info(

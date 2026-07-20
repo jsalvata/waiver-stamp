@@ -18,22 +18,18 @@ const ok = {
 };
 
 describe('preflight', () => {
-  it('resolves owner/repo/defaultBranch and detects pnpm', async () => {
-    const r = await preflight('/repo', {
-      run: runner(ok),
-      exists: async (p: string) => p.endsWith('pnpm-lock.yaml'),
-    });
-    expect(r).toMatchObject({ owner: 'jsalvata', repo: 'demo', defaultBranch: 'main', pnpm: true });
+  it('resolves owner/repo/defaultBranch', async () => {
+    const r = await preflight({ run: runner(ok) });
+    expect(r).toMatchObject({ owner: 'jsalvata', repo: 'demo', defaultBranch: 'main' });
   });
   it('parses an SSH origin remote', async () => {
-    const r = await preflight('/repo', {
+    const r = await preflight({
       run: runner({
         ...ok,
         'git remote get-url origin': { stdout: 'git@github.com:jsalvata/demo.git\n' },
       }),
-      exists: async () => false,
     });
-    expect(r).toMatchObject({ owner: 'jsalvata', repo: 'demo', pnpm: false });
+    expect(r).toMatchObject({ owner: 'jsalvata', repo: 'demo' });
   });
   // Each failure path pins its own message so a future refactor can't silently swap one
   // remediation for another — the remediation string is what the user acts on.
@@ -51,9 +47,8 @@ describe('preflight', () => {
     ['gh is not authenticated', { 'gh auth status': { code: 1 } }],
     ['gh is not installed', { 'gh auth status': { code: 127 } }],
   ])('throws SetupError %s', async (message, override) => {
-    const err = await preflight('/repo', {
+    const err = await preflight({
       run: runner({ ...ok, ...override }),
-      exists: async () => false,
     }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(SetupError);
     expect((err as SetupError).message).toBe(message);

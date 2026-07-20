@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GhClient } from '../setup/gh.ts';
 import { type SetupDeps, setupRepository } from './setup-repository.ts';
 
-const ctx = { owner: 'jsalvata', repo: 'demo', defaultBranch: 'main', pnpm: true };
+const ctx = { owner: 'jsalvata', repo: 'demo', defaultBranch: 'main' };
 
 const fakeGh = (): GhClient => ({
   listOrgs: vi.fn(async () => []),
@@ -23,7 +23,6 @@ function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
     provisionSecrets: vi.fn(async () => {}),
     openBrowser: vi.fn(async () => {}),
     info: vi.fn(),
-    warn: vi.fn(),
     ...over,
   };
 }
@@ -33,15 +32,6 @@ describe('setupRepository', () => {
     const info = vi.fn();
     await setupRepository({ cwd: '/repo' }, makeDeps({ info }));
     expect(info).toHaveBeenCalledWith(expect.stringContaining('jsalvata/demo'));
-  });
-
-  it('warns when pnpm-lock is absent', async () => {
-    const warn = vi.fn();
-    await setupRepository(
-      { cwd: '/repo' },
-      makeDeps({ preflight: vi.fn(async () => ({ ...ctx, pnpm: false })), warn }),
-    );
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('pnpm-lock'));
   });
 
   it('provisions the App and secrets, then opens the install URL (happy path)', async () => {

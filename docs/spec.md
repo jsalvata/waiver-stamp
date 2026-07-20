@@ -424,8 +424,26 @@ otherwise they stay un-covered → the commit fails to stamp → review:
    accept a tampered lockfile inside an allowlisted bump (as any human reviewer would
    probably do, admittedly).
 
+   **Lockfile-less repos.** The delegated check only makes sense for a *present*
+   lockfile — a committed lockfile is an unvouched supply-chain surface precisely
+   because it pins the whole transitive closure as bytes no gate re-derives. A repo
+   with **no committed lockfile** has no such surface: `pnpm install` resolves fresh
+   from the registry per the manifest, so a manifest-only bump introduces no new pinned
+   bytes. There, gates 1–4 **are** the complete surface, and a manifest-only bump is
+   covered without any lockfile-honesty gate. Two guardrails keep this safe:
+   - **The pnpm pin is load-bearing.** "No `pnpm-lock.yaml`" only implies "no pinned
+     closure" because `packageManager` pins pnpm — pnpm reads solely `pnpm-lock.yaml`.
+     A non-pnpm repo could hide a `package-lock.json`/`yarn.lock` this tool never
+     inspects, so it still fails the pnpm-pin gate (as before) — absence is honest only
+     under pnpm.
+   - **A head-added lockfile is rejected.** If the base has no lockfile but the commit
+     *adds* one, that fresh lockfile is a brand-new unvouched surface — the coverage
+     only holds when neither base nor head has a lockfile. Adding one → not covered →
+     review.
+
 Steps 1–4 are offline and deterministic; step 5 is deliberately someone else's load,
-delegated exactly the way tsc-clean and tests-green are (§3.1.6).
+delegated exactly the way tsc-clean and tests-green are (§3.1.6) — and vacuous for a
+lockfile-less repo, where there is no lockfile to vouch.
 
 ### 6.5 `change-docs` policy — `.waiver-stamp.json`
 

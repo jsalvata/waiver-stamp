@@ -1,11 +1,12 @@
 /**
  * The standing dependency-bump policy (spec §6.3). Not a waiver op: when a waivered
  * commit changes `package.json`/lockfile, these gates decide whether the change is a
- * covered bump — allowlisted, plain-semver, up-moving, confined. Lockfile honesty is a
- * delegated precondition (§6.3 step 5): the repo's external always-on check (e.g.
- * lockfile-firewall) vouches the bytes, like CI vouches tsc/tests (§3.1.6) — this
- * module never re-resolves. Trusts upstream review of the bumped package; not
- * behaviour-preserving.
+ * covered bump — allowlisted, plain-semver, up-moving, confined. A *present* lockfile's
+ * honesty is a delegated precondition (§6.3 step 5): the repo's external always-on check
+ * (e.g. lockfile-firewall) vouches the bytes, like CI vouches tsc/tests (§3.1.6) — this
+ * module never re-resolves. A lockfile-less repo (pnpm pinned, no committed lockfile) has
+ * no pinned closure to vouch, so gates 1–4 alone cover a manifest-only bump. Trusts
+ * upstream review of the bumped package; not behaviour-preserving.
  */
 
 import { access, readFile } from 'node:fs/promises';
@@ -159,10 +160,10 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
   if (typeof pm !== 'string' || !pm.startsWith('pnpm@')) {
     return 'base package.json must pin `packageManager` to pnpm (only pnpm is supported)';
   }
-  try {
-    await access(join(ctx.oDir, LOCKFILE));
-  } catch {
-    return `${LOCKFILE} not found in base`;
+  if (!(await exists(join(ctx.oDir, LOCKFILE)))) {
+    if (await exists(join(ctx.headDir, LOCKFILE))) {
+      return `${LOCKFILE} added in head — a new lockfile is an unvouched supply-chain surface (§6.3 step 5)`;
+    }
   }
 
   // Pull the allowlist slice straight from the shared config (base) — a PR
@@ -181,6 +182,15 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
   const violations = manifestBumpViolations(baseManifest, headManifest, allowBumping);
   if (violations.length > 0) return violations.join('; ');
   return null;
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function readManifest(dir: string): Promise<Record<string, unknown> | null> {

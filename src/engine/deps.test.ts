@@ -132,6 +132,21 @@ async function baseCommit(extra: Record<string, string> = {}): Promise<string> {
   );
 }
 
+/** Base commit for a lockfile-less repo: everything `baseCommit` writes minus the lockfile. */
+async function baseCommitNoLock(extra: Record<string, string> = {}): Promise<string> {
+  if (!g) throw new Error('repo not initialized');
+  return g.commit(
+    {
+      'tsconfig.json': FIXTURE_TSCONFIG_JSON,
+      'src/a.ts': 'export const a = 1;\n',
+      'package.json': pkgJson(),
+      '.waiver-stamp.json': ALLOW_JSON,
+      ...extra,
+    },
+    'base (no lockfile)',
+  );
+}
+
 async function validate(commit: string) {
   if (!g) throw new Error('repo not initialized');
   return validateCommit(EMPTY_WAIVER, { commit, cwd: g.repo });
@@ -336,5 +351,82 @@ describe('dependency-bump policy (validateCommit integration)', () => {
     // No package.json change → policy does not fire; the source edit is uncovered.
     expect(report.stamped).toBe(false);
     expect(report.uncovered).toEqual(['src/a.ts']);
+  });
+});
+
+describe('dependency-bump policy — lockfile-less repo (§6.3 step 5)', () => {
+  it('COVERS a manifest-only allowlisted bump (no lockfile to smuggle through)', async () => {
+    g = await makeGitRepo();
+    await baseCommitNoLock();
+    // Bump lodash; no lockfile added — gates 1–4 are the complete supply-chain surface.
+    const head = await g.commit(
+      { 'package.json': pkgJson({ dependencies: { lodash: '^2.0.0', 'left-pad': '^1.0.0' } }) },
+      'bump lodash, no lockfile',
+    );
+    const report = await validate(head);
+    expect(report.failures).toEqual([]);
+    expect(report.stamped).toBe(true);
+  });
+
+  it('FAILS when head adds a lockfile (a fresh lockfile is unvouched)', async () => {
+    g = await makeGitRepo();
+    await baseCommitNoLock();
+    const head = await g.commit(
+      {
+        'package.json': pkgJson({ dependencies: { lodash: '^2.0.0', 'left-pad': '^1.0.0' } }),
+        'pnpm-lock.yaml': HEAD_LOCK,
+      },
+      'bump lodash + introduce a lockfile',
+    );
+    const report = await validate(head);
+    expect(report.stamped).toBe(false);
+    expect(report.failures.join('\n')).toContain('added in head');
+  });
+
+  it('still FAILS a non-allowlisted bump (gate 2 unchanged)', async () => {
+    g = await makeGitRepo();
+    await baseCommitNoLock();
+    const head = await g.commit(
+      { 'package.json': pkgJson({ dependencies: { lodash: '^1.0.0', 'left-pad': '^2.0.0' } }) },
+      'bump left-pad, no lockfile',
+    );
+    const report = await validate(head);
+    expect(report.stamped).toBe(false);
+    expect(report.failures.join('\n')).toContain('not on allowBumping');
+  });
+
+  it('still FAILS an added dependency (gate 1 unchanged)', async () => {
+    g = await makeGitRepo();
+    await baseCommitNoLock();
+    const head = await g.commit(
+      {
+        'package.json': pkgJson({
+          dependencies: { lodash: '^1.0.0', 'left-pad': '^1.0.0', '@myorg/new': '1.0.0' },
+        }),
+      },
+      'add @myorg/new, no lockfile',
+    );
+    const report = await validate(head);
+    expect(report.stamped).toBe(false);
+    expect(report.failures.join('\n')).toContain("'@myorg/new' added");
+  });
+
+  it('still FAILS a non-pnpm repo (the pnpm pin is load-bearing for honest-by-absence)', async () => {
+    // Absent `pnpm-lock.yaml` only implies "no pinned closure" because pnpm is pinned;
+    // an npm/yarn repo could hide one under a name this tool never inspects.
+    g = await makeGitRepo();
+    await baseCommitNoLock({ 'package.json': pkgJson({ packageManager: 'npm@10.0.0' }) });
+    const head = await g.commit(
+      {
+        'package.json': pkgJson({
+          packageManager: 'npm@10.0.0',
+          dependencies: { lodash: '^2.0.0', 'left-pad': '^1.0.0' },
+        }),
+      },
+      'bump on lockfile-less npm repo',
+    );
+    const report = await validate(head);
+    expect(report.stamped).toBe(false);
+    expect(report.failures.join('\n')).toContain('pnpm');
   });
 });
