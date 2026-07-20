@@ -8,6 +8,7 @@ const fakeGh = (): GhClient => ({
   listOrgs: vi.fn(async () => []),
   setSecret: vi.fn(async () => {}),
   appConversion: vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' })),
+  tokenScopes: vi.fn(async () => ['repo', 'admin:org']),
 });
 
 function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
@@ -34,17 +35,48 @@ describe('setupRepository', () => {
     expect(info).toHaveBeenCalledWith(expect.stringContaining('jsalvata/demo'));
   });
 
-  it('provisions the App and secrets, then opens the install URL (happy path)', async () => {
+  it('provisions the App and secrets, then guides install in the same tab', async () => {
     const provisionSecrets = vi.fn(async () => {});
     const openBrowser = vi.fn(async () => {});
+    const info = vi.fn();
     await setupRepository(
       { cwd: '/repo', target: 'personal' },
-      makeDeps({ provisionSecrets, openBrowser }),
+      makeDeps({ provisionSecrets, openBrowser, info }),
     );
     expect(provisionSecrets).toHaveBeenCalledOnce();
-    expect(openBrowser).toHaveBeenCalledWith(
-      'https://github.com/apps/waiver-stamp-jsalvata/installations/new',
+    // provisionAppFresh (mocked here) owns the single browser open; the orchestrator must not
+    // spawn a second install tab — the done page forwards to install in that same tab.
+    expect(openBrowser).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith(expect.stringMatching(/install/i));
+  });
+
+  it('org target without the admin:org scope fails before creating the App', async () => {
+    const provisionAppFresh = vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' }));
+    const gh: GhClient = { ...fakeGh(), tokenScopes: vi.fn(async () => ['repo', 'read:org']) };
+    const err = await setupRepository(
+      { cwd: '/repo', target: 'acme' },
+      makeDeps({
+        chooseTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
+        gh,
+        provisionAppFresh,
+      }),
+    ).catch((e: unknown) => e);
+    expect(err).toMatchObject({ name: 'SetupError', message: expect.stringMatching(/admin:org/) });
+    expect(provisionAppFresh).not.toHaveBeenCalled();
+  });
+
+  it('org target with the admin:org scope proceeds to provisioning', async () => {
+    const provisionAppFresh = vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' }));
+    const gh: GhClient = { ...fakeGh(), tokenScopes: vi.fn(async () => ['repo', 'admin:org']) };
+    await setupRepository(
+      { cwd: '/repo', target: 'acme' },
+      makeDeps({
+        chooseTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
+        gh,
+        provisionAppFresh,
+      }),
     );
+    expect(provisionAppFresh).toHaveBeenCalledOnce();
   });
 
   it('--no-app skips provisioning entirely', async () => {

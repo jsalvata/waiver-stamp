@@ -15,8 +15,15 @@ export function formPage(action: string, manifest: AppManifest): string {
 </form>`;
 }
 
-/** Shown after conversion succeeds; links the interactive install page (spec §3.3). */
+/**
+ * Shown after conversion succeeds (spec §3.3). Auto-forwards to the interactive install page in
+ * the same tab (the meta refresh) so the CLI never has to open a second browser tab, with a manual
+ * link as the fallback if the redirect is blocked.
+ */
 export function donePage(installUrl: string): string {
   return `<!doctype html><meta charset=utf-8><title>waiver-stamp — install</title>
-<body><h1>App created ✓</h1><p>Next step: <a href="${installUrl}">install it on your repository</a>, then return to your terminal.</p>`;
+<meta http-equiv="refresh" content="2;url=${installUrl}">
+<body><h1>App created ✓</h1>
+<p>Last step: pick this repository and click <b>Install</b>.</p>
+<p>Taking you to the install page… if nothing happens, <a href="${installUrl}">open it here</a>, then return to your terminal.</p>`;
 }

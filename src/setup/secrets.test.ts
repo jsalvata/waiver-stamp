@@ -6,6 +6,7 @@ const fakeGh = (): GhClient => ({
   listOrgs: vi.fn(async () => []),
   setSecret: vi.fn(async () => {}),
   appConversion: vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' })),
+  tokenScopes: vi.fn(async () => ['admin:org']),
 });
 
 describe('provisionSecrets', () => {

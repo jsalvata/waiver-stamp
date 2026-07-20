@@ -67,6 +67,20 @@ describe('makeGh', () => {
     ).rejects.toMatchObject({ name: 'SetupError', remediation: 'HTTP 403 Forbidden' });
   });
 
+  it('tokenScopes parses the X-Oauth-Scopes response header', async () => {
+    const run = mockRun(async () =>
+      ok('HTTP/2.0 200 OK\r\nX-Oauth-Scopes: repo, admin:org, gist\r\n\r\n{"login":"x"}'),
+    );
+    const gh = makeGh(run);
+    expect(await gh.tokenScopes()).toEqual(['repo', 'admin:org', 'gist']);
+    expect(run).toHaveBeenCalledWith('gh', ['api', '-i', 'user']);
+  });
+
+  it('tokenScopes returns [] when the scopes header is absent (unprovable)', async () => {
+    const run = mockRun(async () => ok('HTTP/2.0 200 OK\r\n\r\n{"login":"x"}'));
+    expect(await makeGh(run).tokenScopes()).toEqual([]);
+  });
+
   it('appConversion posts to the conversions endpoint and maps id → appId', async () => {
     const run = mockRun(async () =>
       ok(JSON.stringify({ id: 7, pem: '-----BEGIN…', slug: 'waiver-stamp-o' })),
