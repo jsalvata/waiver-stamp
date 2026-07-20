@@ -1,0 +1,51 @@
+import { describe, expect, it, vi } from 'vitest';
+import { runManifestFlow } from './loopback.ts';
+import { buildManifest } from './manifest.ts';
+
+describe('runManifestFlow', () => {
+  it('captures the code on loopback, verifies state, converts, returns credentials', async () => {
+    const manifest = buildManifest({
+      owner: 'o',
+      appUrl: 'https://github.com/jsalvata/waiver-stamp',
+    });
+    const convert = vi.fn(async (code: string) => {
+      expect(code).toBe('abc123');
+      return { appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' };
+    });
+    const openBrowser = vi.fn(async (formUrl: string) => {
+      const u = new URL(formUrl);
+      const page = await fetch(formUrl).then((r) => r.text());
+      expect(page).toContain('method="post"');
+      // Mirror GitHub: it echoes `state` back only because it rode in on the form's action URL.
+      // Read it from there (not the local page-load URL) so this fails if the action drops state.
+      const action = page.match(/action="([^"]+)"/)?.[1] ?? '';
+      const state = new URL(action).searchParams.get('state');
+      expect(state).toBeTruthy();
+      await fetch(`${u.origin}/callback?code=abc123&state=${state}`);
+    });
+    const creds = await runManifestFlow({
+      target: { kind: 'personal' },
+      manifest,
+      openBrowser,
+      convert,
+    });
+    expect(creds).toEqual({ appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' });
+    expect(convert).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a callback whose state does not match (CSRF guard)', async () => {
+    const manifest = buildManifest({ owner: 'o', appUrl: 'https://x' });
+    const openBrowser = vi.fn(async (formUrl: string) => {
+      await fetch(`${new URL(formUrl).origin}/callback?code=abc123&state=WRONG`);
+    });
+    await expect(
+      runManifestFlow({
+        target: { kind: 'personal' },
+        manifest,
+        openBrowser,
+        convert: vi.fn(),
+        timeoutMs: 2000,
+      }),
+    ).rejects.toThrow(/state/i);
+  });
+});
