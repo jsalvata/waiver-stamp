@@ -57,7 +57,7 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   deps.info(`waiver-stamp setup: ${ctx.owner}/${ctx.repo} (default branch ${ctx.defaultBranch})`);
   if (!ctx.pnpm)
     deps.warn(
-      'no `pnpm-lock.yaml` found — dependency bumps can’t be waived; a waivered commit that changes `package.json` will be rejected.',
+      'no `pnpm-lock.yaml` found — manifest-only dependency bumps are still waivable (allowlisted, on gates 1–4), but a waivered commit that *adds* a lockfile will be rejected as unvouched.',
     );
 
   if (opts.noApp) {
