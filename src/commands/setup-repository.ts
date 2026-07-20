@@ -70,7 +70,7 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
     'Opening your browser — two steps, both in that one tab:\n' +
       '  1. Review the App’s permissions, then click the green “Create GitHub App”.\n' +
       '  2. You’ll land on an install page — pick this repository and click “Install”.\n' +
-      'Press Enter here (or Ctrl-C) to cancel.',
+      'Press Enter here to cancel.',
   );
   const app = await deps.provisionAppFresh({
     target,
