@@ -1,5 +1,10 @@
 import type { GhClient } from './gh.ts';
-import { type AppCredentials, type ManifestFlowDeps, runManifestFlow } from './loopback.ts';
+import {
+  type AppCredentials,
+  type ManifestFlowDeps,
+  abortOnEnter,
+  runManifestFlow,
+} from './loopback.ts';
 import { buildManifest } from './manifest.ts';
 
 export type InstallTarget = { kind: 'personal' } | { kind: 'org'; org: string };
@@ -25,6 +30,8 @@ export interface ProvisionAppFreshArgs {
   openBrowser: (url: string) => Promise<void>;
   /** Injectable for tests; defaults to the real loopback handshake. */
   runFlow?: (deps: ManifestFlowDeps) => Promise<AppCredentials>;
+  /** Injectable for tests; defaults to a "press Enter to cancel" abort. */
+  onAbort?: (abort: () => void) => () => void;
 }
 
 /**
@@ -42,5 +49,6 @@ export async function provisionAppFresh(a: ProvisionAppFreshArgs): Promise<AppCr
     manifest,
     openBrowser: a.openBrowser,
     convert: (code) => a.gh.appConversion(code),
+    onAbort: a.onAbort ?? abortOnEnter,
   });
 }

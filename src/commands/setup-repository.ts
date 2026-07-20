@@ -54,6 +54,9 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   }
 
   const target = await deps.chooseTarget(opts.target, deps.gh);
+  deps.info(
+    'Opening your browser for two steps — create the App, then install it. Press Enter here (or Ctrl-C) to cancel.',
+  );
   const app = await deps.provisionAppFresh({
     target,
     owner: ctx.owner,

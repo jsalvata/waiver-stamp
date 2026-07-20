@@ -46,6 +46,21 @@ describe('runManifestFlow', () => {
         convert: vi.fn(),
         timeoutMs: 2000,
       }),
-    ).rejects.toThrow(/state/i);
+    ).rejects.toMatchObject({ name: 'SetupError', message: expect.stringMatching(/state/i) });
+  });
+
+  it('rejects with a SetupError when the user aborts (no timeout needed)', async () => {
+    const manifest = buildManifest({ owner: 'o', appUrl: 'https://x' });
+    const err = await runManifestFlow({
+      target: { kind: 'personal' },
+      manifest,
+      openBrowser: vi.fn(async () => {}), // never calls back — the user gives up instead
+      convert: vi.fn(),
+      onAbort: (abort) => {
+        abort();
+        return () => {};
+      },
+    }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ name: 'SetupError', message: expect.stringMatching(/cancel/i) });
   });
 });
