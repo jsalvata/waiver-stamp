@@ -1,21 +1,18 @@
-import { join } from 'node:path';
 import { SetupError } from './errors.ts';
 import type { RunResult } from './run.ts';
 
 export interface PreflightDeps {
   run: (cmd: string, args: string[]) => Promise<RunResult>;
-  exists: (path: string) => Promise<boolean>;
 }
 export interface RepoContext {
   owner: string;
   repo: string;
   defaultBranch: string;
-  pnpm: boolean;
 }
 
 const NOT_INSTALLED = 127;
 
-export async function preflight(cwd: string, deps: PreflightDeps): Promise<RepoContext> {
+export async function preflight(deps: PreflightDeps): Promise<RepoContext> {
   const inTree = await deps.run('git', ['rev-parse', '--is-inside-work-tree']);
   if (inTree.code === NOT_INSTALLED)
     throw new SetupError('git is not installed', 'Install Git and retry.');
@@ -47,6 +44,5 @@ export async function preflight(cwd: string, deps: PreflightDeps): Promise<RepoC
       'Run `gh auth login` with an account that can administer this repository, then retry.',
     );
 
-  const pnpm = await deps.exists(join(cwd, 'pnpm-lock.yaml'));
-  return { owner, repo, defaultBranch, pnpm };
+  return { owner, repo, defaultBranch };
 }

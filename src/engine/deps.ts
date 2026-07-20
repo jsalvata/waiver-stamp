@@ -166,8 +166,7 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
   // absence is necessarily honest: gates 1–4 are then the complete surface. This holds
   // only because `packageManager` pins pnpm (checked above) — pnpm resolves solely from
   // `pnpm-lock.yaml`, so its absence means no pinned closure; a bare `package-lock.json`/
-  // `yarn.lock` under some other manager would not be honest-by-absence. The pin is
-  // load-bearing here, not stylistic.
+  // `yarn.lock` under some other manager would not be honest-by-absence.
   if (!(await exists(join(ctx.oDir, LOCKFILE)))) {
     // A freshly *added* lockfile pins the whole closure as new, unvouched bytes with no
     // external gate to catch tampering — never blanket-accept it; fall to review.
