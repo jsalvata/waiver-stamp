@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { apply } from './commands/apply.ts';
 import { EXIT, type ExitCode } from './commands/report.ts';
+import { makeSetupDeps, setupRepository } from './commands/setup-repository.ts';
 import { stamp } from './commands/stamp.ts';
 import { verify } from './commands/verify.ts';
 import {
@@ -14,6 +15,7 @@ import {
   WaiverValidationError,
 } from './errors.ts';
 import { startMcpServer } from './mcp.ts';
+import { SetupError } from './setup/errors.ts';
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
 
@@ -42,6 +44,10 @@ async function run(body: () => Promise<void>): Promise<void> {
     } else if (err instanceof NotImplementedError) {
       console.error(`error: '${err.feature}' is not implemented in v0`);
       setExit(EXIT.INTERNAL);
+    } else if (err instanceof SetupError) {
+      console.error(`error: ${err.message}`);
+      console.error(`  ${err.remediation}`);
+      setExit(EXIT.MALFORMED);
     } else {
       console.error(`internal error: ${err instanceof Error ? err.message : String(err)}`);
       setExit(EXIT.INTERNAL);
@@ -114,6 +120,21 @@ program
   .description('run the stdio MCP server exposing the engine as tools (§18.1)')
   .action(async () => {
     await startMcpServer(version);
+  });
+
+program
+  .command('setup-repository')
+  .description('interactively wire waiver-stamp into the current repo (spec §4)')
+  .option('--yes', 'accept recommended defaults for non-destructive prompts')
+  .option('--target <target>', 'install target: personal or an org login')
+  .option('--no-app', 'skip App provisioning; configure the human-click layer only')
+  .action(async (opts: { yes?: boolean; target?: string; app?: boolean }) => {
+    await run(async () => {
+      await setupRepository(
+        { yes: opts.yes, target: opts.target, noApp: opts.app === false, cwd: process.cwd() },
+        makeSetupDeps(),
+      );
+    });
   });
 
 await program.parseAsync(process.argv);
