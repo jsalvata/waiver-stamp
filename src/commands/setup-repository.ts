@@ -56,7 +56,9 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   const ctx = await deps.preflight(cwd);
   deps.info(`waiver-stamp setup: ${ctx.owner}/${ctx.repo} (default branch ${ctx.defaultBranch})`);
   if (!ctx.pnpm)
-    deps.warn('no `pnpm-lock.yaml` found — `allowBumping` in `.waiver-stamp.json` will be inert.');
+    deps.warn(
+      'no `pnpm-lock.yaml` found — dependency bumps can’t be waived; a waivered commit that changes `package.json` will be rejected.',
+    );
 
   if (opts.noApp) {
     deps.info(

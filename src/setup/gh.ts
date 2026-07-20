@@ -34,21 +34,16 @@ export function makeGh(run: Run): GhClient {
     },
     async setSecret(a) {
       const args = ['secret', 'set', a.name];
+      if (!a.repo)
+        throw new SetupError('secret needs a repo', 'Report this — internal wiring bug.');
       if (a.scope === 'org') {
-        if (!a.org || !a.repo)
+        if (!a.org)
           throw new SetupError(
-            'org-scope secret needs an org and a repo',
+            'org-scope secret needs an org',
             'Report this — internal wiring bug.',
           );
-        // Scope the org secret to just this repo. Installing on further repos under the org is a
-        // re-run of setup-repository (which reuse makes idempotent), so no multi-repo list here.
         args.push('--org', a.org, '--repos', a.repo);
       } else {
-        if (!a.repo)
-          throw new SetupError(
-            'repo-scope secret needs a repo',
-            'Report this — internal wiring bug.',
-          );
         args.push('--repo', a.repo);
       }
       // No `--body`: `gh secret set` reads the value from stdin when unspecified. Passing the pem
