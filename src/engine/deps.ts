@@ -160,13 +160,6 @@ async function evaluate(ctx: DependencyContext): Promise<string | null> {
   if (typeof pm !== 'string' || !pm.startsWith('pnpm@')) {
     return 'base package.json must pin `packageManager` to pnpm (only pnpm is supported)';
   }
-  // Lockfile honesty is a delegated precondition (§6.3 step 5) — but only a *present*
-  // lockfile is an unvouched supply-chain surface needing that external gate. A repo with
-  // no committed lockfile has no pinned transitive closure to smuggle through, so its
-  // absence is necessarily honest: gates 1–4 are then the complete surface. This holds
-  // only because `packageManager` pins pnpm (checked above) — pnpm resolves solely from
-  // `pnpm-lock.yaml`, so its absence means no pinned closure; a bare `package-lock.json`/
-  // `yarn.lock` under some other manager would not be honest-by-absence.
   if (!(await exists(join(ctx.oDir, LOCKFILE)))) {
     if (await exists(join(ctx.headDir, LOCKFILE))) {
       return `${LOCKFILE} added in head — a new lockfile is an unvouched supply-chain surface (§6.3 step 5)`;
