@@ -19,6 +19,9 @@ export interface GhClient {
   listOrgs(): Promise<string[]>;
   setSecret(a: SetSecretArgs): Promise<void>;
   appConversion(code: string): Promise<AppConversion>;
+  /** OAuth scopes on the active `gh` token (from the `X-Oauth-Scopes` header). Empty when the
+   *  token exposes none (e.g. fine-grained PATs) — i.e. its scopes can't be proven. */
+  tokenScopes(): Promise<string[]>;
 }
 
 type Run = (cmd: string, args: string[], opts?: { input?: string }) => Promise<RunResult>;
@@ -54,6 +57,17 @@ export function makeGh(run: Run): GhClient {
           `failed to set secret ${a.name}`,
           r.stderr.trim() || 'Check `gh auth status` and that you can administer the repository.',
         );
+    },
+    async tokenScopes() {
+      const r = await run('gh', ['api', '-i', 'user']);
+      if (r.code !== 0) return [];
+      const line = r.stdout.split('\n').find((l) => /^x-oauth-scopes:/i.test(l));
+      if (!line) return [];
+      return line
+        .slice(line.indexOf(':') + 1)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
     },
     async appConversion(code) {
       const r = await run('gh', ['api', '-X', 'POST', `/app-manifests/${code}/conversions`]);

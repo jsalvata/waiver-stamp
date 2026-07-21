@@ -1,3 +1,4 @@
+import { SetupError } from '../setup/errors.ts';
 import { type GhClient, makeGh } from '../setup/gh.ts';
 import type { AppCredentials } from '../setup/loopback.ts';
 import { openBrowser } from '../setup/open-browser.ts';
@@ -54,6 +55,21 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   }
 
   const target = await deps.chooseTarget(opts.target, deps.gh);
+  // Org secret writes need the `admin:org` token scope; without it the write 403s only AFTER the
+  // App is created, leaving an orphan. Fail fast here when the token can't prove the scope.
+  if (target.kind === 'org') {
+    const scopes = await deps.gh.tokenScopes();
+    if (scopes.length > 0 && !scopes.includes('admin:org'))
+      throw new SetupError(
+        'your GitHub token lacks the admin:org scope needed to write org secrets',
+        'Run `gh auth refresh -h github.com -s admin:org` (as an org owner), then re-run setup.',
+      );
+  }
+
+  deps.info(
+    'Opening your browser — each page there tells you what to do: create the App, then install it\n' +
+      'on this repository. Press Enter here to cancel.',
+  );
   const app = await deps.provisionAppFresh({
     target,
     owner: ctx.owner,
@@ -68,6 +84,7 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
     owner: ctx.owner,
     repo: ctx.repo,
   });
-  deps.info(`App ${app.slug} created; secrets written.`);
-  await deps.openBrowser(`https://github.com/apps/${app.slug}/installations/new`);
+  // No second browser tab: the done page (served on the loopback callback) forwards to the install
+  // page in the same tab. Just point the user back to it.
+  deps.info(`App ${app.slug} created; secrets written. Finish the Install step in your browser.`);
 }
