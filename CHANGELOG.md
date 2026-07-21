@@ -1,3 +1,10 @@
+## [1.22.1](https://github.com/jsalvata/waiver-stamp/compare/v1.22.0...v1.22.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* register the App on the repo's own owner ([a702f17](https://github.com/jsalvata/waiver-stamp/commit/a702f17b9bf35644441d79190d8ffe250047a181))
+
 # [1.22.0](https://github.com/jsalvata/waiver-stamp/compare/v1.21.0...v1.22.0) (2026-07-21)
 
 
