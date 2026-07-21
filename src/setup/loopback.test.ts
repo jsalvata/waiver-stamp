@@ -70,7 +70,6 @@ describe('runManifestFlow', () => {
         manifest,
         openBrowser,
         convert: vi.fn(),
-        timeoutMs: 2000,
       }),
     ).rejects.toMatchObject({ name: 'SetupError', message: expect.stringMatching(/state/i) });
   });

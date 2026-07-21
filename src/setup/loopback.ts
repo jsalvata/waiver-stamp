@@ -25,8 +25,6 @@ export interface ManifestFlowDeps {
    * browser was closed, so this keypress is how the user says "I gave up".
    */
   onAbort?: (abort: () => void) => () => void;
-  /** Optional safety bound; omitted in production so the flow waits for the browser callback. */
-  timeoutMs?: number;
 }
 
 // GitHub echoes `state` back on the redirect_url callback only when it rode in as a query
@@ -113,22 +111,9 @@ export function runManifestFlow(deps: ManifestFlowDeps): Promise<AppCredentials>
       res.writeHead(404).end();
     });
 
-    const timer = deps.timeoutMs
-      ? setTimeout(
-          () =>
-            fail(
-              new SetupError(
-                'timed out waiting for the browser step',
-                'Re-run setup and complete the two browser steps.',
-              ),
-            ),
-          deps.timeoutMs,
-        )
-      : undefined;
     let disposeAbort: (() => void) | undefined;
     function teardown(): void {
       settled = true;
-      if (timer) clearTimeout(timer);
       disposeAbort?.();
       server.close();
       // The browser leaves idle sockets to the loopback (preconnects, or the form-page socket
