@@ -362,17 +362,25 @@ Preflight always runs (it's read-only and cheap) and gates the rest — there is
 `--check` flag; running the command on an already-configured repo converges to a no-op, so
 it doubles as the "is my setup healthy?" check.
 
-### 4.2 Choose install target — personal or which org
+### 4.2 Derive the install target from the repo's owner
 
-Prompt: *"Where should the reviewer App live?"* — offer the personal account and each org the
-authenticated user belongs to (from `gh api user/orgs`). The answer selects the manifest POST
-target (§3.2) and the secret strategy (§4.5).
+The App is registered on whichever account owns the repository: an org-owned repo gets an
+org-owned App, a repo under your own account gets a personal one. That choice selects the
+manifest POST target (§3.2) and the secret strategy (§4.5).
 
-> **Decision D9 (recorded):** org install is the recommended default when available — org
-> Actions secrets make multi-repo reuse near-free (§4.3, §4.5). Personal is offered but the
-> prompt notes the per-repo secret consequence. If the user lacks rights to create an App in
-> the chosen org (org policy may require an owner or admin approval), detect and message it
-> clearly rather than failing opaquely mid-flow.
+> **Decision D9 (recorded):** the target is **derived, never asked**. The manifest sets
+> `public: false`, and GitHub only offers the Install button for a private App on the account
+> that owns it — ["if you set your GitHub App registration to private, it can only be installed
+> on the account that owns the app"](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/making-a-github-app-public-or-private).
+> An App owned by anyone else is therefore uninstallable on the target repo, so offering the
+> choice could only produce a dead end. Resolution: `gh api user --jq .login` for the personal
+> case, else `gh api /users/<owner> --jq .type`.
+>
+> Two consequences fall out. A repo owned by a *third* user (you're a collaborator) can't be
+> set up at all — only its owner can — and setup says so instead of minting an unusable App.
+> And an org-owned repo *requires* the org path, so a missing `admin:org` scope is a hard
+> error with no personal fallback to soften it (§4.5). Org policy may additionally require an
+> owner's approval to create the App; that surfaces on GitHub's own create page.
 
 ### 4.3 App provisioning — reuse, disk, or fresh
 

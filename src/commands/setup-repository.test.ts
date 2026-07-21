@@ -9,13 +9,15 @@ const fakeGh = (): GhClient => ({
   setSecret: vi.fn(async () => {}),
   appConversion: vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' })),
   tokenScopes: vi.fn(async () => ['repo', 'admin:org']),
+  viewerLogin: vi.fn(async () => 'jsalvata'),
+  accountType: vi.fn(async () => 'User' as const),
 });
 
 function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
   return {
     preflight: vi.fn(async () => ctx),
     gh: fakeGh(),
-    chooseTarget: vi.fn(async () => ({ kind: 'personal' as const })),
+    resolveTarget: vi.fn(async () => ({ kind: 'personal' as const })),
     provisionAppFresh: vi.fn(async () => ({
       appId: 42,
       pem: '-----BEGIN…',
@@ -39,10 +41,7 @@ describe('setupRepository', () => {
     const provisionSecrets = vi.fn(async () => {});
     const openBrowser = vi.fn(async () => {});
     const info = vi.fn();
-    await setupRepository(
-      { cwd: '/repo', target: 'personal' },
-      makeDeps({ provisionSecrets, openBrowser, info }),
-    );
+    await setupRepository({ cwd: '/repo' }, makeDeps({ provisionSecrets, openBrowser, info }));
     expect(provisionSecrets).toHaveBeenCalledOnce();
     // provisionAppFresh (mocked here) owns the single browser open; the orchestrator must not
     // spawn a second install tab — the done page forwards to install in that same tab.
@@ -50,13 +49,13 @@ describe('setupRepository', () => {
     expect(info).toHaveBeenCalledWith(expect.stringMatching(/install/i));
   });
 
-  it('org target without the admin:org scope fails before creating the App', async () => {
+  it('an org-owned repo without the admin:org scope fails before creating the App', async () => {
     const provisionAppFresh = vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' }));
     const gh: GhClient = { ...fakeGh(), tokenScopes: vi.fn(async () => ['repo', 'read:org']) };
     const err = await setupRepository(
-      { cwd: '/repo', target: 'acme' },
+      { cwd: '/repo' },
       makeDeps({
-        chooseTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
+        resolveTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
         gh,
         provisionAppFresh,
       }),
@@ -65,13 +64,13 @@ describe('setupRepository', () => {
     expect(provisionAppFresh).not.toHaveBeenCalled();
   });
 
-  it('org target with the admin:org scope proceeds to provisioning', async () => {
+  it('an org-owned repo with the admin:org scope proceeds to provisioning', async () => {
     const provisionAppFresh = vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' }));
     const gh: GhClient = { ...fakeGh(), tokenScopes: vi.fn(async () => ['repo', 'admin:org']) };
     await setupRepository(
-      { cwd: '/repo', target: 'acme' },
+      { cwd: '/repo' },
       makeDeps({
-        chooseTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
+        resolveTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
         gh,
         provisionAppFresh,
       }),

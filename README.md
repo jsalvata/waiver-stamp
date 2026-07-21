@@ -145,6 +145,12 @@ the App-token path, creates a per-owner `waiver-stamp-<owner>` GitHub App and wr
 **Install** clicks stay manual — it opens the browser at each. Pass `--no-app` to skip
 provisioning and leave the auto-approval layer unconfigured.
 
+The App is registered on whichever account owns the repository — an org for an org-owned repo,
+otherwise your own — because a private App can only be installed where it's owned. An org-owned
+repo therefore needs a token with `admin:org`
+(`gh auth refresh -h github.com -s admin:org`), and a repo owned by *another* user can only be
+set up by that user.
+
 ## CLI
 
 ```bash

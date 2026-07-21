@@ -1,23 +1,50 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GhClient } from './gh.ts';
 import type { ManifestFlowDeps } from './loopback.ts';
-import { chooseTarget, provisionAppFresh } from './provision-app.ts';
+import { provisionAppFresh, resolveTarget } from './provision-app.ts';
 
 const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   listOrgs: vi.fn(async () => []),
   setSecret: vi.fn(async () => {}),
   appConversion: vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' })),
   tokenScopes: vi.fn(async () => ['admin:org']),
+  viewerLogin: vi.fn(async () => 'jsalvata'),
+  accountType: vi.fn(async () => 'User' as const),
   ...over,
 });
 
-describe('chooseTarget', () => {
-  it('maps an org login to an org target', async () => {
-    expect(await chooseTarget('myorg', fakeGh())).toEqual({ kind: 'org', org: 'myorg' });
+// The manifest registers a private App, and GitHub only lets a private App be installed on the
+// account that owns it — so the App owner is *dictated* by the repo owner, never chosen.
+describe('resolveTarget', () => {
+  it('targets the org when the repo belongs to one', async () => {
+    const gh = fakeGh({ accountType: vi.fn(async () => 'Organization' as const) });
+    expect(await resolveTarget('acme', gh)).toEqual({ kind: 'org', org: 'acme' });
   });
-  it('maps "personal" and absence to a personal target', async () => {
-    expect(await chooseTarget('personal', fakeGh())).toEqual({ kind: 'personal' });
-    expect(await chooseTarget(undefined, fakeGh())).toEqual({ kind: 'personal' });
+
+  it('targets the personal account when the repo is the authenticated user’s own', async () => {
+    expect(await resolveTarget('jsalvata', fakeGh())).toEqual({ kind: 'personal' });
+    // No account-type lookup needed once the login matches.
+    expect(await resolveTarget('JSalvata', fakeGh())).toEqual({ kind: 'personal' });
+  });
+
+  // Nothing we can create is installable here: an App owned by us can't go on their account, and
+  // we can't create one owned by them.
+  it('refuses a repo owned by a different user', async () => {
+    const err = await resolveTarget('someone-else', fakeGh()).catch((e: unknown) => e);
+    expect(err).toMatchObject({
+      name: 'SetupError',
+      message: expect.stringMatching(/someone-else/),
+    });
+  });
+
+  it('fails loudly when the owner’s account type is unreadable', async () => {
+    const gh = fakeGh({ accountType: vi.fn(async () => null) });
+    await expect(resolveTarget('mystery', gh)).rejects.toMatchObject({ name: 'SetupError' });
+  });
+
+  it('fails loudly when the authenticated login is unreadable', async () => {
+    const gh = fakeGh({ viewerLogin: vi.fn(async () => null) });
+    await expect(resolveTarget('acme', gh)).rejects.toMatchObject({ name: 'SetupError' });
   });
 });
 

@@ -7,6 +7,8 @@ const fakeGh = (): GhClient => ({
   setSecret: vi.fn(async () => {}),
   appConversion: vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' })),
   tokenScopes: vi.fn(async () => ['admin:org']),
+  viewerLogin: vi.fn(async () => 'jsalvata'),
+  accountType: vi.fn(async () => 'User' as const),
 });
 
 describe('provisionSecrets', () => {

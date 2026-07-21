@@ -81,6 +81,33 @@ describe('makeGh', () => {
     expect(await makeGh(run).tokenScopes()).toEqual([]);
   });
 
+  it('viewerLogin reads the authenticated login', async () => {
+    const run = mockRun(async () => ok('jsalvata\n'));
+    const gh = makeGh(run);
+    expect(await gh.viewerLogin()).toBe('jsalvata');
+    expect(run).toHaveBeenCalledWith('gh', ['api', 'user', '--jq', '.login']);
+  });
+
+  it('accountType distinguishes an org from a user', async () => {
+    const run = mockRun(async () => ok('Organization\n'));
+    const gh = makeGh(run);
+    expect(await gh.accountType('acme')).toBe('Organization');
+    expect(run).toHaveBeenCalledWith('gh', ['api', '/users/acme', '--jq', '.type']);
+  });
+
+  // Anything we can't read is `null`, not a guess: the caller has to fail loudly rather than mint
+  // an App on the wrong account.
+  it('viewerLogin and accountType return null when the read fails', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 404', code: 1 }));
+    expect(await makeGh(run).viewerLogin()).toBeNull();
+    expect(await makeGh(run).accountType('nope')).toBeNull();
+  });
+
+  it('accountType returns null on an unrecognised type', async () => {
+    const run = mockRun(async () => ok('Mannequin\n'));
+    expect(await makeGh(run).accountType('ghost')).toBeNull();
+  });
+
   it('appConversion posts to the conversions endpoint and maps id → appId', async () => {
     const run = mockRun(async () =>
       ok(JSON.stringify({ id: 7, pem: '-----BEGIN…', slug: 'waiver-stamp-o' })),
