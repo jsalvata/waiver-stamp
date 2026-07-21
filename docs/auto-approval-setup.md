@@ -153,6 +153,9 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    >    (`app_id: ${{ secrets.WAIVER_STAMP_APP_ID }}`,
    >    `app_private_key: ${{ secrets.WAIVER_STAMP_APP_PRIVATE_KEY }}`) — the namespaced names
    >    won't forward by `secrets: inherit`.
+   >    Adopting a second repository doesn't need a second App: `--target <org>` puts the
+   >    secrets at org scope (later repos need only the Install click), and for a personal
+   >    account `--save-key` keeps the key in `~/.waiver-install/` for reuse.
    >    The reusable workflow mints the token, scopes it (`permission-pull-requests: write`, so
    >    zizmor's `github-app` audit stays clean), and wires it into the action's `github-token`
    >    — you don't add a `create-github-app-token` step yourself.

@@ -108,6 +108,69 @@ describe('makeGh', () => {
     expect(await makeGh(run).accountType('ghost')).toBeNull();
   });
 
+  it('orgSecretNames lists the org Actions secrets', async () => {
+    const run = mockRun(async () => ok('WAIVER_STAMP_APP_ID\nWAIVER_STAMP_APP_PRIVATE_KEY\n'));
+    const gh = makeGh(run);
+    expect(await gh.orgSecretNames('acme')).toEqual([
+      'WAIVER_STAMP_APP_ID',
+      'WAIVER_STAMP_APP_PRIVATE_KEY',
+    ]);
+    expect(run).toHaveBeenCalledWith('gh', [
+      'api',
+      '/orgs/acme/actions/secrets',
+      '--paginate',
+      '--jq',
+      '.secrets[].name',
+    ]);
+  });
+
+  it('orgSecretNames returns [] when the read fails rather than throwing', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 403', code: 1 }));
+    expect(await makeGh(run).orgSecretNames('acme')).toEqual([]);
+  });
+
+  it('grantOrgSecretRepo resolves the repo id, then PUTs it onto the secret', async () => {
+    const run = mockRun(async (_c, args) => ok(args.includes('/repos/acme/demo') ? '12345' : ''));
+    const gh = makeGh(run);
+    await gh.grantOrgSecretRepo('acme', 'WAIVER_STAMP_APP_ID', 'acme/demo');
+    expect(run.mock.calls[0]?.[1]).toEqual(['api', '/repos/acme/demo', '--jq', '.id']);
+    expect(run.mock.calls[1]?.[1]).toEqual([
+      'api',
+      '-X',
+      'PUT',
+      '/orgs/acme/actions/secrets/WAIVER_STAMP_APP_ID/repositories/12345',
+    ]);
+  });
+
+  it('grantOrgSecretRepo raises a SetupError the user can act on', async () => {
+    const run = mockRun(async (_c, args) =>
+      args.includes('/repos/acme/demo')
+        ? ok('12345')
+        : { stdout: '', stderr: 'HTTP 404: Not Found', code: 1 },
+    );
+    await expect(
+      makeGh(run).grantOrgSecretRepo('acme', 'WAIVER_STAMP_APP_ID', 'acme/demo'),
+    ).rejects.toMatchObject({ name: 'SetupError', details: 'HTTP 404: Not Found' });
+  });
+
+  it('orgAppSlugs lists the app slugs installed on the org', async () => {
+    const run = mockRun(async () => ok('waiver-stamp-acme\ndependabot\n'));
+    const gh = makeGh(run);
+    expect(await gh.orgAppSlugs('acme')).toEqual(['waiver-stamp-acme', 'dependabot']);
+    expect(run).toHaveBeenCalledWith('gh', [
+      'api',
+      '/orgs/acme/installations',
+      '--paginate',
+      '--jq',
+      '.installations[].app_slug',
+    ]);
+  });
+
+  it('orgAppSlugs returns [] when the read fails — the install link just degrades', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 403', code: 1 }));
+    expect(await makeGh(run).orgAppSlugs('acme')).toEqual([]);
+  });
+
   it('appConversion posts to the conversions endpoint and maps id → appId', async () => {
     const run = mockRun(async () =>
       ok(JSON.stringify({ id: 7, pem: '-----BEGIN…', slug: 'waiver-stamp-o' })),

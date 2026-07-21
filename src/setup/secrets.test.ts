@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GhClient } from './gh.ts';
-import { provisionSecrets } from './secrets.ts';
+import { SECRET_NAMES, grantExistingOrgSecrets, provisionSecrets } from './secrets.ts';
 
 const fakeGh = (): GhClient => ({
   listOrgs: vi.fn(async () => []),
@@ -9,6 +9,9 @@ const fakeGh = (): GhClient => ({
   tokenScopes: vi.fn(async () => ['admin:org']),
   viewerLogin: vi.fn(async () => 'jsalvata'),
   accountType: vi.fn(async () => 'User' as const),
+  orgSecretNames: vi.fn(async () => [...SECRET_NAMES]),
+  grantOrgSecretRepo: vi.fn(async () => {}),
+  orgAppSlugs: vi.fn(async () => []),
 });
 
 describe('provisionSecrets', () => {
@@ -53,5 +56,27 @@ describe('provisionSecrets', () => {
       expect(arg.org).toBe('acme');
       expect(arg.repo).toBe('acme/demo');
     }
+  });
+});
+
+describe('grantExistingOrgSecrets', () => {
+  // The reuse path has no pem, so it can't rewrite the secrets — it can only widen their
+  // selected-repositories list to include the repo being set up.
+  it('adds the repo to both secrets without touching their values', async () => {
+    const gh = fakeGh();
+    await grantExistingOrgSecrets(gh, { org: 'acme', owner: 'acme', repo: 'demo' });
+    expect(gh.setSecret).not.toHaveBeenCalled();
+    expect(gh.grantOrgSecretRepo).toHaveBeenNthCalledWith(
+      1,
+      'acme',
+      'WAIVER_STAMP_APP_ID',
+      'acme/demo',
+    );
+    expect(gh.grantOrgSecretRepo).toHaveBeenNthCalledWith(
+      2,
+      'acme',
+      'WAIVER_STAMP_APP_PRIVATE_KEY',
+      'acme/demo',
+    );
   });
 });

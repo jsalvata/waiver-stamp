@@ -10,6 +10,9 @@ const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   tokenScopes: vi.fn(async () => ['admin:org']),
   viewerLogin: vi.fn(async () => 'jsalvata'),
   accountType: vi.fn(async () => 'User' as const),
+  orgSecretNames: vi.fn(async () => []),
+  grantOrgSecretRepo: vi.fn(async () => {}),
+  orgAppSlugs: vi.fn(async () => []),
   ...over,
 });
 
