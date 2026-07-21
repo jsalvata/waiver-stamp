@@ -1,3 +1,4 @@
+import { SetupError } from './errors.ts';
 import type { GhClient } from './gh.ts';
 import {
   type AppCredentials,
@@ -10,16 +11,34 @@ import { buildManifest } from './manifest.ts';
 export type InstallTarget = { kind: 'personal' } | { kind: 'org'; org: string };
 
 /**
- * Resolve the install target from `--target` (spec §4.2, D9). `personal` or absent installs the
- * App on the user account; a non-empty login installs it on that org. Interactive org-picking
- * (offering `gh.listOrgs()`) is PR 5; this PR takes the preferred value or defaults to personal.
+ * Where the App must be registered, derived from the repo's owner (spec §4.2).
+ *
+ * Not a choice: the manifest registers a *private* App, and GitHub only offers the Install button
+ * for a private App on the account that owns it ("if you set your GitHub App registration to
+ * private, it can only be installed on the account that owns the app"). An App owned by anyone but
+ * the repo's owner is therefore uninstallable on that repo — so we derive the owner and fail
+ * loudly when we can't, rather than minting something that can't be used.
  */
-export async function chooseTarget(
-  preferred: string | undefined,
-  _gh: GhClient,
-): Promise<InstallTarget> {
-  if (preferred && preferred !== 'personal') return { kind: 'org', org: preferred };
-  return { kind: 'personal' };
+export async function resolveTarget(owner: string, gh: GhClient): Promise<InstallTarget> {
+  const viewer = await gh.viewerLogin();
+  if (!viewer)
+    throw new SetupError(
+      'could not read your GitHub login',
+      'Check `gh auth status` — setup needs to know which account you are before it can register an App.',
+    );
+  if (viewer.toLowerCase() === owner.toLowerCase()) return { kind: 'personal' };
+
+  const type = await gh.accountType(owner);
+  if (type === 'Organization') return { kind: 'org', org: owner };
+  if (type === 'User')
+    throw new SetupError(
+      `this repository belongs to ${owner}, not to you or an organization`,
+      `A private App can only be installed on the account that owns it, so ${owner} has to run setup on their own account. Fork the repository, or ask ${owner} to run it.`,
+    );
+  throw new SetupError(
+    `could not tell whether ${owner} is a user or an organization`,
+    'Check `gh auth status` and that the repository’s owner is visible to your token, then re-run.',
+  );
 }
 
 export interface ProvisionAppFreshArgs {

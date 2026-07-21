@@ -127,12 +127,11 @@ program
   .command('setup-repository')
   .description('interactively wire waiver-stamp into the current repo (spec §4)')
   .option('--yes', 'accept recommended defaults for non-destructive prompts')
-  .option('--target <target>', 'install target: personal or an org login')
   .option('--no-app', 'skip App provisioning; configure the human-click layer only')
-  .action(async (opts: { yes?: boolean; target?: string; app?: boolean }) => {
+  .action(async (opts: { yes?: boolean; app?: boolean }) => {
     await run(async () => {
       await setupRepository(
-        { yes: opts.yes, target: opts.target, noApp: opts.app === false, cwd: process.cwd() },
+        { yes: opts.yes, noApp: opts.app === false, cwd: process.cwd() },
         makeSetupDeps(),
       );
     });

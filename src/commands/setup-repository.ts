@@ -6,15 +6,14 @@ import { type RepoContext, preflight } from '../setup/preflight.ts';
 import {
   type InstallTarget,
   type ProvisionAppFreshArgs,
-  chooseTarget,
   provisionAppFresh,
+  resolveTarget,
 } from '../setup/provision-app.ts';
 import { runCommand } from '../setup/run.ts';
 import { type ProvisionSecretsArgs, provisionSecrets } from '../setup/secrets.ts';
 
 export interface SetupOptions {
   yes?: boolean;
-  target?: string;
   noApp?: boolean;
   cwd?: string;
 }
@@ -22,7 +21,7 @@ export interface SetupOptions {
 export interface SetupDeps {
   preflight: (cwd: string) => Promise<RepoContext>;
   gh: GhClient;
-  chooseTarget: (preferred: string | undefined, gh: GhClient) => Promise<InstallTarget>;
+  resolveTarget: (owner: string, gh: GhClient) => Promise<InstallTarget>;
   provisionAppFresh: (a: ProvisionAppFreshArgs) => Promise<AppCredentials>;
   provisionSecrets: (gh: GhClient, a: ProvisionSecretsArgs) => Promise<void>;
   openBrowser: (url: string) => Promise<void>;
@@ -34,7 +33,7 @@ export function makeSetupDeps(): SetupDeps {
   return {
     preflight: () => preflight({ run: runCommand }),
     gh: makeGh(runCommand),
-    chooseTarget,
+    resolveTarget,
     provisionAppFresh,
     provisionSecrets,
     openBrowser,
@@ -54,7 +53,7 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
     return;
   }
 
-  const target = await deps.chooseTarget(opts.target, deps.gh);
+  const target = await deps.resolveTarget(ctx.owner, deps.gh);
   // Org secret writes need the `admin:org` token scope; without it the write 403s only AFTER the
   // App is created, leaving an orphan. Fail fast here when the token can't prove the scope.
   if (target.kind === 'org') {

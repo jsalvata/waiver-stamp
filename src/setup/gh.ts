@@ -17,6 +17,10 @@ export interface SetSecretArgs {
 
 export interface GhClient {
   listOrgs(): Promise<string[]>;
+  /** The authenticated user's login, or `null` when it can't be read. */
+  viewerLogin(): Promise<string | null>;
+  /** Whether `login` is a user or an organization; `null` when unreadable or neither. */
+  accountType(login: string): Promise<'User' | 'Organization' | null>;
   setSecret(a: SetSecretArgs): Promise<void>;
   appConversion(code: string): Promise<AppConversion>;
   /** OAuth scopes on the active `gh` token (from the `X-Oauth-Scopes` header). Empty when the
@@ -34,6 +38,15 @@ export function makeGh(run: Run): GhClient {
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean);
+    },
+    async viewerLogin() {
+      const r = await run('gh', ['api', 'user', '--jq', '.login']);
+      return r.code === 0 && r.stdout.trim() ? r.stdout.trim() : null;
+    },
+    async accountType(login) {
+      const r = await run('gh', ['api', `/users/${login}`, '--jq', '.type']);
+      const t = r.code === 0 ? r.stdout.trim() : '';
+      return t === 'User' || t === 'Organization' ? t : null;
     },
     async setSecret(a) {
       const args = ['secret', 'set', a.name];
