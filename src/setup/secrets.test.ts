@@ -1,17 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { GhClient } from './gh.ts';
+import type { GhClient, SecretVisibility } from './gh.ts';
 import { SECRET_NAMES, grantExistingOrgSecrets, provisionSecrets } from './secrets.ts';
 
-const fakeGh = (): GhClient => ({
+const visible = (visibility: SecretVisibility) =>
+  SECRET_NAMES.map((name) => ({ name, visibility }));
+
+const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   listOrgs: vi.fn(async () => []),
   setSecret: vi.fn(async () => {}),
   appConversion: vi.fn(async () => ({ appId: 1, pem: 'p', slug: 's' })),
   tokenScopes: vi.fn(async () => ['admin:org']),
   viewerLogin: vi.fn(async () => 'jsalvata'),
   accountType: vi.fn(async () => 'User' as const),
-  orgSecretNames: vi.fn(async () => [...SECRET_NAMES]),
+  orgSecrets: vi.fn(async () => visible('selected')),
   grantOrgSecretRepo: vi.fn(async () => {}),
   orgAppSlugs: vi.fn(async () => []),
+  ...over,
 });
 
 describe('provisionSecrets', () => {
@@ -60,11 +64,13 @@ describe('provisionSecrets', () => {
 });
 
 describe('grantExistingOrgSecrets', () => {
+  const args = (info = vi.fn()) => ({ org: 'acme', owner: 'acme', repo: 'demo', info });
+
   // The reuse path has no pem, so it can't rewrite the secrets — it can only widen their
   // selected-repositories list to include the repo being set up.
-  it('adds the repo to both secrets without touching their values', async () => {
+  it('adds the repo to both selected-visibility secrets without touching their values', async () => {
     const gh = fakeGh();
-    await grantExistingOrgSecrets(gh, { org: 'acme', owner: 'acme', repo: 'demo' });
+    await grantExistingOrgSecrets(gh, args());
     expect(gh.setSecret).not.toHaveBeenCalled();
     expect(gh.grantOrgSecretRepo).toHaveBeenNthCalledWith(
       1,
@@ -78,5 +84,23 @@ describe('grantExistingOrgSecrets', () => {
       'WAIVER_STAMP_APP_PRIVATE_KEY',
       'acme/demo',
     );
+  });
+
+  // At `all` the repo can already read the secret, and the grant endpoint only accepts `selected`
+  // — so granting would 409 on a configuration that works.
+  it('skips the grant at `all` visibility and flags how wide the key is', async () => {
+    const gh = fakeGh({ orgSecrets: vi.fn(async () => visible('all')) });
+    const info = vi.fn();
+    await grantExistingOrgSecrets(gh, args(info));
+    expect(gh.grantOrgSecretRepo).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('every repository in acme'));
+  });
+
+  it('skips the grant at `private` visibility and says public repos will not see it', async () => {
+    const gh = fakeGh({ orgSecrets: vi.fn(async () => visible('private')) });
+    const info = vi.fn();
+    await grantExistingOrgSecrets(gh, args(info));
+    expect(gh.grantOrgSecretRepo).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('private'));
   });
 });

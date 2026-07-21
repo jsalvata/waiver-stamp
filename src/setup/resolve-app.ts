@@ -44,8 +44,8 @@ export async function resolveApp(deps: ResolveAppDeps): Promise<ResolvedApp> {
   const write = deps.writeDiskApp ?? writeDiskApp;
 
   if (deps.target.kind === 'org') {
-    const names = await deps.gh.orgSecretNames(deps.target.org);
-    if (SECRET_NAMES.every((n) => names.includes(n))) {
+    const existing = (await deps.gh.orgSecrets(deps.target.org)).map((s) => s.name);
+    if (SECRET_NAMES.every((n) => existing.includes(n))) {
       const slug = (await deps.gh.orgAppSlugs(deps.target.org)).find((s) =>
         s.startsWith('waiver-stamp-'),
       );

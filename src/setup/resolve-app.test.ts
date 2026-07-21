@@ -6,6 +6,10 @@ import { SECRET_NAMES } from './secrets.ts';
 
 const FRESH: AppCredentials = { appId: 9, pem: 'FRESH-PEM', slug: 'waiver-stamp-o' };
 
+/** Reuse keys on presence alone, so visibility is irrelevant here — pick one and move on. */
+const sel = (names: readonly string[]) =>
+  names.map((name) => ({ name, visibility: 'selected' as const }));
+
 const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   listOrgs: vi.fn(async () => []),
   setSecret: vi.fn(async () => {}),
@@ -13,7 +17,7 @@ const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   tokenScopes: vi.fn(async () => ['admin:org']),
   viewerLogin: vi.fn(async () => 'jsalvata'),
   accountType: vi.fn(async () => 'User' as const),
-  orgSecretNames: vi.fn(async () => []),
+  orgSecrets: vi.fn(async () => []),
   grantOrgSecretRepo: vi.fn(async () => {}),
   orgAppSlugs: vi.fn(async () => []),
   ...over,
@@ -40,7 +44,7 @@ describe('resolveApp — org', () => {
     const d = deps({
       target: orgTarget,
       gh: fakeGh({
-        orgSecretNames: vi.fn(async () => [...SECRET_NAMES, 'UNRELATED']),
+        orgSecrets: vi.fn(async () => sel([...SECRET_NAMES, 'UNRELATED'])),
         orgAppSlugs: vi.fn(async () => ['dependabot', 'waiver-stamp-acme']),
       }),
     });
@@ -53,7 +57,7 @@ describe('resolveApp — org', () => {
   it('still reuses when no matching installation is visible — just without a slug', async () => {
     const d = deps({
       target: orgTarget,
-      gh: fakeGh({ orgSecretNames: vi.fn(async () => [...SECRET_NAMES]) }),
+      gh: fakeGh({ orgSecrets: vi.fn(async () => sel([...SECRET_NAMES])) }),
     });
     expect(await resolveApp(d)).toEqual({ source: 'reuse-org' });
     expect(d.provisionAppFresh).not.toHaveBeenCalled();
@@ -62,7 +66,7 @@ describe('resolveApp — org', () => {
   it('provisions fresh when only one of the two secrets exists (half-configured org)', async () => {
     const d = deps({
       target: orgTarget,
-      gh: fakeGh({ orgSecretNames: vi.fn(async () => [SECRET_NAMES[0]]) }),
+      gh: fakeGh({ orgSecrets: vi.fn(async () => sel([SECRET_NAMES[0]])) }),
     });
     expect(await resolveApp(d)).toEqual({ ...FRESH, source: 'fresh' });
   });

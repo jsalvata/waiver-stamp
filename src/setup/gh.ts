@@ -15,6 +15,14 @@ export interface SetSecretArgs {
   org?: string;
 }
 
+/** `all` = every repo in the org, `private` = every private repo, `selected` = an explicit list. */
+export type SecretVisibility = 'all' | 'private' | 'selected';
+
+export interface OrgSecret {
+  name: string;
+  visibility: SecretVisibility;
+}
+
 export interface GhClient {
   listOrgs(): Promise<string[]>;
   /** The authenticated user's login, or `null` when it can't be read. */
@@ -26,8 +34,9 @@ export interface GhClient {
   /** OAuth scopes on the active `gh` token (from the `X-Oauth-Scopes` header). Empty when the
    *  token exposes none (e.g. fine-grained PATs) — i.e. its scopes can't be proven. */
   tokenScopes(): Promise<string[]>;
-  /** Names of the org's Actions secrets — the reuse signal (§4.3). Empty when unreadable. */
-  orgSecretNames(org: string): Promise<string[]>;
+  /** The org's Actions secrets — their presence is the reuse signal (§4.3). Empty when
+   *  unreadable. `visibility` decides whether a repo needs an explicit grant to read one. */
+  orgSecrets(org: string): Promise<OrgSecret[]>;
   /** Add a repo to an org secret's selected-repositories list, without knowing its value. */
   grantOrgSecretRepo(org: string, name: string, repoFullName: string): Promise<void>;
   /** Slugs of the Apps installed on the org. Empty when unreadable. */
@@ -93,15 +102,19 @@ export function makeGh(run: Run): GhClient {
     },
     // Both org reads degrade to [] rather than throwing: a token that can't list them still
     // provisions fine, it just doesn't get the reuse short-circuit.
-    async orgSecretNames(org) {
+    async orgSecrets(org) {
       const r = await run('gh', [
         'api',
         `/orgs/${org}/actions/secrets`,
         '--paginate',
         '--jq',
-        '.secrets[].name',
+        '.secrets[] | [.name, .visibility] | @tsv',
       ]);
-      return r.code === 0 ? lines(r.stdout) : [];
+      if (r.code !== 0) return [];
+      return lines(r.stdout).flatMap((l) => {
+        const [name, visibility] = l.split('\t');
+        return name && visibility ? [{ name, visibility: visibility as SecretVisibility }] : [];
+      });
     },
     async orgAppSlugs(org) {
       const r = await run('gh', [

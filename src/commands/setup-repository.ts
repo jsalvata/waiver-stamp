@@ -27,7 +27,7 @@ export interface SetupDeps {
   provisionSecrets: (gh: GhClient, a: ProvisionSecretsArgs) => Promise<void>;
   grantExistingOrgSecrets: (
     gh: GhClient,
-    a: { org: string; owner: string; repo: string },
+    a: { org: string; owner: string; repo: string; info: (msg: string) => void },
   ) => Promise<void>;
   confirmYesNo: (question: string) => Promise<boolean>;
   openBrowser: (url: string) => Promise<void>;
@@ -95,6 +95,7 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
       org: target.org,
       owner: ctx.owner,
       repo: ctx.repo,
+      info: deps.info,
     });
   }
 

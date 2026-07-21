@@ -11,7 +11,7 @@ const fakeGh = (): GhClient => ({
   tokenScopes: vi.fn(async () => ['repo', 'admin:org']),
   viewerLogin: vi.fn(async () => 'jsalvata'),
   accountType: vi.fn(async () => 'User' as const),
-  orgSecretNames: vi.fn(async () => []),
+  orgSecrets: vi.fn(async () => []),
   grantOrgSecretRepo: vi.fn(async () => {}),
   orgAppSlugs: vi.fn(async () => []),
 });
@@ -130,6 +130,7 @@ describe('setupRepository', () => {
         org: 'acme',
         owner: 'jsalvata',
         repo: 'demo',
+        info: d.info,
       });
     });
 

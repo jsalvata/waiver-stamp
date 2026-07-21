@@ -27,10 +27,25 @@ export async function provisionSecrets(gh: GhClient, a: ProvisionSecretsArgs): P
  * Reuse path (§4.3): the org secrets already hold a key we can't read, so widen their
  * selected-repositories list to cover this repo instead of rewriting them — rewriting would need a
  * pem, and re-minting one would invalidate every repo already running against the old App.
+ *
+ * Only `selected` secrets need (or accept) the grant: at `all` or `private` visibility the repo
+ * can already read them, and the grant endpoint would 409 on a configuration that works fine.
  */
 export async function grantExistingOrgSecrets(
   gh: GhClient,
-  a: { org: string; owner: string; repo: string },
+  a: { org: string; owner: string; repo: string; info: (msg: string) => void },
 ): Promise<void> {
-  for (const name of SECRET_NAMES) await gh.grantOrgSecretRepo(a.org, name, `${a.owner}/${a.repo}`);
+  const existing = await gh.orgSecrets(a.org);
+  for (const name of SECRET_NAMES) {
+    const visibility = existing.find((s) => s.name === name)?.visibility ?? 'selected';
+    if (visibility === 'selected') {
+      await gh.grantOrgSecretRepo(a.org, name, `${a.owner}/${a.repo}`);
+      continue;
+    }
+    const note =
+      visibility === 'all'
+        ? `every repository in ${a.org} can read it — narrow it to selected repositories if that is wider than you want`
+        : `only ${a.org}'s private repositories can read it, so a public repository will not see it`;
+    a.info(`Note: ${name} already reaches this repository; ${note}.`);
+  }
 }

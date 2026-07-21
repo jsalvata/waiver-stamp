@@ -108,25 +108,27 @@ describe('makeGh', () => {
     expect(await makeGh(run).accountType('ghost')).toBeNull();
   });
 
-  it('orgSecretNames lists the org Actions secrets', async () => {
-    const run = mockRun(async () => ok('WAIVER_STAMP_APP_ID\nWAIVER_STAMP_APP_PRIVATE_KEY\n'));
+  it('orgSecrets lists the org Actions secrets with their visibility', async () => {
+    const run = mockRun(async () =>
+      ok('WAIVER_STAMP_APP_ID\tselected\nWAIVER_STAMP_APP_PRIVATE_KEY\tall\n'),
+    );
     const gh = makeGh(run);
-    expect(await gh.orgSecretNames('acme')).toEqual([
-      'WAIVER_STAMP_APP_ID',
-      'WAIVER_STAMP_APP_PRIVATE_KEY',
+    expect(await gh.orgSecrets('acme')).toEqual([
+      { name: 'WAIVER_STAMP_APP_ID', visibility: 'selected' },
+      { name: 'WAIVER_STAMP_APP_PRIVATE_KEY', visibility: 'all' },
     ]);
     expect(run).toHaveBeenCalledWith('gh', [
       'api',
       '/orgs/acme/actions/secrets',
       '--paginate',
       '--jq',
-      '.secrets[].name',
+      '.secrets[] | [.name, .visibility] | @tsv',
     ]);
   });
 
-  it('orgSecretNames returns [] when the read fails rather than throwing', async () => {
+  it('orgSecrets returns [] when the read fails rather than throwing', async () => {
     const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 403', code: 1 }));
-    expect(await makeGh(run).orgSecretNames('acme')).toEqual([]);
+    expect(await makeGh(run).orgSecrets('acme')).toEqual([]);
   });
 
   it('grantOrgSecretRepo resolves the repo id, then PUTs it onto the secret', async () => {
