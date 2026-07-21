@@ -18,6 +18,11 @@ describe('formPage', () => {
     expect(html).toContain('name');
     expect(html).toContain('reuse');
   });
+
+  // `default_permissions` legitimately rides in the hidden manifest, so assert on the prose.
+  it('does not promise a permissions review — GitHub does not show them on that page', () => {
+    expect(formPage(action, manifest).toLowerCase()).not.toContain('review the permissions');
+  });
 });
 
 describe('donePage', () => {
@@ -34,5 +39,11 @@ describe('donePage', () => {
     expect(html).toContain('o/r');
     expect(html.toLowerCase()).toContain('select repositories');
     expect(html.toLowerCase()).toContain('install');
+  });
+
+  // We can't close the tab from GitHub's own install page, so the last step has to be stated
+  // here — otherwise the user is left on GitHub wondering whether setup finished.
+  it('tells the user to close the tab once the install is done', () => {
+    expect(donePage(url, 'o/r').toLowerCase()).toContain('close');
   });
 });

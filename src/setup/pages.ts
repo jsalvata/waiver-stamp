@@ -11,8 +11,8 @@ export function formPage(action: string, manifest: AppManifest): string {
   return `<!doctype html><meta charset=utf-8><title>Create waiver-stamp App</title>
 <body>
 <h1>Create the waiver-stamp GitHub App</h1>
-<p>The button below opens GitHub's App-creation page. There, review the permissions and click the
-green <b>Create GitHub App</b>.</p>
+<p>The button below opens GitHub's App-creation page. There, click the green
+<b>Create GitHub App</b>.</p>
 <p>⚠️ <b>Leave the App name unchanged.</b> waiver-stamp finds this App by its name, so if you rename
 it you won't be able to reuse it when enabling waiver-stamp on your other repositories.</p>
 <form action="${action}" method="post">
@@ -35,6 +35,7 @@ export function donePage(installUrl: string, repoFullName: string): string {
 <li>Choose <b>Only select repositories</b> (not "All repositories").</li>
 <li>Pick <b>${repoFullName}</b> from the list.</li>
 <li>Click <b>Install</b>.</li>
+<li>That's it — close this tab and return to your terminal.</li>
 </ol>
-<p><a href="${installUrl}">Open the install page →</a> then return to your terminal.</p>`;
+<p><a href="${installUrl}">Open the install page →</a></p>`;
 }
