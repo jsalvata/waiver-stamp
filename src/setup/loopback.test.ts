@@ -27,6 +27,7 @@ describe('runManifestFlow', () => {
     const creds = await runManifestFlow({
       target: { kind: 'personal' },
       manifest,
+      repoFullName: 'jsalvata/waiver-stamp',
       openBrowser,
       convert,
     });

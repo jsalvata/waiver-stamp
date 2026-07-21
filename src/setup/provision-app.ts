@@ -47,6 +47,7 @@ export async function provisionAppFresh(a: ProvisionAppFreshArgs): Promise<AppCr
   return runFlow({
     target: a.target,
     manifest,
+    repoFullName: `${a.owner}/${a.repo}`,
     openBrowser: a.openBrowser,
     convert: (code) => a.gh.appConversion(code),
     onAbort: a.onAbort ?? abortOnEnter,

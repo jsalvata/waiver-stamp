@@ -14,6 +14,8 @@ export interface AppCredentials {
 export interface ManifestFlowDeps {
   target: { kind: 'personal' } | { kind: 'org'; org: string };
   manifest: AppManifest;
+  /** `owner/repo`, named on the done page so the user knows which repo to pick when installing. */
+  repoFullName?: string;
   openBrowser: (url: string) => Promise<void>;
   convert: (code: string) => Promise<AppCredentials>;
   /**
@@ -93,7 +95,12 @@ export function runManifestFlow(deps: ManifestFlowDeps): Promise<AppCredentials>
         deps.convert(code).then(
           (creds) => {
             res.writeHead(200, { 'content-type': 'text/html' });
-            res.end(donePage(`https://github.com/apps/${creds.slug}/installations/new`));
+            res.end(
+              donePage(
+                `https://github.com/apps/${creds.slug}/installations/new`,
+                deps.repoFullName ?? 'this repository',
+              ),
+            );
             succeed(creds);
           },
           (err) => {

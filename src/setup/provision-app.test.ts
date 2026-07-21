@@ -27,6 +27,7 @@ describe('provisionAppFresh', () => {
     const runFlow = vi.fn(async (deps: ManifestFlowDeps) => {
       expect(deps.manifest.url).toBe('https://github.com/o/r');
       expect(deps.manifest.name).toBe('waiver-stamp-o');
+      expect(deps.repoFullName).toBe('o/r');
       // convert delegates to gh.appConversion
       await deps.convert('code-xyz');
       return creds;
