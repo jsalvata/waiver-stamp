@@ -37,6 +37,9 @@ export interface GhClient {
   /** The org's Actions secrets — their presence is the reuse signal (§4.3). Empty when
    *  unreadable. `visibility` decides whether a repo needs an explicit grant to read one. */
   orgSecrets(org: string): Promise<OrgSecret[]>;
+  /** Names of the repo's own Actions secrets (org-scope ones don't appear). Empty when
+   *  unreadable — the caller then provisions, which is the safe direction. */
+  repoSecretNames(repoFullName: string): Promise<string[]>;
   /** Add a repo to an org secret's selected-repositories list, without knowing its value. */
   grantOrgSecretRepo(org: string, name: string, repoFullName: string): Promise<void>;
   /** Slugs of the Apps installed on the org. Empty when unreadable. */
@@ -115,6 +118,16 @@ export function makeGh(run: Run): GhClient {
         const [name, visibility] = l.split('\t');
         return name && visibility ? [{ name, visibility: visibility as SecretVisibility }] : [];
       });
+    },
+    async repoSecretNames(repoFullName) {
+      const r = await run('gh', [
+        'api',
+        `/repos/${repoFullName}/actions/secrets`,
+        '--paginate',
+        '--jq',
+        '.secrets[].name',
+      ]);
+      return r.code === 0 ? lines(r.stdout) : [];
     },
     async orgAppSlugs(org) {
       const r = await run('gh', [

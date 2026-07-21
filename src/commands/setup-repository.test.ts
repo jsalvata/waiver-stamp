@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GhClient } from '../setup/gh.ts';
+import { SECRET_NAMES } from '../setup/secrets.ts';
 import { type SetupDeps, setupRepository } from './setup-repository.ts';
 
 const ctx = { owner: 'jsalvata', repo: 'demo', defaultBranch: 'main' };
@@ -12,6 +13,7 @@ const fakeGh = (): GhClient => ({
   viewerLogin: vi.fn(async () => 'jsalvata'),
   accountType: vi.fn(async () => 'User' as const),
   orgSecrets: vi.fn(async () => []),
+  repoSecretNames: vi.fn(async () => []),
   grantOrgSecretRepo: vi.fn(async () => {}),
   orgAppSlugs: vi.fn(async () => []),
 });
@@ -110,6 +112,40 @@ describe('setupRepository', () => {
     expect(resolveApp).not.toHaveBeenCalled();
     expect(provisionSecrets).not.toHaveBeenCalled();
     expect(openBrowser).not.toHaveBeenCalled();
+  });
+
+  // Re-running on a configured repo has to converge, not mint a duplicate App (design §1). The
+  // signal is repo-scope secrets; an org-configured repo carries none, and reaches reuse-org.
+  describe('already provisioned', () => {
+    const configured = (over: Partial<SetupDeps> = {}) =>
+      makeDeps({
+        gh: { ...fakeGh(), repoSecretNames: vi.fn(async () => [...SECRET_NAMES, 'UNRELATED']) },
+        ...over,
+      });
+
+    it('provisions nothing — not even resolving the target', async () => {
+      const d = configured();
+      await setupRepository({ cwd: '/repo' }, d);
+      expect(d.resolveTarget).not.toHaveBeenCalled();
+      expect(d.resolveApp).not.toHaveBeenCalled();
+      expect(d.provisionSecrets).not.toHaveBeenCalled();
+    });
+
+    // Secrets present but no installation is the likeliest half-finished state — someone closed
+    // the browser before the Install click. Silently no-opping would fail exactly that person.
+    it('still points at the install step', async () => {
+      const info = vi.fn();
+      await setupRepository({ cwd: '/repo' }, configured({ info }));
+      expect(info).toHaveBeenCalledWith(expect.stringMatching(/install/i));
+    });
+
+    it('provisions normally when only one of the two secrets is there', async () => {
+      const d = makeDeps({
+        gh: { ...fakeGh(), repoSecretNames: vi.fn(async () => [SECRET_NAMES[0]]) },
+      });
+      await setupRepository({ cwd: '/repo' }, d);
+      expect(d.resolveApp).toHaveBeenCalledOnce();
+    });
   });
 
   describe('reuse-org', () => {

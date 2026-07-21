@@ -8,6 +8,7 @@ import { type ResolveAppDeps, type ResolvedApp, resolveApp } from '../setup/reso
 import { runCommand } from '../setup/run.ts';
 import {
   type ProvisionSecretsArgs,
+  SECRET_NAMES,
   grantExistingOrgSecrets,
   provisionSecrets,
 } from '../setup/secrets.ts';
@@ -61,6 +62,25 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   if (opts.noApp) {
     deps.info(
       '--no-app: skipping App provisioning — configure the auto-approval layer yourself, or leave it unconfigured.',
+    );
+    return;
+  }
+
+  // Converge rather than duplicate (design §1): this repo already carries both secrets, so
+  // provisioning again would mint a second App for no gain. Ahead of resolveTarget deliberately —
+  // a repo owned by someone else can't resolve a target at all, yet is perfectly usable once its
+  // owner has set it up.
+  const repoSecrets = await deps.gh.repoSecretNames(`${ctx.owner}/${ctx.repo}`);
+  if (SECRET_NAMES.every((n) => repoSecrets.includes(n))) {
+    // Not silent: secrets written but the App never installed is the likeliest half-finished
+    // state — someone closed the browser before the Install click — and a re-run is how they'd
+    // expect to recover. We can't read a secret back to name the App, hence the listing page.
+    deps.info(
+      [
+        `${ctx.owner}/${ctx.repo} already has both reviewer secrets — leaving them alone.`,
+        'If the App is not installed on it yet, finish that at https://github.com/settings/installations',
+        'To provision a different App instead, delete the two WAIVER_STAMP_* secrets and re-run.',
+      ].join('\n'),
     );
     return;
   }

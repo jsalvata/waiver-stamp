@@ -161,6 +161,10 @@ Setting up a *second* repository reuses that App rather than minting another:
   `~/.waiver-install/<owner>.json` at mode 600; later runs load it and skip the handshake.
   Declining is the default — you can always re-run the browser flow instead.
 
+Re-running on a repo that already has both secrets provisions nothing: setup leaves them in
+place and points at the Install step, so a first run you abandoned before that click is
+recoverable. To swap in a different App, delete the two secrets and re-run.
+
 ## CLI
 
 ```bash

@@ -126,6 +126,24 @@ describe('makeGh', () => {
     ]);
   });
 
+  it('repoSecretNames lists the repo Actions secrets', async () => {
+    const run = mockRun(async () => ok('WAIVER_STAMP_APP_ID\nOTHER\n'));
+    const gh = makeGh(run);
+    expect(await gh.repoSecretNames('o/r')).toEqual(['WAIVER_STAMP_APP_ID', 'OTHER']);
+    expect(run).toHaveBeenCalledWith('gh', [
+      'api',
+      '/repos/o/r/actions/secrets',
+      '--paginate',
+      '--jq',
+      '.secrets[].name',
+    ]);
+  });
+
+  it('repoSecretNames returns [] when the read fails rather than throwing', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 403', code: 1 }));
+    expect(await makeGh(run).repoSecretNames('o/r')).toEqual([]);
+  });
+
   it('orgSecrets returns [] when the read fails rather than throwing', async () => {
     const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 403', code: 1 }));
     expect(await makeGh(run).orgSecrets('acme')).toEqual([]);

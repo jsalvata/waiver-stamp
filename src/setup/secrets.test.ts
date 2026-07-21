@@ -13,6 +13,7 @@ const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   viewerLogin: vi.fn(async () => 'jsalvata'),
   accountType: vi.fn(async () => 'User' as const),
   orgSecrets: vi.fn(async () => visible('selected')),
+  repoSecretNames: vi.fn(async () => []),
   grantOrgSecretRepo: vi.fn(async () => {}),
   orgAppSlugs: vi.fn(async () => []),
   ...over,
