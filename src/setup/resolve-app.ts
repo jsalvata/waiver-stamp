@@ -61,9 +61,10 @@ export async function resolveApp(deps: ResolveAppDeps): Promise<ResolvedApp> {
     return { ...saved, source: 'disk' };
   }
 
-  const save = await deps.confirmSaveKey();
+  // Mint first, then ask: there's no point offering to persist a key before it exists (and it may
+  // never, if the user cancels the browser step).
   const creds = await runFresh();
-  if (save) await write(deps.owner, creds);
+  if (await deps.confirmSaveKey()) await write(deps.owner, creds);
   return { ...creds, source: 'fresh' };
 
   function runFresh(): Promise<AppCredentials> {

@@ -1,9 +1,12 @@
 import type { GhClient, SetSecretArgs } from './gh.ts';
 import type { InstallTarget } from './provision-app.ts';
 
-/** The two conventional reviewer secrets (§4.5). Their presence at org scope is also the reuse
- *  signal (§4.3), so both readers and writers key off this one list. */
-export const SECRET_NAMES = ['WAIVER_STAMP_APP_ID', 'WAIVER_STAMP_APP_PRIVATE_KEY'] as const;
+/** The two conventional reviewer secrets (§4.5). */
+export const APP_ID_SECRET = 'WAIVER_STAMP_APP_ID';
+export const APP_KEY_SECRET = 'WAIVER_STAMP_APP_PRIVATE_KEY';
+/** Both, for the readers/writers that iterate — their presence at org scope is the reuse signal
+ *  (§4.3), so those callers key off this one list. */
+export const SECRET_NAMES = [APP_ID_SECRET, APP_KEY_SECRET] as const;
 
 export interface ProvisionSecretsArgs {
   target: InstallTarget;
@@ -19,8 +22,8 @@ export async function provisionSecrets(gh: GhClient, a: ProvisionSecretsArgs): P
     a.target.kind === 'org'
       ? { scope: 'org', org: a.target.org, repo: `${a.owner}/${a.repo}` }
       : { scope: 'repo', repo: `${a.owner}/${a.repo}` };
-  await gh.setSecret({ name: SECRET_NAMES[0], value: String(a.appId), ...common });
-  await gh.setSecret({ name: SECRET_NAMES[1], value: a.pem, ...common });
+  await gh.setSecret({ name: APP_ID_SECRET, value: String(a.appId), ...common });
+  await gh.setSecret({ name: APP_KEY_SECRET, value: a.pem, ...common });
 }
 
 /**

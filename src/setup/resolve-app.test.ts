@@ -101,9 +101,9 @@ describe('resolveApp — personal', () => {
     expect(d.writeDiskApp).not.toHaveBeenCalled();
   });
 
-  // Asked before the browser step: the key only exists for the instant between conversion and the
-  // secret write, so a prompt afterwards would be one more thing to get wrong while it's in memory.
-  it('asks about saving before opening the browser', async () => {
+  // Mint, then ask: offering to persist a key that doesn't exist yet (and won't, if the browser
+  // step is cancelled) is backwards.
+  it('mints the App before asking whether to save it', async () => {
     const order: string[] = [];
     const d = deps({
       confirmSaveKey: vi.fn(async () => {
@@ -116,6 +116,6 @@ describe('resolveApp — personal', () => {
       }),
     });
     await resolveApp(d);
-    expect(order).toEqual(['ask', 'flow']);
+    expect(order).toEqual(['flow', 'ask']);
   });
 });

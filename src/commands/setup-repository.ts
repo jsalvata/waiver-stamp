@@ -16,7 +16,6 @@ import {
 export interface SetupOptions {
   yes?: boolean;
   noApp?: boolean;
-  saveKey?: boolean;
   cwd?: string;
 }
 
@@ -103,8 +102,7 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
     repo: ctx.repo,
     gh: deps.gh,
     openBrowser: deps.openBrowser,
-    confirmSaveKey: () =>
-      opts.saveKey ? Promise.resolve(true) : deps.confirmYesNo(SAVE_KEY_QUESTION),
+    confirmSaveKey: () => deps.confirmYesNo(SAVE_KEY_QUESTION),
     info: deps.info,
   });
 

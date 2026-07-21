@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AppCredentials } from './loopback.ts';
@@ -32,8 +32,9 @@ export async function readDiskApp(owner: string, home?: string): Promise<AppCred
 
 /**
  * Persist `owner`'s App credentials. This is the only at-rest copy of the private key, so the
- * directory is 0700 and the file 0600 — and `mkdir`/`writeFile` set those at creation time, never
- * leaving a readable window a later `chmod` would have to close.
+ * directory is 0700 and the file 0600. The `mode` options only bite when the path is created —
+ * a re-save over a pre-existing (perhaps loosened) file or dir ignores them — so we `chmod`
+ * afterwards to enforce the permissions on every write, not just the first.
  */
 export async function writeDiskApp(
   owner: string,
@@ -41,7 +42,10 @@ export async function writeDiskApp(
   home?: string,
 ): Promise<void> {
   const path = diskAppPath(owner, home);
-  await mkdir(join(path, '..'), { recursive: true, mode: 0o700 });
+  const dir = join(path, '..');
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700);
   const body = JSON.stringify({ app_id: creds.appId, pem: creds.pem, slug: creds.slug }, null, 2);
   await writeFile(path, `${body}\n`, { mode: 0o600 });
+  await chmod(path, 0o600);
 }

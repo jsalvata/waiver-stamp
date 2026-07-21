@@ -28,6 +28,18 @@ describe('disk app store', () => {
     expect(statSync(join(home, '.waiver-install')).mode & 0o777).toBe(0o700);
   });
 
+  // The mode option only applies when the path is created, so a re-save over a file/dir that got
+  // loosened must actively tighten it back — otherwise the private key sits world-readable.
+  it('re-tightens an already-loose file and directory on re-save', async () => {
+    const { chmodSync } = await import('node:fs');
+    await writeDiskApp('acme', { appId: 1, pem: 'p', slug: 's' }, home);
+    chmodSync(diskAppPath('acme', home), 0o666);
+    chmodSync(join(home, '.waiver-install'), 0o755);
+    await writeDiskApp('acme', { appId: 2, pem: 'p2', slug: 's2' }, home);
+    expect(statSync(diskAppPath('acme', home)).mode & 0o777).toBe(0o600);
+    expect(statSync(join(home, '.waiver-install')).mode & 0o777).toBe(0o700);
+  });
+
   it('returns null when nothing is saved', async () => {
     expect(await readDiskApp('acme', home)).toBeNull();
   });

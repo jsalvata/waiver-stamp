@@ -128,11 +128,10 @@ program
   .description('interactively wire waiver-stamp into the current repo (spec §4)')
   .option('--yes', 'accept recommended defaults for non-destructive prompts')
   .option('--no-app', 'skip App provisioning; configure the human-click layer only')
-  .option('--save-key', 'save the personal App key under ~/.waiver-install without asking (§4.4)')
-  .action(async (opts: { yes?: boolean; app?: boolean; saveKey?: boolean }) => {
+  .action(async (opts: { yes?: boolean; app?: boolean }) => {
     await run(async () => {
       await setupRepository(
-        { yes: opts.yes, noApp: opts.app === false, saveKey: opts.saveKey, cwd: process.cwd() },
+        { yes: opts.yes, noApp: opts.app === false, cwd: process.cwd() },
         makeSetupDeps(),
       );
     });
