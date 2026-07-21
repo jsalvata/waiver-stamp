@@ -46,11 +46,11 @@ the design doc §3.4 for the threat model this defends against (the classic GitH
 
 ## Which ref to pin
 
-Each caller ships pinned to a release tag (`@v1.21.0`, kept current on every release), so **you
+Each caller ships pinned to a release tag (`@v1.22.0`, kept current on every release), so **you
 can paste them as-is** — we keep `v*` tags immutable via a repo ruleset. If your policy is
 hash-pin-only (e.g. [zizmor](https://github.com/zizmorcore/zizmor)'s default `unpinned-uses`), or
 you'd rather not rely on a setting you can't see, swap in the SHA the tag points at:
-`gh api repos/jsalvata/waiver-stamp/commits/v1.21.0 --jq .sha`. Each caller has exactly one
+`gh api repos/jsalvata/waiver-stamp/commits/v1.22.0 --jq .sha`. Each caller has exactly one
 `uses:` ref — the reusable workflow — so you pin one ref per file (two total); keep both on the
 same ref, and never a mutable one (a branch, `@main`). The pinned reusable workflow pins the
 action and `actions/checkout` internally, so you don't.

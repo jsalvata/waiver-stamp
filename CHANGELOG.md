@@ -1,3 +1,20 @@
+# [1.22.0](https://github.com/jsalvata/waiver-stamp/compare/v1.21.0...v1.22.0) (2026-07-21)
+
+
+### Bug Fixes
+
+* close idle loopback sockets on teardown ([7976718](https://github.com/jsalvata/waiver-stamp/commit/79767187e08071abe8c3a11f55f60fbe51c46539))
+* correct the create-page copy and close the install loop ([b5f87c1](https://github.com/jsalvata/waiver-stamp/commit/b5f87c1985433a1a5dc72c14a4378cf987d2d0e8))
+* drop redundant Ctrl-C from the cancel hint ([5019b39](https://github.com/jsalvata/waiver-stamp/commit/5019b395e7ceb549357cfa30c6fd1b8efda468c9))
+* drop the vestigial loopback timeout ([df72ea3](https://github.com/jsalvata/waiver-stamp/commit/df72ea39cb800932ce274e39bbf04818625fbb24))
+* friendly loopback errors, cancel over timeout ([a4db94b](https://github.com/jsalvata/waiver-stamp/commit/a4db94bf51ae1f69933a1a077dc3366eb2f55121))
+
+
+### Features
+
+* guide the user on both browser pages ([128f506](https://github.com/jsalvata/waiver-stamp/commit/128f506b8037595f14b0b2caeb9549db52b8b0c3))
+* smoother setup — one tab, per-page guidance, org preflight ([4b9cb6e](https://github.com/jsalvata/waiver-stamp/commit/4b9cb6e462b1f090985fc4a9020f394685033b7c))
+
 # [1.21.0](https://github.com/jsalvata/waiver-stamp/compare/v1.20.0...v1.21.0) (2026-07-20)
 
 
