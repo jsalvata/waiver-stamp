@@ -376,11 +376,15 @@ manifest POST target (§3.2) and the secret strategy (§4.5).
 > choice could only produce a dead end. Resolution: `gh api user --jq .login` for the personal
 > case, else `gh api /users/<owner> --jq .type`.
 >
-> Two consequences fall out. A repo owned by a *third* user (you're a collaborator) can't be
-> set up at all — only its owner can — and setup says so instead of minting an unusable App.
-> And an org-owned repo *requires* the org path, so a missing `admin:org` scope is a hard
-> error with no personal fallback to soften it (§4.5). Org policy may additionally require an
-> owner's approval to create the App; that surfaces on GitHub's own create page.
+> Two consequences fall out. Only a repo's owner can *register* its App, so a repo owned by a
+> third user (you're a collaborator) stops here rather than minting an unusable App — the
+> narrower claim than "can't be set up": once that owner has registered and installed it, the
+> remaining work is secret writes anyone with repo admin could do, which the reuse layer
+> (§4.3) is where we'd exploit. And an org-owned repo *requires* the org path, so a missing
+> `admin:org` scope is a hard error with no personal fallback to soften it — that scope is
+> demanded by the org-secret operations (§4.5), not by App creation, which happens in the
+> browser under the user's own session. Org policy may additionally require an owner's approval
+> to create the App; that surfaces on GitHub's own create page.
 
 ### 4.3 App provisioning — reuse, disk, or fresh
 
