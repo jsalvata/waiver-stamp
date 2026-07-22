@@ -3,8 +3,8 @@ import type { AppManifest } from './manifest.ts';
 /**
  * The manifest POST to GitHub's App-creation endpoint (the manifest rides in a `manifest` field,
  * so the flow requires a form POST). Deliberately NOT auto-submitting: this is the only page we
- * control before GitHub's create form, so it's where the "don't rename the App" warning has to
- * land — auto-submitting would flash past it.
+ * control before GitHub's create form, so it's the last place to say anything — auto-submitting
+ * would flash past it.
  */
 export function formPage(action: string, manifest: AppManifest): string {
   const json = JSON.stringify(manifest).replace(/</g, '\\u003c').replace(/'/g, '&#39;');
@@ -13,8 +13,9 @@ export function formPage(action: string, manifest: AppManifest): string {
 <h1>Create the waiver-stamp GitHub App</h1>
 <p>The button below opens GitHub's App-creation page. There, click the green
 <b>Create GitHub App</b>.</p>
-<p>⚠️ <b>Leave the App name unchanged.</b> waiver-stamp finds this App by its name, so if you rename
-it you won't be able to reuse it when enabling waiver-stamp on your other repositories.</p>
+<p>Keeping the suggested name is easiest: on an organisation it's how waiver-stamp finds this App's
+install page, and either way it's how you'll recognise it among your other Apps. Renaming won't
+stop your other repositories reusing it.</p>
 <form action="${action}" method="post">
 <input type="hidden" name="manifest" value='${json}'>
 <button type="submit">Continue to GitHub →</button>
@@ -22,14 +23,14 @@ it you won't be able to reuse it when enabling waiver-stamp on your other reposi
 }
 
 /**
- * Shown after conversion succeeds (spec §3.3). GitHub's install page defaults to "All
- * repositories" and gives no hint which repo to pick, so spell that out here — the last page we
+ * The install guidance both endings share (spec §3.3). GitHub's install page defaults to "All
+ * repositories" and gives no hint which repo to pick, so we spell that out on the last page we
  * control. No auto-redirect: the user needs to read this before landing there.
  */
-export function donePage(installUrl: string, repoFullName: string): string {
+function installPage(heading: string, installUrl: string, repoFullName: string): string {
   return `<!doctype html><meta charset=utf-8><title>waiver-stamp — install</title>
 <body>
-<h1>App created ✓</h1>
+<h1>${heading}</h1>
 <p>Last step: install it on <b>${repoFullName}</b>. On the page that opens:</p>
 <ol>
 <li>Choose <b>Only select repositories</b> (not "All repositories").</li>
@@ -38,4 +39,15 @@ export function donePage(installUrl: string, repoFullName: string): string {
 <li>That's it — close this tab and return to your terminal.</li>
 </ol>
 <p><a href="${installUrl}">Open the install page →</a></p>`;
+}
+
+/** Shown from the loopback callback after a fresh App is created. */
+export function donePage(installUrl: string, repoFullName: string): string {
+  return installPage('App created ✓', installUrl, repoFullName);
+}
+
+/** Shown before the install page on a reuse run, where no App was created — so it can't repeat
+ *  the loopback done page, and there's no server to serve it from (see {@link openInstallGuidance}). */
+export function reusePage(installUrl: string, repoFullName: string): string {
+  return installPage('Secrets ready ✓', installUrl, repoFullName);
 }

@@ -10,6 +10,10 @@ const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   tokenScopes: vi.fn(async () => ['admin:org']),
   viewerLogin: vi.fn(async () => 'jsalvata'),
   accountType: vi.fn(async () => 'User' as const),
+  orgSecrets: vi.fn(async () => []),
+  repoSecretNames: vi.fn(async () => []),
+  grantOrgSecretRepo: vi.fn(async () => {}),
+  orgAppSlugs: vi.fn(async () => []),
   ...over,
 });
 
@@ -70,5 +74,25 @@ describe('provisionAppFresh', () => {
     });
     expect(result).toEqual(creds);
     expect(gh.appConversion).toHaveBeenCalledWith('code-xyz');
+  });
+
+  // The App URL still points at the repo either way; only the name changes, and only that keeps
+  // a dedicated App from colliding with the account-wide one.
+  it('names the App after the repo when dedicated to it', async () => {
+    const runFlow = vi.fn(async (deps: ManifestFlowDeps) => {
+      expect(deps.manifest.name).toBe('waiver-stamp-o-r');
+      expect(deps.manifest.url).toBe('https://github.com/o/r');
+      return { appId: 1, pem: 'p', slug: 'waiver-stamp-o-r' };
+    });
+    await provisionAppFresh({
+      target: { kind: 'personal' },
+      owner: 'o',
+      repo: 'r',
+      dedicated: true,
+      gh: fakeGh(),
+      openBrowser: vi.fn(async () => {}),
+      runFlow,
+    });
+    expect(runFlow).toHaveBeenCalledOnce();
   });
 });

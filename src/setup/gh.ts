@@ -15,6 +15,14 @@ export interface SetSecretArgs {
   org?: string;
 }
 
+/** `all` = every repo in the org, `private` = every private repo, `selected` = an explicit list. */
+export type SecretVisibility = 'all' | 'private' | 'selected';
+
+export interface OrgSecret {
+  name: string;
+  visibility: SecretVisibility;
+}
+
 export interface GhClient {
   listOrgs(): Promise<string[]>;
   /** The authenticated user's login, or `null` when it can't be read. */
@@ -26,7 +34,23 @@ export interface GhClient {
   /** OAuth scopes on the active `gh` token (from the `X-Oauth-Scopes` header). Empty when the
    *  token exposes none (e.g. fine-grained PATs) — i.e. its scopes can't be proven. */
   tokenScopes(): Promise<string[]>;
+  /** The org's Actions secrets — their presence is the reuse signal (§4.3). Empty when
+   *  unreadable. `visibility` decides whether a repo needs an explicit grant to read one. */
+  orgSecrets(org: string): Promise<OrgSecret[]>;
+  /** Names of the repo's own Actions secrets (org-scope ones don't appear). Empty when
+   *  unreadable — the caller then provisions, which is the safe direction. */
+  repoSecretNames(repoFullName: string): Promise<string[]>;
+  /** Add a repo to an org secret's selected-repositories list, without knowing its value. */
+  grantOrgSecretRepo(org: string, name: string, repoFullName: string): Promise<void>;
+  /** Slugs of the Apps installed on the org. Empty when unreadable. */
+  orgAppSlugs(org: string): Promise<string[]>;
 }
+
+const lines = (s: string): string[] =>
+  s
+    .split('\n')
+    .map((x) => x.trim())
+    .filter(Boolean);
 
 type Run = (cmd: string, args: string[], opts?: { input?: string }) => Promise<RunResult>;
 
@@ -34,10 +58,7 @@ export function makeGh(run: Run): GhClient {
   return {
     async listOrgs() {
       const r = await run('gh', ['api', 'user/orgs', '--jq', '.[].login']);
-      return r.stdout
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      return lines(r.stdout);
     },
     async viewerLogin() {
       const r = await run('gh', ['api', 'user', '--jq', '.login']);
@@ -81,6 +102,61 @@ export function makeGh(run: Run): GhClient {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
+    },
+    // Both org reads degrade to [] rather than throwing: a token that can't list them still
+    // provisions fine, it just doesn't get the reuse short-circuit.
+    async orgSecrets(org) {
+      const r = await run('gh', [
+        'api',
+        `/orgs/${org}/actions/secrets`,
+        '--paginate',
+        '--jq',
+        '.secrets[] | [.name, .visibility] | @tsv',
+      ]);
+      if (r.code !== 0) return [];
+      return lines(r.stdout).flatMap((l) => {
+        const [name, visibility] = l.split('\t');
+        return name && visibility ? [{ name, visibility: visibility as SecretVisibility }] : [];
+      });
+    },
+    async repoSecretNames(repoFullName) {
+      const r = await run('gh', [
+        'api',
+        `/repos/${repoFullName}/actions/secrets`,
+        '--paginate',
+        '--jq',
+        '.secrets[].name',
+      ]);
+      return r.code === 0 ? lines(r.stdout) : [];
+    },
+    async orgAppSlugs(org) {
+      const r = await run('gh', [
+        'api',
+        `/orgs/${org}/installations`,
+        '--paginate',
+        '--jq',
+        '.installations[].app_slug',
+      ]);
+      return r.code === 0 ? lines(r.stdout) : [];
+    },
+    async grantOrgSecretRepo(org, name, repoFullName) {
+      // The API takes a numeric repository id, not `owner/repo`.
+      const id = await run('gh', ['api', `/repos/${repoFullName}`, '--jq', '.id']);
+      const r =
+        id.code === 0
+          ? await run('gh', [
+              'api',
+              '-X',
+              'PUT',
+              `/orgs/${org}/actions/secrets/${name}/repositories/${id.stdout.trim()}`,
+            ])
+          : id;
+      if (r.code !== 0)
+        throw new SetupError(
+          `failed to grant ${repoFullName} access to the org secret ${name}`,
+          `Add it by hand under https://github.com/organizations/${org}/settings/secrets/actions, then re-run.`,
+          r.stderr.trim() || r.stdout.trim() || undefined,
+        );
     },
     async appConversion(code) {
       const r = await run('gh', ['api', '-X', 'POST', `/app-manifests/${code}/conversions`]);

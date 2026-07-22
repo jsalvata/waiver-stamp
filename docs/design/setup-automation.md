@@ -407,12 +407,22 @@ Resolution order:
 ### 4.4 Personal-account pem-on-disk option
 
 Only when the install target is a **personal account** (orgs use org secrets, so no local pem
-persistence is needed), one prompt:
+persistence is needed), one prompt — asked **before** the manifest is built, because the answer
+picks the App's name:
 
-- *"Save the App ID + private key to disk so you can configure more of your repos later
-  without re-running the browser flow?"* → if yes, write `~/.waiver-install/<owner>.json`
-  (`{ "app_id": …, "pem": … }`), **`chmod 600`**, directory `chmod 700`. Warn plainly that
-  this is a private key at rest on disk.
+- **Yes** → one account-wide `waiver-stamp-<owner>` App; write `~/.waiver-install/<owner>.json`
+  (`{ "app_id": …, "pem": …, "slug": … }`), **`chmod 600`**, directory `chmod 700`. Later repos
+  load it and skip the browser flow entirely.
+- **No** → a `waiver-stamp-<owner>-<repo>` App dedicated to this repository; nothing at rest.
+
+The names must differ: App names are **globally unique**, so an owner who declined earlier
+already holds `waiver-stamp-<owner>`, and reusing it would make GitHub's create page reject the
+second repo outright. Since neither reuse path keys on the name (§4.3), a per-repo name costs
+nothing.
+
+The prompt states both branches rather than asking only about disk, because there is **no API to
+re-download a private key** — declining permanently confines that App to the one repository, and
+that consequence is invisible from a question about where a file goes.
 
 Never persist a pem for an **org** target; never transmit a pem anywhere; never log it. The
 file is the *only* at-rest copy and it is opt-in.
@@ -421,6 +431,15 @@ file is the *only* at-rest copy and it is opt-in.
 > convenience is opt-in and personal-only. Alternative considered: always persist to a
 > keychain — rejected for v0 (extra platform-specific dependency; disk file with 600 perms is
 > adequate and inspectable).
+>
+> Also considered and rejected: keeping the key **inside GitHub** instead of on disk, which would
+> avoid at-rest key material on the adopter's machine. There is nowhere safe to put it. Actions
+> secrets have no user-level tier (repo, environment, org only — an org *is* the multi-repo
+> answer, which is why the org path needs no key at all), and secret values are write-only, so
+> even a key parked in one repo's secrets couldn't be read back to configure the next. The only
+> readable account-side store is repo contents, i.e. a plaintext key committed to a "vault" repo:
+> permanently in git history and exfiltratable by any token with read access — strictly worse
+> than a 600 file. Hence the §4.4 fork: persist locally, or accept a per-repo App.
 
 ### 4.5 Secret provisioning
 

@@ -47,6 +47,8 @@ export interface ProvisionAppFreshArgs {
   repo: string;
   gh: GhClient;
   openBrowser: (url: string) => Promise<void>;
+  /** Name the App after the repo, because it serves only this one — see {@link appSlugName}. */
+  dedicated?: boolean;
   /** Injectable for tests; defaults to the real loopback handshake. */
   runFlow?: (deps: ManifestFlowDeps) => Promise<AppCredentials>;
   /** Injectable for tests; defaults to a "press Enter to cancel" abort. */
@@ -54,12 +56,13 @@ export interface ProvisionAppFreshArgs {
 }
 
 /**
- * Create a brand-new App via the manifest handshake and return its credentials. Reuse-existing-App
- * and pem-on-disk short-circuits are PR 5; this PR always runs the fresh flow.
+ * Create a brand-new App via the manifest handshake and return its credentials. Always mints —
+ * {@link import('./resolve-app.ts').resolveApp} decides whether minting is what we want.
  */
 export async function provisionAppFresh(a: ProvisionAppFreshArgs): Promise<AppCredentials> {
   const manifest = buildManifest({
     owner: a.owner,
+    repo: a.dedicated ? a.repo : undefined,
     appUrl: `https://github.com/${a.owner}/${a.repo}`,
   });
   const runFlow = a.runFlow ?? runManifestFlow;

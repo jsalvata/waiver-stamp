@@ -14,6 +14,21 @@ describe('appSlugName', () => {
     expect(name.startsWith('waiver-stamp-')).toBe(true);
     expect(appSlugName('a'.repeat(60))).toBe(name); // deterministic
   });
+
+  // App names are globally unique, so an App dedicated to one repo can't take the account-wide
+  // name — the owner may already hold it from an earlier repo.
+  it('folds the repo in when the App is dedicated to one', () => {
+    expect(appSlugName('jsalvata', 'demo')).toBe('waiver-stamp-jsalvata-demo');
+    expect(appSlugName('jsalvata', 'demo')).not.toBe(appSlugName('jsalvata'));
+  });
+
+  it('caps the dedicated name too, hashing owner and repo together', () => {
+    const name = appSlugName('a'.repeat(30), 'b'.repeat(30));
+    expect(name.length).toBeLessThanOrEqual(34);
+    expect(name).toBe(appSlugName('a'.repeat(30), 'b'.repeat(30)));
+    // Two repos under one long owner must not collapse to the same truncated name.
+    expect(name).not.toBe(appSlugName('a'.repeat(30), 'c'.repeat(30)));
+  });
 });
 
 describe('buildManifest', () => {
