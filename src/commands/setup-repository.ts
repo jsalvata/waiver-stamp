@@ -1,5 +1,6 @@
 import { SetupError } from '../setup/errors.ts';
 import { type GhClient, makeGh } from '../setup/gh.ts';
+import { openInstallGuidance } from '../setup/install-guidance.ts';
 import { openBrowser } from '../setup/open-browser.ts';
 import { type RepoContext, preflight } from '../setup/preflight.ts';
 import { confirmYesNo } from '../setup/prompt.ts';
@@ -31,6 +32,8 @@ export interface SetupDeps {
   ) => Promise<void>;
   confirmYesNo: (question: string) => Promise<boolean>;
   openBrowser: (url: string) => Promise<void>;
+  /** Show the install guidance page, then the install link, for a reuse run (no loopback ran). */
+  openInstallGuidance: (installUrl: string, repoFullName: string) => Promise<void>;
   info: (msg: string) => void;
 }
 
@@ -45,6 +48,7 @@ export function makeSetupDeps(): SetupDeps {
     grantExistingOrgSecrets,
     confirmYesNo: (q) => confirmYesNo(q),
     openBrowser,
+    openInstallGuidance: (url, repo) => openInstallGuidance(url, repo, openBrowser),
     info: (m) => console.log(m),
   };
 }
@@ -137,11 +141,16 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   const installUrl = app.slug
     ? `https://github.com/apps/${app.slug}/installations/new`
     : `https://github.com/organizations/${target.kind === 'org' ? target.org : ctx.owner}/settings/installations`;
+  // A local guidance page opens first, because the install link jumps straight to GitHub where we
+  // can't say anything; the terminal line repeats the URL for a headless opener that can't.
+  const repoFull = `${ctx.owner}/${ctx.repo}`;
   deps.info(
-    `Secrets ready. Last step: install the App on ${ctx.owner}/${ctx.repo} — choose "Only select\n` +
-      `repositories" and pick it. Opening ${installUrl}`,
+    [
+      `Secrets ready. A browser page is opening with the last step: install the App on ${repoFull}.`,
+      `If it doesn't open, go to ${installUrl} and choose "Only select repositories", then pick ${repoFull}.`,
+    ].join('\n'),
   );
-  await deps.openBrowser(installUrl);
+  await deps.openInstallGuidance(installUrl, repoFull);
 
   async function writeSecrets(appId: number, pem: string): Promise<void> {
     try {

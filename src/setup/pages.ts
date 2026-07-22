@@ -23,14 +23,14 @@ stop your other repositories reusing it.</p>
 }
 
 /**
- * Shown after conversion succeeds (spec §3.3). GitHub's install page defaults to "All
- * repositories" and gives no hint which repo to pick, so spell that out here — the last page we
+ * The install guidance both endings share (spec §3.3). GitHub's install page defaults to "All
+ * repositories" and gives no hint which repo to pick, so we spell that out on the last page we
  * control. No auto-redirect: the user needs to read this before landing there.
  */
-export function donePage(installUrl: string, repoFullName: string): string {
+function installPage(heading: string, installUrl: string, repoFullName: string): string {
   return `<!doctype html><meta charset=utf-8><title>waiver-stamp — install</title>
 <body>
-<h1>App created ✓</h1>
+<h1>${heading}</h1>
 <p>Last step: install it on <b>${repoFullName}</b>. On the page that opens:</p>
 <ol>
 <li>Choose <b>Only select repositories</b> (not "All repositories").</li>
@@ -39,4 +39,15 @@ export function donePage(installUrl: string, repoFullName: string): string {
 <li>That's it — close this tab and return to your terminal.</li>
 </ol>
 <p><a href="${installUrl}">Open the install page →</a></p>`;
+}
+
+/** Shown from the loopback callback after a fresh App is created. */
+export function donePage(installUrl: string, repoFullName: string): string {
+  return installPage('App created ✓', installUrl, repoFullName);
+}
+
+/** Shown before the install page on a reuse run, where no App was created — so it can't repeat
+ *  the loopback done page, and there's no server to serve it from (see {@link openInstallGuidance}). */
+export function reusePage(installUrl: string, repoFullName: string): string {
+  return installPage('Secrets ready ✓', installUrl, repoFullName);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildManifest } from './manifest.ts';
-import { donePage, formPage } from './pages.ts';
+import { donePage, formPage, reusePage } from './pages.ts';
 
 describe('formPage', () => {
   const manifest = buildManifest({ owner: 'o', appUrl: 'https://github.com/o/r' });
@@ -48,5 +48,22 @@ describe('donePage', () => {
   // here — otherwise the user is left on GitHub wondering whether setup finished.
   it('tells the user to close the tab once the install is done', () => {
     expect(donePage(url, 'o/r').toLowerCase()).toContain('close');
+  });
+});
+
+describe('reusePage', () => {
+  const url = 'https://github.com/apps/waiver-stamp-o/installations/new';
+
+  it('carries the same install steps as the done page', () => {
+    const html = reusePage(url, 'o/r');
+    expect(html).toContain(`href="${url}"`);
+    expect(html).toContain('o/r');
+    expect(html.toLowerCase()).toContain('select repositories');
+    expect(html.toLowerCase()).toContain('close');
+  });
+
+  // The reuse path skipped creation — the App already existed — so it must not claim otherwise.
+  it('does not claim the App was just created', () => {
+    expect(reusePage(url, 'o/r').toLowerCase()).not.toContain('created');
   });
 });

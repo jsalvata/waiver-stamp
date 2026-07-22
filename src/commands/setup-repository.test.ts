@@ -33,6 +33,7 @@ function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
     grantExistingOrgSecrets: vi.fn(async () => {}),
     confirmYesNo: vi.fn(async () => false),
     openBrowser: vi.fn(async () => {}),
+    openInstallGuidance: vi.fn(async () => {}),
     info: vi.fn(),
     ...over,
   };
@@ -170,13 +171,14 @@ describe('setupRepository', () => {
       });
     });
 
-    // Reuse skips the manifest flow, so nothing has opened a browser yet — but the App still has
-    // to be installed on this repo, and only GitHub's picker can do that.
-    it('opens the install page itself, since no browser flow ran', async () => {
+    // Reuse skips the manifest flow, so no loopback served a guidance page — the orchestrator
+    // shows one itself before the install link, rather than dropping the user onto raw GitHub.
+    it('guides install via a local page, since no browser flow ran', async () => {
       const d = reuse();
       await setupRepository({ cwd: '/repo' }, d);
-      expect(d.openBrowser).toHaveBeenCalledWith(
+      expect(d.openInstallGuidance).toHaveBeenCalledWith(
         'https://github.com/apps/waiver-stamp-acme/installations/new',
+        'jsalvata/demo',
       );
     });
 
@@ -186,8 +188,9 @@ describe('setupRepository', () => {
         resolveApp: vi.fn(async () => ({ source: 'reuse-org' as const })),
       });
       await setupRepository({ cwd: '/repo' }, d);
-      expect(d.openBrowser).toHaveBeenCalledWith(
+      expect(d.openInstallGuidance).toHaveBeenCalledWith(
         'https://github.com/organizations/acme/settings/installations',
+        'jsalvata/demo',
       );
     });
   });
@@ -213,8 +216,9 @@ describe('setupRepository', () => {
         owner: 'jsalvata',
         repo: 'demo',
       });
-      expect(d.openBrowser).toHaveBeenCalledWith(
+      expect(d.openInstallGuidance).toHaveBeenCalledWith(
         'https://github.com/apps/renamed-by-hand/installations/new',
+        'jsalvata/demo',
       );
     });
   });
