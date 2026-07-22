@@ -49,9 +49,19 @@ export function makeSetupDeps(): SetupDeps {
   };
 }
 
-const SAVE_KEY_QUESTION =
-  'Save the App ID and private key under ~/.waiver-install so you can set up your other\n' +
-  'repositories without repeating the browser step? (a private key at rest on disk, mode 600)';
+/** Both branches are spelled out because the answer decides what gets created, not just where a
+ *  file lands — and GitHub gives no way to re-download a key later, so it's a one-shot choice. */
+const SAVE_KEY_QUESTION = [
+  'This repository needs a GitHub App, and there are two ways to go about it:',
+  '',
+  '  yes — one App for your whole account. Its key is saved to ~/.waiver-install (mode 600),',
+  '        and your other repositories reuse it with no browser step.',
+  '  no  — an App just for this repository. Nothing is stored on disk, and setting up another',
+  '        repository will create another App.',
+  '',
+  'GitHub never lets a key be downloaded twice, so declining means this App can only ever',
+  'serve this repository. Save the key and reuse the App elsewhere?',
+].join('\n');
 
 export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Promise<void> {
   const cwd = opts.cwd ?? process.cwd();

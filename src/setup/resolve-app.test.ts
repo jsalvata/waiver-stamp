@@ -101,9 +101,8 @@ describe('resolveApp — personal', () => {
     expect(d.writeDiskApp).not.toHaveBeenCalled();
   });
 
-  // Mint, then ask: offering to persist a key that doesn't exist yet (and won't, if the browser
-  // step is cancelled) is backwards.
-  it('mints the App before asking whether to save it', async () => {
+  // The answer picks the App's name, so it has to be known before the manifest is built.
+  it('asks about saving before minting, since the answer names the App', async () => {
     const order: string[] = [];
     const d = deps({
       confirmSaveKey: vi.fn(async () => {
@@ -116,6 +115,24 @@ describe('resolveApp — personal', () => {
       }),
     });
     await resolveApp(d);
-    expect(order).toEqual(['flow', 'ask']);
+    expect(order).toEqual(['ask', 'flow']);
+  });
+
+  it('mints an account-wide App when the key will be saved', async () => {
+    const d = deps({ confirmSaveKey: vi.fn(async () => true) });
+    await resolveApp(d);
+    expect(d.provisionAppFresh).toHaveBeenCalledWith(
+      expect.objectContaining({ dedicated: false, owner: 'o', repo: 'r' }),
+    );
+  });
+
+  // Without a saved key the account-wide name may already be taken by an earlier repo, and App
+  // names are globally unique — so a declined save must ask GitHub for a repo-specific name.
+  it('mints an App dedicated to this repo when the key will not be saved', async () => {
+    const d = deps({ confirmSaveKey: vi.fn(async () => false) });
+    await resolveApp(d);
+    expect(d.provisionAppFresh).toHaveBeenCalledWith(
+      expect.objectContaining({ dedicated: true, owner: 'o', repo: 'r' }),
+    );
   });
 });

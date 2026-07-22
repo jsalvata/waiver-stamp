@@ -61,17 +61,20 @@ export async function resolveApp(deps: ResolveAppDeps): Promise<ResolvedApp> {
     return { ...saved, source: 'disk' };
   }
 
-  // Mint first, then ask: there's no point offering to persist a key before it exists (and it may
-  // never, if the user cancels the browser step).
-  const creds = await runFresh();
-  if (await deps.confirmSaveKey()) await write(deps.owner, creds);
+  // Asked before minting because the answer picks the App's *name*: saving means one reusable
+  // account-wide App, declining means one dedicated to this repo. They can't share a name — App
+  // names are globally unique, and the account-wide one may already be taken by an earlier repo.
+  const save = await deps.confirmSaveKey();
+  const creds = await runFresh(!save);
+  if (save) await write(deps.owner, creds);
   return { ...creds, source: 'fresh' };
 
-  function runFresh(): Promise<AppCredentials> {
+  function runFresh(dedicated = false): Promise<AppCredentials> {
     return fresh({
       target: deps.target,
       owner: deps.owner,
       repo: deps.repo,
+      dedicated,
       gh: deps.gh,
       openBrowser: deps.openBrowser,
     });

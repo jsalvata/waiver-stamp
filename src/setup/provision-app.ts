@@ -47,6 +47,8 @@ export interface ProvisionAppFreshArgs {
   repo: string;
   gh: GhClient;
   openBrowser: (url: string) => Promise<void>;
+  /** Name the App after the repo, because it serves only this one — see {@link appSlugName}. */
+  dedicated?: boolean;
   /** Injectable for tests; defaults to the real loopback handshake. */
   runFlow?: (deps: ManifestFlowDeps) => Promise<AppCredentials>;
   /** Injectable for tests; defaults to a "press Enter to cancel" abort. */
@@ -60,6 +62,7 @@ export interface ProvisionAppFreshArgs {
 export async function provisionAppFresh(a: ProvisionAppFreshArgs): Promise<AppCredentials> {
   const manifest = buildManifest({
     owner: a.owner,
+    repo: a.dedicated ? a.repo : undefined,
     appUrl: `https://github.com/${a.owner}/${a.repo}`,
   });
   const runFlow = a.runFlow ?? runManifestFlow;

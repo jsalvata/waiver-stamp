@@ -156,10 +156,12 @@ Setting up a *second* repository reuses that App rather than minting another:
 
 - **Org-owned repos** share one App through org secrets, so every later repo needs only the
   Install click — no key, no browser handshake.
-- **Personal repos** have no shared secret store, so the key has to come from somewhere. Answer
-  yes to the save prompt and setup keeps it in `~/.waiver-install/<owner>.json` at mode 600;
-  later runs load it and skip the handshake. Declining is the default — you can always re-run
-  the browser flow instead.
+- **Personal repos** have no shared secret store, so setup asks once which you want. Save the
+  key and it goes to `~/.waiver-install/<owner>.json` at mode 600, giving you one
+  `waiver-stamp-<owner>` App that later repos reuse with no browser step. Decline (the default)
+  and you get a `waiver-stamp-<owner>-<repo>` App dedicated to this repository, with nothing
+  stored on disk — the next repository then gets its own. GitHub never lets a private key be
+  downloaded twice, so a declined App can only ever serve the repo it was made for.
 
 Re-running on a repo that already has both secrets provisions nothing: setup leaves them in
 place and points at the Install step, so a first run you abandoned before that click is
