@@ -1,3 +1,20 @@
+# [1.23.0](https://github.com/jsalvata/waiver-stamp/compare/v1.22.1...v1.23.0) (2026-07-22)
+
+
+### Bug Fixes
+
+* address PR review on the reuse layer ([ddfa224](https://github.com/jsalvata/waiver-stamp/commit/ddfa2245bd05dd2927304b520afc19b4aa29c7f7)), closes [#56](https://github.com/jsalvata/waiver-stamp/issues/56)
+* converge instead of minting a second App ([4603d17](https://github.com/jsalvata/waiver-stamp/commit/4603d1701c6f377e54a38c9d0f5d1768d4abe4c3))
+* only grant org secrets that need granting ([27c54dd](https://github.com/jsalvata/waiver-stamp/commit/27c54ddf128e46a19ca194a088db050a5bac66d1))
+* show install guidance on the reuse paths too ([a152fe2](https://github.com/jsalvata/waiver-stamp/commit/a152fe2a1b7564ba893e7d09c89ca50f1bb9fb9b))
+* stop warning that a rename breaks reuse ([9c805f8](https://github.com/jsalvata/waiver-stamp/commit/9c805f8f58dd69b5e28bd6089c5e7b98555c9d71))
+
+
+### Features
+
+* name a declined App after its repo ([8d9538b](https://github.com/jsalvata/waiver-stamp/commit/8d9538b5586312229236a359dcd2e7256f577181))
+* reuse the App instead of minting a new one ([2b24b41](https://github.com/jsalvata/waiver-stamp/commit/2b24b41d94bc7801bb539f5a8016e3059b73fc95))
+
 ## [1.22.1](https://github.com/jsalvata/waiver-stamp/compare/v1.22.0...v1.22.1) (2026-07-21)
 
 

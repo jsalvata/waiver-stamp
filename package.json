@@ -1,6 +1,6 @@
 {
   "name": "waiver-stamp",
-  "version": "1.22.1",
+  "version": "1.23.0",
   "description": "Auto-approve PRs whose safety can be proven mechanically. A waiver is a JSON recipe describing a change; stamping validates a PR's diff against its waiver.",
   "keywords": [
     "refactor",
