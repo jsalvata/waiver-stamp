@@ -3,8 +3,8 @@ import type { AppManifest } from './manifest.ts';
 /**
  * The manifest POST to GitHub's App-creation endpoint (the manifest rides in a `manifest` field,
  * so the flow requires a form POST). Deliberately NOT auto-submitting: this is the only page we
- * control before GitHub's create form, so it's where the "don't rename the App" warning has to
- * land — auto-submitting would flash past it.
+ * control before GitHub's create form, so it's the last place to say anything — auto-submitting
+ * would flash past it.
  */
 export function formPage(action: string, manifest: AppManifest): string {
   const json = JSON.stringify(manifest).replace(/</g, '\\u003c').replace(/'/g, '&#39;');
@@ -13,8 +13,9 @@ export function formPage(action: string, manifest: AppManifest): string {
 <h1>Create the waiver-stamp GitHub App</h1>
 <p>The button below opens GitHub's App-creation page. There, click the green
 <b>Create GitHub App</b>.</p>
-<p>⚠️ <b>Leave the App name unchanged.</b> waiver-stamp finds this App by its name, so if you rename
-it you won't be able to reuse it when enabling waiver-stamp on your other repositories.</p>
+<p>Keeping the suggested name is easiest: on an organisation it's how waiver-stamp finds this App's
+install page, and either way it's how you'll recognise it among your other Apps. Renaming won't
+stop your other repositories reusing it.</p>
 <form action="${action}" method="post">
 <input type="hidden" name="manifest" value='${json}'>
 <button type="submit">Continue to GitHub →</button>

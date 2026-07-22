@@ -13,10 +13,13 @@ describe('formPage', () => {
     expect(html).toContain('type="submit"');
   });
 
-  it('warns that renaming the App breaks reuse across repos', () => {
+  // Reuse keys on the org secrets / the slug recorded at creation, never on the name — so the page
+  // must not claim a rename costs you reuse.
+  it('mentions the name without threatening reuse, which no longer depends on it', () => {
     const html = formPage(action, manifest).toLowerCase();
     expect(html).toContain('name');
-    expect(html).toContain('reuse');
+    expect(html).toMatch(/renaming won't\s+stop|renaming will not stop/);
+    expect(html).not.toMatch(/won't be able to reuse|leave the app name unchanged/);
   });
 
   // `default_permissions` legitimately rides in the hidden manifest, so assert on the prose.
