@@ -1,7 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { openLocalPage } from './open-local-page.ts';
 import { reusePage } from './pages.ts';
 
 /**
@@ -15,8 +12,5 @@ export async function openInstallGuidance(
   repoFullName: string,
   openBrowser: (url: string) => Promise<void>,
 ): Promise<void> {
-  const dir = await mkdtemp(join(tmpdir(), 'waiver-install-'));
-  const file = join(dir, 'install.html');
-  await writeFile(file, reusePage(installUrl, repoFullName));
-  await openBrowser(pathToFileURL(file).href);
+  await openLocalPage(reusePage(installUrl, repoFullName), openBrowser);
 }

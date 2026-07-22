@@ -76,7 +76,7 @@ interface Linter {
  * applies safe fixes and organizes imports; `--unsafe` is deliberately omitted so only
  * safe fixes land (§6.1).
  */
-interface LinterSpec {
+export interface LinterSpec {
   pkg: string;
   bin: string;
   args: readonly string[];
@@ -89,6 +89,15 @@ const SUPPORTED_LINTERS: readonly LinterSpec[] = [
 ];
 
 /**
+ * The supported linters `cwd`'s manifest declares (§6.1). The single source of truth for both the
+ * op's apply-time resolution and setup's config advisory — so the two never drift on which linters
+ * exist. Zero or more than one is a fail-closed condition for the op (see {@link resolveLinter}).
+ */
+export function declaredLinters(cwd: string): LinterSpec[] {
+  return SUPPORTED_LINTERS.filter((linter) => manifestDeclares(cwd, linter.pkg));
+}
+
+/**
  * Resolve the repo's linter (v0 catalog). The linter must be declared in the
  * folded tree's own manifest — the committed toolchain is the source of truth
  * (§6.1) — and its binary is resolved from an actual install (`toolchainRoot`
@@ -96,7 +105,7 @@ const SUPPORTED_LINTERS: readonly LinterSpec[] = [
  * unresolvable linter never yields `O`, so it can never yield a false stamp.
  */
 function resolveLinter(cwd: string, toolchainRoot: string): Linter {
-  const declared = SUPPORTED_LINTERS.filter((linter) => manifestDeclares(cwd, linter.pkg));
+  const declared = declaredLinters(cwd);
   if (declared.length === 0) {
     throw new OpApplicationError(
       'lint-fix',

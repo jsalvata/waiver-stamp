@@ -139,11 +139,15 @@ To turn a correctly waivered PR into an auto-approved one, wire `waiver stamp --
 your CI and add a privileged reviewer workflow that posts the mapped GitHub review. See
 [`docs/auto-approval-setup.md`](docs/auto-approval-setup.md) for full instructions.
 
-`waiver setup-repository` checks the current repository configuration is supported and, for
-the App-token path, creates a per-owner `waiver-stamp-<owner>` GitHub App and writes its
-`WAIVER_STAMP_APP_ID` / `WAIVER_STAMP_APP_PRIVATE_KEY` secrets. The **Create GitHub App** and
-**Install** clicks stay manual — it opens the browser at each. Pass `--no-app` to skip
-provisioning and leave the auto-approval layer unconfigured.
+`waiver setup-repository`, run from inside a checked-out repo, wires it up end to end: it
+provisions the App and its `WAIVER_STAMP_APP_ID` / `WAIVER_STAMP_APP_PRIVATE_KEY` secrets (for
+the App-token path), writes the two caller workflows into `.github/workflows/`, seeds a
+closed-by-default `.waiver-stamp.json` if none exists, adds a dedicated `waiver-stamp`
+required-check ruleset, and opens a browser hand-off page listing the few steps left to you. The
+**Create GitHub App** and **Install** clicks stay manual — it opens the browser at each. Pass
+`--no-app` to do the file-and-ruleset half only, leaving the reviewer's auth for you to wire
+(§2.6). It also warns, never edits, if the repo's commitlint would reject long waiver bodies or
+if no single linter is declared for the `lint-fix` op.
 
 The App is registered on whichever account owns the repository — an org for an org-owned repo,
 otherwise your own — because a private App can only be installed where it's owned. So a repo
@@ -163,9 +167,12 @@ Setting up a *second* repository reuses that App rather than minting another:
   stored on disk — the next repository then gets its own. GitHub never lets a private key be
   downloaded twice, so a declined App can only ever serve the repo it was made for.
 
-Re-running on a repo that already has both secrets provisions nothing: setup leaves them in
-place and points at the Install step, so a first run you abandoned before that click is
-recoverable. To swap in a different App, delete the two secrets and re-run.
+The required-check ruleset can't be added until the producer has run once — a check that never
+reported would block every PR — so setup writes the caller workflows first and, if the
+`waiver-stamp` check hasn't run yet, tells you to merge them and re-run; the second run adds the
+ruleset. Re-running is always safe: every step checks current state and converges, so a run you
+abandoned partway is recoverable. Re-running on a repo that already has both secrets provisions
+no new App; to swap one in, delete the two secrets and re-run.
 
 ## CLI
 
@@ -212,7 +219,8 @@ a rebase-merge, so the verified commits land as-is (spec §17.5).
 **Adopting this in a repo whose commitlint enforces `body-max-line-length`:** pretty-
 printed waiver JSON can have lines longer than the default 100-char limit. Disable the
 rule (this repo does, in `commitlint.config.js`) so the `commit-msg` hook doesn't reject
-waivered commits.
+waivered commits — `waiver setup-repository` detects and warns about this, but leaves your
+commitlint config for you to edit.
 
 ## Scope (v0)
 

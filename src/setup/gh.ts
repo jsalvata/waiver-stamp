@@ -23,6 +23,26 @@ export interface OrgSecret {
   visibility: SecretVisibility;
 }
 
+/** A repo ruleset as listed — only the name matters for the idempotency check (§4.6). */
+export interface RulesetSummary {
+  name: string;
+}
+
+/** The dedicated `waiver-stamp` ruleset we create: one required check on the default branch. */
+export interface RulesetSpec {
+  name: string;
+  target: 'branch';
+  enforcement: 'active';
+  conditions: { ref_name: { include: string[]; exclude: string[] } };
+  rules: Array<{
+    type: 'required_status_checks';
+    parameters: {
+      strict_required_status_checks_policy: boolean;
+      required_status_checks: Array<{ context: string }>;
+    };
+  }>;
+}
+
 export interface GhClient {
   listOrgs(): Promise<string[]>;
   /** The authenticated user's login, or `null` when it can't be read. */
@@ -44,6 +64,15 @@ export interface GhClient {
   grantOrgSecretRepo(org: string, name: string, repoFullName: string): Promise<void>;
   /** Slugs of the Apps installed on the org. Empty when unreadable. */
   orgAppSlugs(org: string): Promise<string[]>;
+  /** The repo's rulesets — presence of one named `waiver-stamp` is the idempotency signal (§4.6). */
+  listRulesets(owner: string, repo: string): Promise<RulesetSummary[]>;
+  /** Create a repo ruleset from `spec`. */
+  createRuleset(owner: string, repo: string, spec: RulesetSpec): Promise<void>;
+  /** Whether the App is installed on `owner/repo` (`GET …/installation` succeeds). */
+  installationPresent(owner: string, repo: string): Promise<boolean>;
+  /** Whether a check run named `name` has reported on `ref` (a branch, tag, or sha) — the §4.13
+   *  phase-boundary gate. */
+  checkRunPresent(owner: string, repo: string, ref: string, name: string): Promise<boolean>;
 }
 
 const lines = (s: string): string[] =>
@@ -177,6 +206,46 @@ export function makeGh(run: Run): GhClient {
           r.stdout.trim(),
         );
       return { appId: j.id, pem: j.pem, slug: j.slug };
+    },
+    async listRulesets(owner, repo) {
+      const r = await run('gh', [
+        'api',
+        `/repos/${owner}/${repo}/rulesets`,
+        '--paginate',
+        '--jq',
+        '.[].name',
+      ]);
+      return r.code === 0 ? lines(r.stdout).map((name) => ({ name })) : [];
+    },
+    async createRuleset(owner, repo, spec) {
+      // `--input -` sends the ruleset JSON on stdin, keeping the payload out of argv.
+      const r = await run(
+        'gh',
+        ['api', '-X', 'POST', `/repos/${owner}/${repo}/rulesets`, '--input', '-'],
+        {
+          input: JSON.stringify(spec),
+        },
+      );
+      if (r.code !== 0)
+        throw new SetupError(
+          'failed to create the waiver-stamp ruleset',
+          `Add a branch ruleset on ${owner}/${repo} requiring the "waiver-stamp" check by hand, then re-run.`,
+          r.stderr.trim() || r.stdout.trim() || undefined,
+        );
+    },
+    async installationPresent(owner, repo) {
+      const r = await run('gh', ['api', `/repos/${owner}/${repo}/installation`]);
+      return r.code === 0;
+    },
+    async checkRunPresent(owner, repo, ref, name) {
+      const r = await run('gh', [
+        'api',
+        `/repos/${owner}/${repo}/commits/${ref}/check-runs`,
+        '--paginate',
+        '--jq',
+        '.check_runs[].name',
+      ]);
+      return r.code === 0 && lines(r.stdout).includes(name);
     },
   };
 }

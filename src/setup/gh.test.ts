@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeGh } from './gh.ts';
+import type { RulesetSpec } from './gh.ts';
 import type { RunResult } from './run.ts';
 
 const ok = (stdout = ''): RunResult => ({ stdout, stderr: '', code: 0 });
@@ -218,5 +219,90 @@ describe('makeGh', () => {
     expect((err as { remediation: string }).remediation).toContain(
       'github.com/jsalvata/waiver-stamp/issues',
     );
+  });
+
+  it('listRulesets returns one summary per ruleset name', async () => {
+    const run = mockRun(async () => ok('protect-main\nwaiver-stamp\n'));
+    const gh = makeGh(run);
+    expect(await gh.listRulesets('o', 'r')).toEqual([
+      { name: 'protect-main' },
+      { name: 'waiver-stamp' },
+    ]);
+    expect(run).toHaveBeenCalledWith('gh', [
+      'api',
+      '/repos/o/r/rulesets',
+      '--paginate',
+      '--jq',
+      '.[].name',
+    ]);
+  });
+
+  it('listRulesets returns [] when the read fails', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 403', code: 1 }));
+    expect(await makeGh(run).listRulesets('o', 'r')).toEqual([]);
+  });
+
+  it('createRuleset POSTs the spec on stdin, never in argv', async () => {
+    const run = mockRun(async () => ok());
+    const gh = makeGh(run);
+    const spec: RulesetSpec = {
+      name: 'waiver-stamp',
+      target: 'branch',
+      enforcement: 'active',
+      conditions: { ref_name: { include: ['refs/heads/main'], exclude: [] } },
+      rules: [
+        {
+          type: 'required_status_checks',
+          parameters: {
+            strict_required_status_checks_policy: false,
+            required_status_checks: [{ context: 'waiver-stamp' }],
+          },
+        },
+      ],
+    };
+    await gh.createRuleset('o', 'r', spec);
+    const [, args, opts] = run.mock.calls[0] ?? [];
+    expect(args).toEqual(['api', '-X', 'POST', '/repos/o/r/rulesets', '--input', '-']);
+    expect(opts).toEqual({ input: JSON.stringify(spec) });
+  });
+
+  it('createRuleset throws a SetupError the user can act on', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 422', code: 1 }));
+    await expect(
+      makeGh(run).createRuleset('o', 'r', {
+        name: 'waiver-stamp',
+        target: 'branch',
+        enforcement: 'active',
+        conditions: { ref_name: { include: ['refs/heads/main'], exclude: [] } },
+        rules: [],
+      }),
+    ).rejects.toMatchObject({ name: 'SetupError', details: 'HTTP 422' });
+  });
+
+  it('installationPresent is true iff GET …/installation succeeds', async () => {
+    const present = mockRun(async () => ok('{"id":1}'));
+    expect(await makeGh(present).installationPresent('o', 'r')).toBe(true);
+    expect(present).toHaveBeenCalledWith('gh', ['api', '/repos/o/r/installation']);
+    const absent = mockRun(async () => ({ stdout: '', stderr: 'HTTP 404', code: 1 }));
+    expect(await makeGh(absent).installationPresent('o', 'r')).toBe(false);
+  });
+
+  it('checkRunPresent is true only when the named check reported on the sha', async () => {
+    const run = mockRun(async () => ok('build\nwaiver-stamp\n'));
+    const gh = makeGh(run);
+    expect(await gh.checkRunPresent('o', 'r', 'abc123', 'waiver-stamp')).toBe(true);
+    expect(await gh.checkRunPresent('o', 'r', 'abc123', 'never-ran')).toBe(false);
+    expect(run).toHaveBeenCalledWith('gh', [
+      'api',
+      '/repos/o/r/commits/abc123/check-runs',
+      '--paginate',
+      '--jq',
+      '.check_runs[].name',
+    ]);
+  });
+
+  it('checkRunPresent is false when the read fails', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 404', code: 1 }));
+    expect(await makeGh(run).checkRunPresent('o', 'r', 'abc', 'waiver-stamp')).toBe(false);
   });
 });
