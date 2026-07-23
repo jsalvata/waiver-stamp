@@ -6,7 +6,6 @@ const base = {
   repo: 'demo',
   slug: 'waiver-stamp-jsalvata',
   defaultBranch: 'main',
-  installDetected: false,
   configExisted: false,
   suggestedHonestyCheck: null as string | null,
 };
@@ -21,11 +20,14 @@ describe('handoffPage', () => {
     expect(html).toContain('docs/auto-approval-setup.md');
   });
 
-  it('shows the install-confirm step only when the install was not detected', async () => {
-    expect(handoffPage({ ...base, installDetected: false })).toContain('waiver-stamp-jsalvata');
-    expect(handoffPage({ ...base, installDetected: false }).toLowerCase()).toContain('install');
-    const detected = handoffPage({ ...base, installDetected: true });
-    expect(detected).not.toMatch(/is installed on/i);
+  it('shows the install-confirm step only when an App was provisioned (slug present)', async () => {
+    const withApp = handoffPage({ ...base, slug: 'waiver-stamp-jsalvata' });
+    expect(withApp).toContain('waiver-stamp-jsalvata');
+    expect(withApp).toMatch(/is installed on/i);
+    // No slug (--no-app / converged resume): nothing to install, so no step and no broken link.
+    const noApp = handoffPage({ ...base, slug: '' });
+    expect(noApp).not.toMatch(/is installed on/i);
+    expect(noApp).not.toContain('/apps//');
   });
 
   it('suggests the lockfileHonestyCheck edit only when an existing config lacks it', async () => {

@@ -18,7 +18,6 @@ const fakeGh = (): GhClient => ({
   orgAppSlugs: vi.fn(async () => []),
   listRulesets: vi.fn(async () => []),
   createRuleset: vi.fn(async () => {}),
-  installationPresent: vi.fn(async () => false),
   checkRunPresent: vi.fn(async () => false),
 });
 
@@ -181,17 +180,15 @@ describe('setupRepository', () => {
   });
 
   describe('hand-off page', () => {
-    it('opens the hand-off page with the install/config state', async () => {
-      const gh: GhClient = { ...fakeGh(), installationPresent: vi.fn(async () => true) };
+    it('opens the hand-off page with the provisioned slug and config state', async () => {
       const handoffPage = vi.fn(() => '<handoff>');
       const openHandoff = vi.fn(async () => {});
-      await setupRepository({ cwd: '/repo' }, makeDeps({ gh, handoffPage, openHandoff }));
+      await setupRepository({ cwd: '/repo' }, makeDeps({ handoffPage, openHandoff }));
       expect(handoffPage).toHaveBeenCalledWith(
         expect.objectContaining({
           owner: 'jsalvata',
           repo: 'demo',
           slug: 'waiver-stamp-jsalvata',
-          installDetected: true,
           configExisted: false,
         }),
       );

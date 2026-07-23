@@ -152,15 +152,15 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
     );
   }
 
-  // Phase 3 — the hand-off page: only the steps we chose not to automate (§4.10).
-  const installed = await deps.gh.installationPresent(ctx.owner, ctx.repo).catch(() => false);
+  // Phase 3 — the hand-off page: only the steps we chose not to automate (§4.10). The install step
+  // shows when a slug was provisioned; whether it's already installed is left to the reader (no
+  // reliable user-token check exists — GET …/installation needs an App JWT).
   await deps.openHandoff(
     deps.handoffPage({
       owner: ctx.owner,
       repo: ctx.repo,
       slug: slug ?? '',
       defaultBranch: ctx.defaultBranch,
-      installDetected: installed,
       configExisted: seed.existing,
       suggestedHonestyCheck: seed.existing ? honesty : null,
     }),

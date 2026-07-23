@@ -68,8 +68,6 @@ export interface GhClient {
   listRulesets(owner: string, repo: string): Promise<RulesetSummary[]>;
   /** Create a repo ruleset from `spec`. */
   createRuleset(owner: string, repo: string, spec: RulesetSpec): Promise<void>;
-  /** Whether the App is installed on `owner/repo` (`GET …/installation` succeeds). */
-  installationPresent(owner: string, repo: string): Promise<boolean>;
   /** Whether a check run named `name` has reported on `ref` (a branch, tag, or sha) — the §4.13
    *  phase-boundary gate. */
   checkRunPresent(owner: string, repo: string, ref: string, name: string): Promise<boolean>;
@@ -232,10 +230,6 @@ export function makeGh(run: Run): GhClient {
           `Add a branch ruleset on ${owner}/${repo} requiring the "waiver-stamp" check by hand, then re-run.`,
           r.stderr.trim() || r.stdout.trim() || undefined,
         );
-    },
-    async installationPresent(owner, repo) {
-      const r = await run('gh', ['api', `/repos/${owner}/${repo}/installation`]);
-      return r.code === 0;
     },
     async checkRunPresent(owner, repo, ref, name) {
       const r = await run('gh', [

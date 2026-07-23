@@ -279,14 +279,6 @@ describe('makeGh', () => {
     ).rejects.toMatchObject({ name: 'SetupError', details: 'HTTP 422' });
   });
 
-  it('installationPresent is true iff GET …/installation succeeds', async () => {
-    const present = mockRun(async () => ok('{"id":1}'));
-    expect(await makeGh(present).installationPresent('o', 'r')).toBe(true);
-    expect(present).toHaveBeenCalledWith('gh', ['api', '/repos/o/r/installation']);
-    const absent = mockRun(async () => ({ stdout: '', stderr: 'HTTP 404', code: 1 }));
-    expect(await makeGh(absent).installationPresent('o', 'r')).toBe(false);
-  });
-
   it('checkRunPresent is true only when the named check reported on the sha', async () => {
     const run = mockRun(async () => ok('build\nwaiver-stamp\n'));
     const gh = makeGh(run);
