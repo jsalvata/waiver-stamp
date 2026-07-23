@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeGh } from './gh.ts';
+import type { RulesetSpec } from './gh.ts';
 import type { RunResult } from './run.ts';
 
 const ok = (stdout = ''): RunResult => ({ stdout, stderr: '', code: 0 });
@@ -218,5 +219,81 @@ describe('makeGh', () => {
     expect((err as { remediation: string }).remediation).toContain(
       'github.com/jsalvata/waiver-stamp/issues',
     );
+  });
+
+  it('listRulesets returns one summary per ruleset name', async () => {
+    const run = mockRun(async () => ok('protect-main\nwaiver-stamp\n'));
+    const gh = makeGh(run);
+    expect(await gh.listRulesets('o', 'r')).toEqual([
+      { name: 'protect-main' },
+      { name: 'waiver-stamp' },
+    ]);
+    expect(run).toHaveBeenCalledWith('gh', [
+      'api',
+      '/repos/o/r/rulesets',
+      '--paginate',
+      '--jq',
+      '.[].name',
+    ]);
+  });
+
+  it('listRulesets returns [] when the read fails', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 403', code: 1 }));
+    expect(await makeGh(run).listRulesets('o', 'r')).toEqual([]);
+  });
+
+  it('createRuleset POSTs the spec on stdin, never in argv', async () => {
+    const run = mockRun(async () => ok());
+    const gh = makeGh(run);
+    const spec: RulesetSpec = {
+      name: 'waiver-stamp',
+      target: 'branch',
+      enforcement: 'active',
+      conditions: { ref_name: { include: ['refs/heads/main'], exclude: [] } },
+      rules: [
+        {
+          type: 'required_status_checks',
+          parameters: {
+            strict_required_status_checks_policy: false,
+            required_status_checks: [{ context: 'waiver-stamp' }],
+          },
+        },
+      ],
+    };
+    await gh.createRuleset('o', 'r', spec);
+    const [, args, opts] = run.mock.calls[0] ?? [];
+    expect(args).toEqual(['api', '-X', 'POST', '/repos/o/r/rulesets', '--input', '-']);
+    expect(opts).toEqual({ input: JSON.stringify(spec) });
+  });
+
+  it('createRuleset throws a SetupError the user can act on', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 422', code: 1 }));
+    await expect(
+      makeGh(run).createRuleset('o', 'r', {
+        name: 'waiver-stamp',
+        target: 'branch',
+        enforcement: 'active',
+        conditions: { ref_name: { include: ['refs/heads/main'], exclude: [] } },
+        rules: [],
+      }),
+    ).rejects.toMatchObject({ name: 'SetupError', details: 'HTTP 422' });
+  });
+
+  it('fileExistsOnRef is true when the contents endpoint returns 200 for the path on the ref', async () => {
+    const run = mockRun(async () => ok());
+    const gh = makeGh(run);
+    expect(
+      await gh.fileExistsOnRef('o', 'r', '.github/workflows/waiver-stamp-ci.yml', 'main'),
+    ).toBe(true);
+    expect(run).toHaveBeenCalledWith('gh', [
+      'api',
+      '/repos/o/r/contents/.github/workflows/waiver-stamp-ci.yml?ref=main',
+      '--silent',
+    ]);
+  });
+
+  it('fileExistsOnRef is false when the path is absent on the ref (404)', async () => {
+    const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 404', code: 1 }));
+    expect(await makeGh(run).fileExistsOnRef('o', 'r', 'x.yml', 'main')).toBe(false);
   });
 });

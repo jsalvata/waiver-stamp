@@ -14,6 +14,9 @@ const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   repoSecretNames: vi.fn(async () => []),
   grantOrgSecretRepo: vi.fn(async () => {}),
   orgAppSlugs: vi.fn(async () => []),
+  listRulesets: vi.fn(async () => []),
+  createRuleset: vi.fn(async () => {}),
+  fileExistsOnRef: vi.fn(async () => false),
   ...over,
 });
 

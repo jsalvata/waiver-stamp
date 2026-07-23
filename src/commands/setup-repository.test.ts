@@ -16,6 +16,9 @@ const fakeGh = (): GhClient => ({
   repoSecretNames: vi.fn(async () => []),
   grantOrgSecretRepo: vi.fn(async () => {}),
   orgAppSlugs: vi.fn(async () => []),
+  listRulesets: vi.fn(async () => []),
+  createRuleset: vi.fn(async () => {}),
+  fileExistsOnRef: vi.fn(async () => false),
 });
 
 function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
@@ -34,7 +37,26 @@ function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
     confirmYesNo: vi.fn(async () => false),
     openBrowser: vi.fn(async () => {}),
     openInstallGuidance: vi.fn(async () => {}),
+    discoverCiWorkflowNames: vi.fn(async () => ['CI']),
+    detectLockfileHonestyCheck: vi.fn(async () => null),
+    writeCallerWorkflows: vi.fn(async () => ({
+      written: [
+        '.github/workflows/waiver-stamp-ci.yml',
+        '.github/workflows/waiver-stamp-review.yml',
+      ],
+      skipped: [],
+    })),
+    seedConfigIfAbsent: vi.fn(async () => ({ seeded: true, existing: false })),
+    detectCommitlintBodyLimit: vi.fn(async () => ({ blocks: false })),
+    detectLintFixLinter: vi.fn(async () => ({
+      status: 'resolved' as const,
+      declared: ['@biomejs/biome'],
+    })),
+    ensureWaiverStampRuleset: vi.fn(async () => 'created' as const),
+    handoffPage: vi.fn(() => '<handoff>'),
+    openHandoff: vi.fn(async () => {}),
     info: vi.fn(),
+    warn: vi.fn(),
     ...over,
   };
 }
@@ -46,158 +68,241 @@ describe('setupRepository', () => {
     expect(info).toHaveBeenCalledWith(expect.stringContaining('jsalvata/demo'));
   });
 
-  it('provisions the App and secrets, then guides install in the same tab', async () => {
+  it('provisions the App and secrets on the fresh path without opening a second install tab', async () => {
     const provisionSecrets = vi.fn(async () => {});
     const openBrowser = vi.fn(async () => {});
-    const info = vi.fn();
-    await setupRepository({ cwd: '/repo' }, makeDeps({ provisionSecrets, openBrowser, info }));
+    await setupRepository({ cwd: '/repo' }, makeDeps({ provisionSecrets, openBrowser }));
     expect(provisionSecrets).toHaveBeenCalledOnce();
-    // resolveApp (mocked here) owns the single browser open on the fresh path; the orchestrator
-    // must not spawn a second install tab — the done page forwards to install in that same tab.
+    // The loopback done page owns the install tab on the fresh path — the orchestrator opens no
+    // browser itself; only the hand-off page (via openHandoff) is its own.
     expect(openBrowser).not.toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith(expect.stringMatching(/install/i));
+  });
+
+  describe('config + workflow phase (always runs)', () => {
+    it('writes the caller workflows and seeds the config', async () => {
+      const d = makeDeps();
+      await setupRepository({ cwd: '/repo' }, d);
+      expect(d.writeCallerWorkflows).toHaveBeenCalledWith('/repo', { ciWorkflowNames: ['CI'] });
+      expect(d.seedConfigIfAbsent).toHaveBeenCalledOnce();
+    });
+
+    it('feeds a detected lockfile-honesty check into the seed', async () => {
+      const seedConfigIfAbsent = vi.fn(async () => ({ seeded: true, existing: false }));
+      const d = makeDeps({
+        detectLockfileHonestyCheck: vi.fn(async () => 'lockfile-honesty'),
+        seedConfigIfAbsent,
+      });
+      await setupRepository({ cwd: '/repo' }, d);
+      expect(seedConfigIfAbsent).toHaveBeenCalledWith('/repo', {
+        lockfileHonestyCheck: 'lockfile-honesty',
+      });
+    });
+
+    it('warns about each caller it left untouched', async () => {
+      const warn = vi.fn();
+      const d = makeDeps({
+        warn,
+        writeCallerWorkflows: vi.fn(async () => ({
+          written: [],
+          skipped: ['.github/workflows/waiver-stamp-ci.yml'],
+        })),
+      });
+      await setupRepository({ cwd: '/repo' }, d);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('waiver-stamp-ci.yml'));
+    });
+
+    it('warns when commitlint would reject long waiver bodies', async () => {
+      const warn = vi.fn();
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({ warn, detectCommitlintBodyLimit: vi.fn(async () => ({ blocks: true })) }),
+      );
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/body-max-line-length/));
+    });
+
+    it('warns when no linter (or more than one) is declared for lint-fix', async () => {
+      const none = vi.fn();
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({
+          warn: none,
+          detectLintFixLinter: vi.fn(async () => ({ status: 'none' as const, declared: [] })),
+        }),
+      );
+      expect(none).toHaveBeenCalledWith(expect.stringMatching(/lint-fix/));
+
+      const many = vi.fn();
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({
+          warn: many,
+          detectLintFixLinter: vi.fn(async () => ({
+            status: 'ambiguous' as const,
+            declared: ['@biomejs/biome', 'eslint'],
+          })),
+        }),
+      );
+      expect(many).toHaveBeenCalledWith(expect.stringMatching(/@biomejs\/biome, eslint/));
+    });
+  });
+
+  describe('§4.13 phase boundary — the ruleset must not precede the producer', () => {
+    it('creates no ruleset and points at the merge/re-run step when the producer is not on the default branch', async () => {
+      const info = vi.fn();
+      const d = makeDeps({ info }); // fileExistsOnRef defaults to false
+      await setupRepository({ cwd: '/repo' }, d);
+      expect(d.ensureWaiverStampRuleset).not.toHaveBeenCalled();
+      expect(info).toHaveBeenCalledWith(expect.stringMatching(/re-run/i));
+    });
+
+    it('gates on the producer caller on the default branch, not a default-branch check run', async () => {
+      const fileExistsOnRef = vi.fn(async () => true);
+      const gh: GhClient = { ...fakeGh(), fileExistsOnRef };
+      const d = makeDeps({ gh });
+      await setupRepository({ cwd: '/repo' }, d);
+      // The `waiver-stamp` check never reports on default-branch commits, so the gate reads the
+      // producer caller's presence there instead.
+      expect(fileExistsOnRef).toHaveBeenCalledWith(
+        'jsalvata',
+        'demo',
+        '.github/workflows/waiver-stamp-ci.yml',
+        'main',
+      );
+      expect(d.ensureWaiverStampRuleset).toHaveBeenCalledWith(gh, ctx);
+      // §4.13 ordering: callers are written before the required-check ruleset exists.
+      const wrote = (d.writeCallerWorkflows as ReturnType<typeof vi.fn>).mock
+        .invocationCallOrder[0];
+      const ruled = (d.ensureWaiverStampRuleset as ReturnType<typeof vi.fn>).mock
+        .invocationCallOrder[0];
+      expect(wrote).toBeLessThan(ruled ?? Number.POSITIVE_INFINITY);
+    });
+
+    it('re-run with an existing ruleset converges to a no-op message', async () => {
+      const info = vi.fn();
+      const gh: GhClient = { ...fakeGh(), fileExistsOnRef: vi.fn(async () => true) };
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({ info, gh, ensureWaiverStampRuleset: vi.fn(async () => 'exists' as const) }),
+      );
+      expect(info).toHaveBeenCalledWith(expect.stringMatching(/ruleset exists/i));
+    });
+  });
+
+  describe('hand-off page', () => {
+    it('opens the hand-off page with the provisioned slug and config state', async () => {
+      const handoffPage = vi.fn(() => '<handoff>');
+      const openHandoff = vi.fn(async () => {});
+      await setupRepository({ cwd: '/repo' }, makeDeps({ handoffPage, openHandoff }));
+      expect(handoffPage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: 'jsalvata',
+          repo: 'demo',
+          slug: 'waiver-stamp-jsalvata',
+          configExisted: false,
+        }),
+      );
+      expect(openHandoff).toHaveBeenCalledWith('<handoff>');
+    });
+
+    it('suggests the honesty edit only for an existing config that was missing it', async () => {
+      const handoffPage = vi.fn(() => '<handoff>');
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({
+          handoffPage,
+          detectLockfileHonestyCheck: vi.fn(async () => 'lockfile-honesty'),
+          seedConfigIfAbsent: vi.fn(async () => ({ seeded: false, existing: true })),
+        }),
+      );
+      expect(handoffPage).toHaveBeenCalledWith(
+        expect.objectContaining({ configExisted: true, suggestedHonestyCheck: 'lockfile-honesty' }),
+      );
+    });
   });
 
   it('an org-owned repo without the admin:org scope fails before creating the App', async () => {
-    const resolveApp = vi.fn(async () => ({
-      source: 'fresh' as const,
-      appId: 1,
-      pem: 'p',
-      slug: 's',
-    }));
     const gh: GhClient = { ...fakeGh(), tokenScopes: vi.fn(async () => ['repo', 'read:org']) };
-    const err = await setupRepository(
-      { cwd: '/repo' },
-      makeDeps({
-        resolveTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
-        gh,
-        resolveApp,
-      }),
-    ).catch((e: unknown) => e);
+    const d = makeDeps({
+      resolveTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
+      gh,
+    });
+    const err = await setupRepository({ cwd: '/repo' }, d).catch((e: unknown) => e);
     expect(err).toMatchObject({ name: 'SetupError', message: expect.stringMatching(/admin:org/) });
-    expect(resolveApp).not.toHaveBeenCalled();
+    expect(d.resolveApp).not.toHaveBeenCalled();
+    // Failing fast means the config/workflow phase never ran either.
+    expect(d.writeCallerWorkflows).not.toHaveBeenCalled();
   });
 
-  it('an org-owned repo with the admin:org scope proceeds to provisioning', async () => {
-    const resolveApp = vi.fn(async () => ({
-      source: 'fresh' as const,
-      appId: 1,
-      pem: 'p',
-      slug: 's',
-    }));
-    const gh: GhClient = { ...fakeGh(), tokenScopes: vi.fn(async () => ['repo', 'admin:org']) };
-    await setupRepository(
-      { cwd: '/repo' },
-      makeDeps({
-        resolveTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
-        gh,
-        resolveApp,
-      }),
-    );
-    expect(resolveApp).toHaveBeenCalledOnce();
+  it('--no-app skips App provisioning but still configures the repo half', async () => {
+    const d = makeDeps();
+    await setupRepository({ cwd: '/repo', noApp: true }, d);
+    expect(d.resolveApp).not.toHaveBeenCalled();
+    expect(d.provisionSecrets).not.toHaveBeenCalled();
+    // The file/config half is independent of the App and still runs.
+    expect(d.writeCallerWorkflows).toHaveBeenCalledOnce();
+    expect(d.seedConfigIfAbsent).toHaveBeenCalledOnce();
+    expect(d.openHandoff).toHaveBeenCalledOnce();
   });
 
-  it('--no-app skips provisioning entirely', async () => {
-    const resolveApp = vi.fn(async () => ({
-      source: 'fresh' as const,
-      appId: 0,
-      pem: '',
-      slug: '',
-    }));
-    const provisionSecrets = vi.fn(async () => {});
-    const openBrowser = vi.fn(async () => {});
-    await setupRepository(
-      { cwd: '/repo', noApp: true },
-      makeDeps({ resolveApp, provisionSecrets, openBrowser }),
-    );
-    expect(resolveApp).not.toHaveBeenCalled();
-    expect(provisionSecrets).not.toHaveBeenCalled();
-    expect(openBrowser).not.toHaveBeenCalled();
-  });
-
-  // Re-running on a configured repo has to converge, not mint a duplicate App (design §1). The
-  // signal is repo-scope secrets; an org-configured repo carries none, and reaches reuse-org.
-  describe('already provisioned', () => {
+  // Re-running on a configured repo must not mint a second App (design §1), but the resume still
+  // has to reach the ruleset/hand-off phases — the personal-path secrets were written run 1.
+  describe('already provisioned (resume)', () => {
     const configured = (over: Partial<SetupDeps> = {}) =>
       makeDeps({
         gh: { ...fakeGh(), repoSecretNames: vi.fn(async () => [...SECRET_NAMES, 'UNRELATED']) },
         ...over,
       });
 
-    it('provisions nothing — not even resolving the target', async () => {
+    it('provisions no App but still writes callers, seeds config, and opens the hand-off', async () => {
       const d = configured();
       await setupRepository({ cwd: '/repo' }, d);
       expect(d.resolveTarget).not.toHaveBeenCalled();
       expect(d.resolveApp).not.toHaveBeenCalled();
       expect(d.provisionSecrets).not.toHaveBeenCalled();
+      expect(d.writeCallerWorkflows).toHaveBeenCalledOnce();
+      expect(d.openHandoff).toHaveBeenCalledOnce();
     });
 
-    // Secrets present but no installation is the likeliest half-finished state — someone closed
-    // the browser before the Install click. Silently no-opping would fail exactly that person.
-    it('still points at the install step', async () => {
-      const info = vi.fn();
-      await setupRepository({ cwd: '/repo' }, configured({ info }));
-      expect(info).toHaveBeenCalledWith(expect.stringMatching(/install/i));
-    });
-
-    it('provisions normally when only one of the two secrets is there', async () => {
-      const d = makeDeps({
-        gh: { ...fakeGh(), repoSecretNames: vi.fn(async () => [SECRET_NAMES[0]]) },
+    it('creates the ruleset on the resume once the producer is on the default branch', async () => {
+      const d = configured({
+        gh: {
+          ...fakeGh(),
+          repoSecretNames: vi.fn(async () => [...SECRET_NAMES]),
+          fileExistsOnRef: vi.fn(async () => true),
+        },
       });
       await setupRepository({ cwd: '/repo' }, d);
-      expect(d.resolveApp).toHaveBeenCalledOnce();
+      expect(d.ensureWaiverStampRuleset).toHaveBeenCalledOnce();
     });
   });
 
   describe('reuse-org', () => {
-    const reuse = () =>
+    const reuse = (over: Partial<SetupDeps> = {}) =>
       makeDeps({
         resolveTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
         resolveApp: vi.fn(async () => ({
           source: 'reuse-org' as const,
           slug: 'waiver-stamp-acme',
         })),
+        ...over,
       });
 
-    it('widens the existing org secrets instead of rewriting them', async () => {
+    it('widens the org secrets and guides install, then configures the repo half', async () => {
       const d = reuse();
       await setupRepository({ cwd: '/repo' }, d);
       expect(d.provisionSecrets).not.toHaveBeenCalled();
-      expect(d.grantExistingOrgSecrets).toHaveBeenCalledWith(d.gh, {
-        org: 'acme',
-        owner: 'jsalvata',
-        repo: 'demo',
-        info: d.info,
-      });
-    });
-
-    // Reuse skips the manifest flow, so no loopback served a guidance page — the orchestrator
-    // shows one itself before the install link, rather than dropping the user onto raw GitHub.
-    it('guides install via a local page, since no browser flow ran', async () => {
-      const d = reuse();
-      await setupRepository({ cwd: '/repo' }, d);
+      expect(d.grantExistingOrgSecrets).toHaveBeenCalledOnce();
       expect(d.openInstallGuidance).toHaveBeenCalledWith(
         'https://github.com/apps/waiver-stamp-acme/installations/new',
         'jsalvata/demo',
       );
-    });
-
-    it('falls back to the org install settings when the App slug is unknown', async () => {
-      const d = makeDeps({
-        resolveTarget: vi.fn(async () => ({ kind: 'org' as const, org: 'acme' })),
-        resolveApp: vi.fn(async () => ({ source: 'reuse-org' as const })),
-      });
-      await setupRepository({ cwd: '/repo' }, d);
-      expect(d.openInstallGuidance).toHaveBeenCalledWith(
-        'https://github.com/organizations/acme/settings/installations',
-        'jsalvata/demo',
-      );
+      expect(d.writeCallerWorkflows).toHaveBeenCalledOnce();
     });
   });
 
   describe('disk', () => {
-    const disk = () =>
-      makeDeps({
+    it('writes the repo secrets from the saved key and guides install', async () => {
+      const d = makeDeps({
         resolveApp: vi.fn(async () => ({
           source: 'disk' as const,
           appId: 3,
@@ -205,17 +310,8 @@ describe('setupRepository', () => {
           slug: 'renamed-by-hand',
         })),
       });
-
-    it('writes the repo secrets from the saved key and opens the install page', async () => {
-      const d = disk();
       await setupRepository({ cwd: '/repo' }, d);
-      expect(d.provisionSecrets).toHaveBeenCalledWith(d.gh, {
-        target: { kind: 'personal' },
-        appId: 3,
-        pem: 'DISK-PEM',
-        owner: 'jsalvata',
-        repo: 'demo',
-      });
+      expect(d.provisionSecrets).toHaveBeenCalledOnce();
       expect(d.openInstallGuidance).toHaveBeenCalledWith(
         'https://github.com/apps/renamed-by-hand/installations/new',
         'jsalvata/demo',
