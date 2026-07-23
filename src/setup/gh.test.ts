@@ -279,22 +279,21 @@ describe('makeGh', () => {
     ).rejects.toMatchObject({ name: 'SetupError', details: 'HTTP 422' });
   });
 
-  it('checkRunPresent is true only when the named check reported on the sha', async () => {
-    const run = mockRun(async () => ok('build\nwaiver-stamp\n'));
+  it('fileExistsOnRef is true when the contents endpoint returns 200 for the path on the ref', async () => {
+    const run = mockRun(async () => ok());
     const gh = makeGh(run);
-    expect(await gh.checkRunPresent('o', 'r', 'abc123', 'waiver-stamp')).toBe(true);
-    expect(await gh.checkRunPresent('o', 'r', 'abc123', 'never-ran')).toBe(false);
+    expect(
+      await gh.fileExistsOnRef('o', 'r', '.github/workflows/waiver-stamp-ci.yml', 'main'),
+    ).toBe(true);
     expect(run).toHaveBeenCalledWith('gh', [
       'api',
-      '/repos/o/r/commits/abc123/check-runs',
-      '--paginate',
-      '--jq',
-      '.check_runs[].name',
+      '/repos/o/r/contents/.github/workflows/waiver-stamp-ci.yml?ref=main',
+      '--silent',
     ]);
   });
 
-  it('checkRunPresent is false when the read fails', async () => {
+  it('fileExistsOnRef is false when the path is absent on the ref (404)', async () => {
     const run = mockRun(async () => ({ stdout: '', stderr: 'HTTP 404', code: 1 }));
-    expect(await makeGh(run).checkRunPresent('o', 'r', 'abc', 'waiver-stamp')).toBe(false);
+    expect(await makeGh(run).fileExistsOnRef('o', 'r', 'x.yml', 'main')).toBe(false);
   });
 });

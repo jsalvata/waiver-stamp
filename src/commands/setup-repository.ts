@@ -140,15 +140,18 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
       `multiple linters declared (${lint.declared.join(', ')}); lint-fix fails closed until you narrow to one (spec §6.1).`,
     );
 
-  // Phase 2 — the required-check ruleset, gated on the producer having run at least once (§4.13):
-  // requiring a check that never reported would block every PR. Creating it early is the one
-  // ordering mistake that breaks the adopter's repo, so it is explicitly gated.
-  if (await deps.gh.checkRunPresent(ctx.owner, ctx.repo, ctx.defaultBranch, 'waiver-stamp')) {
+  // Phase 2 — the required-check ruleset, gated on the producer caller being on the default branch
+  // (§4.13). The `waiver-stamp` check only ever reports on PRs (the producer is `on: pull_request`),
+  // never on default-branch commits — so its presence there, i.e. the callers have been merged, is
+  // the real signal that requiring it won't block every PR on a check that never arrives. Creating
+  // it before then is the one ordering mistake that breaks the adopter's repo.
+  const producerPath = '.github/workflows/waiver-stamp-ci.yml';
+  if (await deps.gh.fileExistsOnRef(ctx.owner, ctx.repo, producerPath, ctx.defaultBranch)) {
     const r = await deps.ensureWaiverStampRuleset(deps.gh, ctx);
     deps.info(`waiver-stamp ruleset ${r}.`);
   } else {
     deps.info(
-      'Merge the workflows PR (or push the callers) so the waiver-stamp check runs once, then re-run `waiver setup-repository` to add the required-check ruleset.',
+      `Get the two files under .github/workflows/ (waiver-stamp-ci.yml, waiver-stamp-review.yml) onto ${ctx.defaultBranch} — open a PR and merge them, or push directly — then re-run \`waiver setup-repository\` to add the required-check ruleset.`,
     );
   }
 

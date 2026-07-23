@@ -18,7 +18,7 @@ const fakeGh = (): GhClient => ({
   orgAppSlugs: vi.fn(async () => []),
   listRulesets: vi.fn(async () => []),
   createRuleset: vi.fn(async () => {}),
-  checkRunPresent: vi.fn(async () => false),
+  fileExistsOnRef: vi.fn(async () => false),
 });
 
 function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
@@ -147,18 +147,27 @@ describe('setupRepository', () => {
   });
 
   describe('§4.13 phase boundary — the ruleset must not precede the producer', () => {
-    it('creates no ruleset and points at the merge/re-run step when the check has not run', async () => {
+    it('creates no ruleset and points at the merge/re-run step when the producer is not on the default branch', async () => {
       const info = vi.fn();
-      const d = makeDeps({ info }); // checkRunPresent defaults to false
+      const d = makeDeps({ info }); // fileExistsOnRef defaults to false
       await setupRepository({ cwd: '/repo' }, d);
       expect(d.ensureWaiverStampRuleset).not.toHaveBeenCalled();
       expect(info).toHaveBeenCalledWith(expect.stringMatching(/re-run/i));
     });
 
-    it('creates the ruleset once the check has reported, after writing the callers', async () => {
-      const gh: GhClient = { ...fakeGh(), checkRunPresent: vi.fn(async () => true) };
+    it('gates on the producer caller on the default branch, not a default-branch check run', async () => {
+      const fileExistsOnRef = vi.fn(async () => true);
+      const gh: GhClient = { ...fakeGh(), fileExistsOnRef };
       const d = makeDeps({ gh });
       await setupRepository({ cwd: '/repo' }, d);
+      // The `waiver-stamp` check never reports on default-branch commits, so the gate reads the
+      // producer caller's presence there instead.
+      expect(fileExistsOnRef).toHaveBeenCalledWith(
+        'jsalvata',
+        'demo',
+        '.github/workflows/waiver-stamp-ci.yml',
+        'main',
+      );
       expect(d.ensureWaiverStampRuleset).toHaveBeenCalledWith(gh, ctx);
       // §4.13 ordering: callers are written before the required-check ruleset exists.
       const wrote = (d.writeCallerWorkflows as ReturnType<typeof vi.fn>).mock
@@ -170,7 +179,7 @@ describe('setupRepository', () => {
 
     it('re-run with an existing ruleset converges to a no-op message', async () => {
       const info = vi.fn();
-      const gh: GhClient = { ...fakeGh(), checkRunPresent: vi.fn(async () => true) };
+      const gh: GhClient = { ...fakeGh(), fileExistsOnRef: vi.fn(async () => true) };
       await setupRepository(
         { cwd: '/repo' },
         makeDeps({ info, gh, ensureWaiverStampRuleset: vi.fn(async () => 'exists' as const) }),
@@ -254,12 +263,12 @@ describe('setupRepository', () => {
       expect(d.openHandoff).toHaveBeenCalledOnce();
     });
 
-    it('creates the ruleset on the resume once the producer has run', async () => {
+    it('creates the ruleset on the resume once the producer is on the default branch', async () => {
       const d = configured({
         gh: {
           ...fakeGh(),
           repoSecretNames: vi.fn(async () => [...SECRET_NAMES]),
-          checkRunPresent: vi.fn(async () => true),
+          fileExistsOnRef: vi.fn(async () => true),
         },
       });
       await setupRepository({ cwd: '/repo' }, d);

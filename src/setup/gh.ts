@@ -68,9 +68,10 @@ export interface GhClient {
   listRulesets(owner: string, repo: string): Promise<RulesetSummary[]>;
   /** Create a repo ruleset from `spec`. */
   createRuleset(owner: string, repo: string, spec: RulesetSpec): Promise<void>;
-  /** Whether a check run named `name` has reported on `ref` (a branch, tag, or sha) — the §4.13
-   *  phase-boundary gate. */
-  checkRunPresent(owner: string, repo: string, ref: string, name: string): Promise<boolean>;
+  /** Whether `path` exists on `ref` — the §4.13 phase-boundary gate reads the producer caller on
+   *  the default branch (the `waiver-stamp` check only reports on PRs, never on default-branch
+   *  commits, so its presence there is the real "safe to require it" signal). */
+  fileExistsOnRef(owner: string, repo: string, path: string, ref: string): Promise<boolean>;
 }
 
 const lines = (s: string): string[] =>
@@ -231,15 +232,13 @@ export function makeGh(run: Run): GhClient {
           r.stderr.trim() || r.stdout.trim() || undefined,
         );
     },
-    async checkRunPresent(owner, repo, ref, name) {
+    async fileExistsOnRef(owner, repo, path, ref) {
       const r = await run('gh', [
         'api',
-        `/repos/${owner}/${repo}/commits/${ref}/check-runs`,
-        '--paginate',
-        '--jq',
-        '.check_runs[].name',
+        `/repos/${owner}/${repo}/contents/${path}?ref=${ref}`,
+        '--silent',
       ]);
-      return r.code === 0 && lines(r.stdout).includes(name);
+      return r.code === 0;
     },
   };
 }
