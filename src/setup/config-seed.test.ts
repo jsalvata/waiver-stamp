@@ -13,15 +13,9 @@ describe('seedConfigIfAbsent', () => {
     try {
       expect(await seedConfigIfAbsent(cwd, {})).toEqual({ seeded: true, existing: false });
       const cfg = await readConfig(cwd);
-      // Dependency bumps closed; the recommended change-docs allow/deny protecting AI assets.
+      // Every gate closed — a scaffold the adopter widens deliberately, not a policy we pick.
       expect(cfg.allowBumping).toEqual([]);
-      expect(cfg.changeDocs.allow).toEqual(['docs/**', '**/README.md', 'CHANGELOG.md']);
-      expect(cfg.changeDocs.deny).toEqual([
-        '.claude/**',
-        '**/CLAUDE.md',
-        '**/AGENTS.md',
-        '.cursor/**',
-      ]);
+      expect(cfg.changeDocs).toEqual({ allow: [], deny: [] });
       expect(cfg.lockfileHonestyCheck).toBeUndefined();
     } finally {
       await cleanup();

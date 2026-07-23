@@ -6,10 +6,11 @@ const CONFIG_SCHEMA =
 
 /**
  * Drop a closed-by-default `.waiver-stamp.json` only when none exists (§4.11). Policy is a security
- * judgment, so the seed opens nothing: `allowBumping: []` and the recommended change-docs allow/deny
- * (README) that confines docs while keeping AI-instruction assets out. A detected lockfile-honesty
- * check is recorded here (§4.8), the one place we may add it. An existing file is never touched —
- * widening someone's policy is exactly what setup must not do; it's surfaced on the hand-off page.
+ * judgment, so the seed opens nothing: empty `allowBumping` and empty `changeDocs` — a scaffold with
+ * every gate closed, for the adopter to widen deliberately (an empty `changeDocs.allow` confines
+ * nothing, so nothing is auto-exempted from review). A detected lockfile-honesty check is recorded
+ * here (§4.8), the one place we may add it. An existing file is never touched — widening someone's
+ * policy is exactly what setup must not do; it's surfaced on the hand-off page instead.
  */
 export async function seedConfigIfAbsent(
   cwd: string,
@@ -25,10 +26,7 @@ export async function seedConfigIfAbsent(
   const config: Record<string, unknown> = {
     $schema: CONFIG_SCHEMA,
     allowBumping: [],
-    changeDocs: {
-      allow: ['docs/**', '**/README.md', 'CHANGELOG.md'],
-      deny: ['.claude/**', '**/CLAUDE.md', '**/AGENTS.md', '.cursor/**'],
-    },
+    changeDocs: { allow: [], deny: [] },
   };
   if (lockfileHonestyCheck) config.lockfileHonestyCheck = lockfileHonestyCheck;
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
