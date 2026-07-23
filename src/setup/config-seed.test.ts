@@ -13,13 +13,15 @@ describe('seedConfigIfAbsent', () => {
     try {
       expect(await seedConfigIfAbsent(cwd, {})).toEqual({ seeded: true, existing: false });
       const cfg = await readConfig(cwd);
-      // Dependency bumps closed; the recommended change-docs allow/deny protecting AI assets.
+      // Bumps closed; the recommended change-docs allow/deny, with AI-instruction assets vetoed.
       expect(cfg.allowBumping).toEqual([]);
       expect(cfg.changeDocs.allow).toEqual(['docs/**', '**/README.md', 'CHANGELOG.md']);
       expect(cfg.changeDocs.deny).toEqual([
         '.claude/**',
         '**/CLAUDE.md',
         '**/AGENTS.md',
+        '**/GEMINI.md',
+        '**/SKILL.md',
         '.cursor/**',
       ]);
       expect(cfg.lockfileHonestyCheck).toBeUndefined();

@@ -280,7 +280,7 @@ diff. Absent file or absent key ⇒ that policy is **off**; nothing is auto-enab
   "allowBumping": ["@myorg/*", "lodash"],
   "changeDocs": {
     "allow": ["docs/**", "**/README.md", "CHANGELOG.md"],
-    "deny": [".claude/**", "**/CLAUDE.md", "**/AGENTS.md", ".cursor/**"]
+    "deny": [".claude/**", "**/CLAUDE.md", "**/AGENTS.md", "**/GEMINI.md", "**/SKILL.md", ".cursor/**"]
   }
 }
 ```

@@ -5,11 +5,13 @@ const CONFIG_SCHEMA =
   'https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json';
 
 /**
- * Drop a closed-by-default `.waiver-stamp.json` only when none exists (§4.11). Policy is a security
- * judgment, so the seed opens nothing: `allowBumping: []` and the recommended change-docs allow/deny
- * (README) that confines docs while keeping AI-instruction assets out. A detected lockfile-honesty
- * check is recorded here (§4.8), the one place we may add it. An existing file is never touched —
- * widening someone's policy is exactly what setup must not do; it's surfaced on the hand-off page.
+ * Drop the recommended closed-by-default `.waiver-stamp.json` only when none exists (§4.11).
+ * `allowBumping` stays empty (opt in per dependency), and `changeDocs` ships the recommended
+ * allow/deny (README): docs/README/CHANGELOG confinable, but AI-instruction assets (CLAUDE.md,
+ * AGENTS.md, GEMINI.md, SKILL.md, `.claude/**`, `.cursor/**`) always vetoed so a malicious edit
+ * can't ride in as a "doc". A detected lockfile-honesty check is recorded here (§4.8), the one place
+ * we may add it. An existing file is never touched — widening someone's policy is exactly what setup
+ * must not do; it's surfaced on the hand-off page instead.
  */
 export async function seedConfigIfAbsent(
   cwd: string,
@@ -27,7 +29,14 @@ export async function seedConfigIfAbsent(
     allowBumping: [],
     changeDocs: {
       allow: ['docs/**', '**/README.md', 'CHANGELOG.md'],
-      deny: ['.claude/**', '**/CLAUDE.md', '**/AGENTS.md', '.cursor/**'],
+      deny: [
+        '.claude/**',
+        '**/CLAUDE.md',
+        '**/AGENTS.md',
+        '**/GEMINI.md',
+        '**/SKILL.md',
+        '.cursor/**',
+      ],
     },
   };
   if (lockfileHonestyCheck) config.lockfileHonestyCheck = lockfileHonestyCheck;
