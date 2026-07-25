@@ -66,7 +66,6 @@ export interface SetupDeps {
   /** Write the hand-off HTML to a local file and open it (openBrowser only takes a URL). */
   openHandoff: (html: string) => Promise<void>;
   info: (msg: string) => void;
-  warn: (msg: string) => void;
 }
 
 /** Default wiring for the CLI (real shell + fs). */
@@ -91,7 +90,6 @@ export function makeSetupDeps(): SetupDeps {
     handoffPage,
     openHandoff: (html) => openLocalPage(html, openBrowser),
     info: (m) => console.log(m),
-    warn: (m) => console.warn(m),
   };
 }
 
@@ -125,19 +123,26 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   const ciNames = await deps.discoverCiWorkflowNames(wfDir);
   const honesty = await deps.detectLockfileHonestyCheck(wfDir);
   const drop = await deps.writeCallerWorkflows(cwd, { ciWorkflowNames: ciNames });
-  for (const p of drop.skipped) deps.warn(`left existing ${p} untouched — reconcile by hand.`);
   const seed = await deps.seedConfigIfAbsent(cwd, { lockfileHonestyCheck: honesty ?? undefined });
 
+  // Advisories ride the hand-off page (persistent), not the scrolling terminal.
+  const caveats: string[] = [];
+  for (const p of drop.skipped)
+    caveats.push(
+      `Existing ${p} left untouched — reconcile it by hand against the caller setup would write.`,
+    );
   if ((await deps.detectCommitlintBodyLimit(cwd)).blocks)
-    deps.warn('commitlint rejects long body lines; set `body-max-line-length: [0]` (spec §4.7).');
+    caveats.push(
+      'commitlint rejects long body lines; set `body-max-line-length: [0]` so waivered commits are not blocked (spec §4.7).',
+    );
   const lint = await deps.detectLintFixLinter(cwd);
   if (lint.status === 'none')
-    deps.warn(
-      'no supported linter (biome/eslint) declared — the lint-fix op is unavailable (spec §6.1).',
+    caveats.push(
+      'No supported linter (biome/eslint) declared — the lint-fix op is unavailable (spec §6.1).',
     );
   else if (lint.status === 'ambiguous')
-    deps.warn(
-      `multiple linters declared (${lint.declared.join(', ')}); lint-fix fails closed until you narrow to one (spec §6.1).`,
+    caveats.push(
+      `Multiple linters declared (${lint.declared.join(', ')}); lint-fix fails closed until you narrow to one (spec §6.1).`,
     );
 
   // Phase 2 — the required-check ruleset, gated on the producer caller being on the default branch
@@ -146,12 +151,20 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   // the real signal that requiring it won't block every PR on a check that never arrives. Creating
   // it before then is the one ordering mistake that breaks the adopter's repo.
   const producerPath = '.github/workflows/waiver-stamp-ci.yml';
-  if (await deps.gh.fileExistsOnRef(ctx.owner, ctx.repo, producerPath, ctx.defaultBranch)) {
+  const producerOnDefault = await deps.gh.fileExistsOnRef(
+    ctx.owner,
+    ctx.repo,
+    producerPath,
+    ctx.defaultBranch,
+  );
+  if (producerOnDefault) {
     const r = await deps.ensureWaiverStampRuleset(deps.gh, ctx);
     deps.info(`waiver-stamp ruleset ${r}.`);
   } else {
+    // The full instruction is the last step on the hand-off page; this is just the terminal
+    // breadcrumb for when the browser can't take over.
     deps.info(
-      `Get the two files under .github/workflows/ (waiver-stamp-ci.yml, waiver-stamp-review.yml) onto ${ctx.defaultBranch} — open a PR and merge them, or push directly — then re-run \`waiver setup-repository\` to add the required-check ruleset.`,
+      'Not finished yet — complete the steps on the page opening now, then re-run `waiver setup-repository`.',
     );
   }
 
@@ -166,6 +179,8 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
       defaultBranch: ctx.defaultBranch,
       configExisted: seed.existing,
       suggestedHonestyCheck: seed.existing ? honesty : null,
+      producerOnDefault,
+      caveats,
     }),
   );
 }

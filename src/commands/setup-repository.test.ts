@@ -56,7 +56,6 @@ function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
     handoffPage: vi.fn(() => '<handoff>'),
     openHandoff: vi.fn(async () => {}),
     info: vi.fn(),
-    warn: vi.fn(),
     ...over,
   };
 }
@@ -98,51 +97,57 @@ describe('setupRepository', () => {
       });
     });
 
-    it('warns about each caller it left untouched', async () => {
-      const warn = vi.fn();
-      const d = makeDeps({
-        warn,
-        writeCallerWorkflows: vi.fn(async () => ({
-          written: [],
-          skipped: ['.github/workflows/waiver-stamp-ci.yml'],
-        })),
-      });
-      await setupRepository({ cwd: '/repo' }, d);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('waiver-stamp-ci.yml'));
-    });
+    // Advisories are page-only (§6): they go into the hand-off's caveats, not the terminal.
+    const caveatsOf = (handoffPage: ReturnType<typeof vi.fn>): string[] =>
+      (handoffPage.mock.calls[0]?.[0] as { caveats: string[] }).caveats;
 
-    it('warns when commitlint would reject long waiver bodies', async () => {
-      const warn = vi.fn();
-      await setupRepository(
-        { cwd: '/repo' },
-        makeDeps({ warn, detectCommitlintBodyLimit: vi.fn(async () => ({ blocks: true })) }),
-      );
-      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/body-max-line-length/));
-    });
-
-    it('warns when no linter (or more than one) is declared for lint-fix', async () => {
-      const none = vi.fn();
+    it('carries each untouched caller into the hand-off caveats', async () => {
+      const handoffPage = vi.fn(() => '<handoff>');
       await setupRepository(
         { cwd: '/repo' },
         makeDeps({
-          warn: none,
+          handoffPage,
+          writeCallerWorkflows: vi.fn(async () => ({
+            written: [],
+            skipped: ['.github/workflows/waiver-stamp-ci.yml'],
+          })),
+        }),
+      );
+      expect(caveatsOf(handoffPage)).toContainEqual(expect.stringContaining('waiver-stamp-ci.yml'));
+    });
+
+    it('carries the commitlint caveat into the hand-off when long bodies would be rejected', async () => {
+      const handoffPage = vi.fn(() => '<handoff>');
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({ handoffPage, detectCommitlintBodyLimit: vi.fn(async () => ({ blocks: true })) }),
+      );
+      expect(caveatsOf(handoffPage)).toContainEqual(expect.stringMatching(/body-max-line-length/));
+    });
+
+    it('carries the lint-fix caveat into the hand-off for none/ambiguous linters', async () => {
+      const none = vi.fn(() => '<handoff>');
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({
+          handoffPage: none,
           detectLintFixLinter: vi.fn(async () => ({ status: 'none' as const, declared: [] })),
         }),
       );
-      expect(none).toHaveBeenCalledWith(expect.stringMatching(/lint-fix/));
+      expect(caveatsOf(none)).toContainEqual(expect.stringMatching(/lint-fix/));
 
-      const many = vi.fn();
+      const many = vi.fn(() => '<handoff>');
       await setupRepository(
         { cwd: '/repo' },
         makeDeps({
-          warn: many,
+          handoffPage: many,
           detectLintFixLinter: vi.fn(async () => ({
             status: 'ambiguous' as const,
             declared: ['@biomejs/biome', 'eslint'],
           })),
         }),
       );
-      expect(many).toHaveBeenCalledWith(expect.stringMatching(/@biomejs\/biome, eslint/));
+      expect(caveatsOf(many)).toContainEqual(expect.stringMatching(/@biomejs\/biome, eslint/));
     });
   });
 
@@ -202,6 +207,17 @@ describe('setupRepository', () => {
         }),
       );
       expect(openHandoff).toHaveBeenCalledWith('<handoff>');
+    });
+
+    it('tells the hand-off whether the producer is already on the default branch', async () => {
+      const notYet = vi.fn(() => '<handoff>');
+      await setupRepository({ cwd: '/repo' }, makeDeps({ handoffPage: notYet })); // fileExistsOnRef=false
+      expect(notYet).toHaveBeenCalledWith(expect.objectContaining({ producerOnDefault: false }));
+
+      const live = vi.fn(() => '<handoff>');
+      const gh: GhClient = { ...fakeGh(), fileExistsOnRef: vi.fn(async () => true) };
+      await setupRepository({ cwd: '/repo' }, makeDeps({ handoffPage: live, gh }));
+      expect(live).toHaveBeenCalledWith(expect.objectContaining({ producerOnDefault: true }));
     });
 
     it('suggests the honesty edit only for an existing config that was missing it', async () => {
