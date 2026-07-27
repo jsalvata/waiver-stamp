@@ -5,13 +5,14 @@ const CONFIG_SCHEMA =
   'https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json';
 
 /**
- * Drop the recommended closed-by-default `.waiver-stamp.json` only when none exists (§4.11).
- * `allowBumping` stays empty (opt in per dependency), and `changeDocs` ships the recommended
- * allow/deny (README): docs/README/CHANGELOG confinable, but AI-instruction assets (CLAUDE.md,
- * AGENTS.md, GEMINI.md, SKILL.md, `.claude/**`, `.cursor/**`) always vetoed so a malicious edit
- * can't ride in as a "doc". A detected lockfile-honesty check is recorded here (§4.8), the one place
- * we may add it. An existing file is never touched — widening someone's policy is exactly what setup
- * must not do; it's surfaced on the hand-off page instead.
+ * Drop the closed-by-default `.waiver-stamp.json` only when none exists (§4.11). Every gate ships
+ * closed: `allowBumping` empty, and `changeDocs.allow` empty so it confines nothing. But `changeDocs.deny`
+ * is pre-populated with the AI-instruction assets (CLAUDE.md, AGENTS.md, GEMINI.md, SKILL.md,
+ * `.claude/**`, `.cursor/**`, `.cursorrules`, `.github/copilot-instructions.md`) — a guard that already
+ * stands the moment the adopter opens `allow`, so a malicious edit can't ride in as a "doc". A detected
+ * lockfile-honesty check is recorded here (§4.8), the one place we may add it. An existing file is never
+ * touched — widening someone's policy is exactly what setup must not do; it's surfaced on the hand-off
+ * page instead.
  */
 export async function seedConfigIfAbsent(
   cwd: string,
@@ -28,7 +29,7 @@ export async function seedConfigIfAbsent(
     $schema: CONFIG_SCHEMA,
     allowBumping: [],
     changeDocs: {
-      allow: ['docs/**', '**/README.md', 'CHANGELOG.md'],
+      allow: [],
       deny: [
         '.claude/**',
         '**/CLAUDE.md',
@@ -36,6 +37,8 @@ export async function seedConfigIfAbsent(
         '**/GEMINI.md',
         '**/SKILL.md',
         '.cursor/**',
+        '.cursorrules',
+        '.github/copilot-instructions.md',
       ],
     },
   };

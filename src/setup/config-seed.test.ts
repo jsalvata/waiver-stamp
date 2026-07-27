@@ -13,9 +13,10 @@ describe('seedConfigIfAbsent', () => {
     try {
       expect(await seedConfigIfAbsent(cwd, {})).toEqual({ seeded: true, existing: false });
       const cfg = await readConfig(cwd);
-      // Bumps closed; the recommended change-docs allow/deny, with AI-instruction assets vetoed.
+      // Closed by default: bumps and allow both empty (confines nothing) — but the deny guard is
+      // pre-populated so opening `allow` later can't expose AI-instruction assets.
       expect(cfg.allowBumping).toEqual([]);
-      expect(cfg.changeDocs.allow).toEqual(['docs/**', '**/README.md', 'CHANGELOG.md']);
+      expect(cfg.changeDocs.allow).toEqual([]);
       expect(cfg.changeDocs.deny).toEqual([
         '.claude/**',
         '**/CLAUDE.md',
@@ -23,6 +24,8 @@ describe('seedConfigIfAbsent', () => {
         '**/GEMINI.md',
         '**/SKILL.md',
         '.cursor/**',
+        '.cursorrules',
+        '.github/copilot-instructions.md',
       ]);
       expect(cfg.lockfileHonestyCheck).toBeUndefined();
     } finally {
