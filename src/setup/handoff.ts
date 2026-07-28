@@ -69,27 +69,31 @@ export function handoffPage(args: HandoffArgs): string {
       `<li>Install <b>${esc(slug)}</b> on <b>${repoFull}</b>. Open the <a href="https://github.com/apps/${esc(slug)}/installations/new" target="_blank" rel="noopener">install page</a>, then:<ol><li>choose <b>Only select repositories</b> — not "All repositories";</li><li>pick <b>${repoFull}</b>;</li><li>click <b>Install</b>;</li><li>close that tab to come back here.</li></ol></li>`,
     );
 
-  const configLede = configExisted
-    ? 'Review your <b>.waiver-stamp.json</b>'
-    : 'Review the seeded <b>.waiver-stamp.json</b>';
-  const honesty = suggestedHonestyCheck
-    ? ` Add <code>"lockfileHonestyCheck": "${esc(suggestedHonestyCheck)}"</code>.`
-    : '';
-  steps.push(
-    `<li>${configLede}; set <code>allowBumping</code> / <code>changeDocs</code> to taste.${honesty}</li>`,
-  );
-
-  steps.push(
-    `<li>Set <b>${repoFull}</b> to <b>merge-commit</b> or <b>rebase-merge</b> (not squash) — <a href="https://github.com/${repoFull}/settings#merge-button-settings" target="_blank" rel="noopener">Settings → General</a>.</li>`,
-  );
-
-  steps.push(
-    `<li>(Optional) Protect <code>.github/**</code> on <b>${esc(defaultBranch)}</b> with CODEOWNERS or a ruleset.</li>`,
-  );
-
-  // Last, after every step that may edit repo content: land the files this run wrote (named in a
-  // copy-pasteable `git add`) on the default branch, then re-run to add the ruleset (§4.13).
+  // The standing adopter choices (tune the policy, merge-method, optional protection) and the
+  // commit/re-run step belong to finishing setup. Once the producer is on the default branch, setup
+  // is complete: these are the same one-time choices the adopter already passed on the way here, so
+  // repeating them under "Setup complete" only muddies it — docs/auto-approval-setup.md carries them.
   if (!producerOnDefault) {
+    const configLede = configExisted
+      ? 'Review your <b>.waiver-stamp.json</b>'
+      : 'Review the seeded <b>.waiver-stamp.json</b>';
+    const honesty = suggestedHonestyCheck
+      ? ` Add <code>"lockfileHonestyCheck": "${esc(suggestedHonestyCheck)}"</code>.`
+      : '';
+    steps.push(
+      `<li>${configLede}; set <code>allowBumping</code> / <code>changeDocs</code> to taste.${honesty}</li>`,
+    );
+
+    steps.push(
+      `<li>Set <b>${repoFull}</b> to <b>merge-commit</b> or <b>rebase-merge</b> (not squash) — <a href="https://github.com/${repoFull}/settings#merge-button-settings" target="_blank" rel="noopener">Settings → General</a>.</li>`,
+    );
+
+    steps.push(
+      `<li>(Optional) Protect <code>.github/**</code> on <b>${esc(defaultBranch)}</b> with CODEOWNERS or a ruleset.</li>`,
+    );
+
+    // Last, after every step that may edit repo content: land the files this run wrote (named in a
+    // copy-pasteable `git add`) on the default branch, then re-run to add the ruleset (§4.13).
     const add =
       writtenFiles.length > 0
         ? ` — <code>git add ${writtenFiles.map(esc).join(' ')}</code>, commit,`
@@ -110,11 +114,16 @@ export function handoffPage(args: HandoffArgs): string {
       ? `\n<h2>Caveats</h2>\n<ul>\n${caveats.map(renderCaveat).join('\n')}\n</ul>`
       : '';
 
+  // Complete: confirm and stop. Finishing: an ordered list of what's left (install, and — when the
+  // callers aren't merged yet — the adopter choices + commit/re-run). The list is omitted entirely
+  // when empty (a converged "Setup complete" with the App already provisioned).
+  const lede = producerOnDefault
+    ? '\n<p>The <code>waiver-stamp</code> ruleset is in place; waivered PRs will auto-approve.</p>'
+    : '';
+  const stepsBlock = steps.length > 0 ? `\n<ol>\n${steps.join('\n')}\n</ol>` : '';
+
   return `<!doctype html><meta charset=utf-8><title>waiver-stamp — finish setup</title>
 <body>
-<h1>${producerOnDefault ? 'Setup complete' : 'Finish setup'} — ${repoFull}</h1>
-<ol>
-${steps.join('\n')}
-</ol>${caveatsBlock}
+<h1>${producerOnDefault ? 'Setup complete' : 'Finish setup'} — ${repoFull}</h1>${lede}${stepsBlock}${caveatsBlock}
 <p><a href="${setupDoc()}" target="_blank" rel="noopener">docs/auto-approval-setup.md</a></p>`;
 }

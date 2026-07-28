@@ -8,7 +8,9 @@ const base = {
   defaultBranch: 'main',
   configExisted: false,
   suggestedHonestyCheck: null as string | null,
-  producerOnDefault: true,
+  // Default to the "finishing" state — the page that carries the full checklist. The complete-state
+  // tests set this true explicitly.
+  producerOnDefault: false,
   writtenFiles: [] as string[],
   caveats: [] as Caveat[],
 };
@@ -84,10 +86,24 @@ describe('handoffPage', () => {
     expect(reRun).toBeGreaterThan(html.indexOf('.github/**'));
   });
 
-  it('omits the merge/re-run step and reads as complete once the producer is on the default branch', async () => {
+  it('drops the finishing steps and just confirms once the producer is on the default branch', async () => {
     const html = handoffPage({ ...base, producerOnDefault: true });
     expect(html).toContain('Setup complete');
     expect(html).not.toMatch(/re-run/i);
+    // The standing adopter choices are dropped — setup is done, not "complete, but do these 3".
+    expect(html.toLowerCase()).not.toContain('squash');
+    expect(html).not.toContain('.waiver-stamp.json');
+    expect(html).not.toContain('.github/**');
+    // A short confirmation stands in their place.
+    expect(html).toMatch(/ruleset is in place/i);
+  });
+
+  it('still shows the install step on a complete page when an App was just provisioned', async () => {
+    // Rare: the callers are pre-placed on the default branch, so a first run lands on "Setup
+    // complete" with a freshly provisioned App that still needs installing.
+    const html = handoffPage({ ...base, producerOnDefault: true, slug: 'waiver-stamp-x' });
+    expect(html).toContain('/apps/waiver-stamp-x/installations/new');
+    expect(html.toLowerCase()).toContain('close that tab to come back here');
   });
 
   it('renders caveats as their own section, page-only, or nothing when there are none', async () => {
