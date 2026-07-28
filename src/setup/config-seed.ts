@@ -1,8 +1,12 @@
 import { access, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
-const CONFIG_SCHEMA =
-  'https://raw.githubusercontent.com/jsalvata/waiver-stamp/main/schema/waiver-stamp-config.v0.schema.json';
+const { version } = createRequire(import.meta.url)('../../package.json') as { version: string };
+
+// Pinned to the running version's tag, like the callers and hand-off links — the seeded config
+// then validates against the schema that shipped with the reusable workflows it wires up.
+const CONFIG_SCHEMA = `https://raw.githubusercontent.com/jsalvata/waiver-stamp/v${version}/schema/waiver-stamp-config.v0.schema.json`;
 
 /**
  * Drop the closed-by-default `.waiver-stamp.json` only when none exists (§4.11). Every gate ships

@@ -28,6 +28,11 @@ describe('seedConfigIfAbsent', () => {
         '.github/copilot-instructions.md',
       ]);
       expect(cfg.lockfileHonestyCheck).toBeUndefined();
+      // The $schema is pinned to the running version's tag, not a moving `main`.
+      const raw = JSON.parse(await readFile(join(cwd, '.waiver-stamp.json'), 'utf8'));
+      expect(raw.$schema).toMatch(
+        /\/v\d+\.\d+\.\d+\/schema\/waiver-stamp-config\.v0\.schema\.json$/,
+      );
     } finally {
       await cleanup();
     }

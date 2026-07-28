@@ -100,7 +100,7 @@ const SAVE_KEY_QUESTION = [
   '        repository will create another App.',
   '',
   'GitHub never lets a key be downloaded twice, so declining means this App can only ever',
-  'serve this repository. Save the key and reuse the App elsewhere?',
+  'serve this repository. Save the key to allow reusing the App for your other repos?',
 ].join('\n');
 
 export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Promise<void> {
