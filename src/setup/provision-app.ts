@@ -47,6 +47,8 @@ export interface ProvisionAppFreshArgs {
   repo: string;
   gh: GhClient;
   openBrowser: (url: string) => Promise<void>;
+  /** Render the callback-tab page from the new App's slug — the finished hand-off (§4.10). */
+  renderDonePage: (slug: string) => string;
   /** Name the App after the repo, because it serves only this one — see {@link appSlugName}. */
   dedicated?: boolean;
   /** Injectable for tests; defaults to the real loopback handshake. */
@@ -69,7 +71,7 @@ export async function provisionAppFresh(a: ProvisionAppFreshArgs): Promise<AppCr
   return runFlow({
     target: a.target,
     manifest,
-    repoFullName: `${a.owner}/${a.repo}`,
+    renderDonePage: a.renderDonePage,
     openBrowser: a.openBrowser,
     convert: (code) => a.gh.appConversion(code),
     onAbort: a.onAbort ?? abortOnEnter,

@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -109,16 +109,19 @@ jobs:
 `;
 }
 
-const exists = (p: string) =>
-  access(p).then(
-    () => true,
-    () => false,
+/** The current file at `abs`, or `null` if it isn't there. */
+const currentContent = (abs: string): Promise<string | null> =>
+  readFile(abs, 'utf8').then(
+    (c) => c,
+    () => null,
   );
 
 /**
  * Write the two caller workflows (§4.8), filling the reviewer's trigger with `ciWorkflowNames`.
- * Never overwrites: an existing path is recorded in `skipped` and left byte-for-byte intact — a
- * new file is safe, but clobbering the adopter's hand-tuned CI is not (§2.2).
+ * Never clobbers a *different* file: an existing path whose content differs is recorded in `skipped`
+ * and left byte-for-byte intact — clobbering the adopter's hand-tuned CI is not safe (§2.2). An
+ * existing path that already holds our exact caller counts as `written`: it's a no-op we own (a
+ * prior partial run wrote it, or the callers are already committed), not a foreign file to warn on.
  */
 export async function writeCallerWorkflows(
   cwd: string,
@@ -133,11 +136,12 @@ export async function writeCallerWorkflows(
   ];
   for (const [rel, content] of files) {
     const abs = join(cwd, rel);
-    if (await exists(abs)) {
+    const current = await currentContent(abs);
+    if (current !== null && current !== content) {
       skipped.push(rel);
       continue;
     }
-    await writeFile(abs, content);
+    if (current === null) await writeFile(abs, content);
     written.push(rel);
   }
   return { written, skipped };

@@ -25,7 +25,7 @@ describe('disk app store', () => {
   it('writes the file 0600 inside a 0700 directory', async () => {
     await writeDiskApp('acme', { appId: 1, pem: 'p', slug: 's' }, home);
     expect(statSync(diskAppPath('acme', home)).mode & 0o777).toBe(0o600);
-    expect(statSync(join(home, '.waiver-install')).mode & 0o777).toBe(0o700);
+    expect(statSync(join(home, '.waiver-stamp')).mode & 0o777).toBe(0o700);
   });
 
   // The mode option only applies when the path is created, so a re-save over a file/dir that got
@@ -34,10 +34,10 @@ describe('disk app store', () => {
     const { chmodSync } = await import('node:fs');
     await writeDiskApp('acme', { appId: 1, pem: 'p', slug: 's' }, home);
     chmodSync(diskAppPath('acme', home), 0o666);
-    chmodSync(join(home, '.waiver-install'), 0o755);
+    chmodSync(join(home, '.waiver-stamp'), 0o755);
     await writeDiskApp('acme', { appId: 2, pem: 'p2', slug: 's2' }, home);
     expect(statSync(diskAppPath('acme', home)).mode & 0o777).toBe(0o600);
-    expect(statSync(join(home, '.waiver-install')).mode & 0o777).toBe(0o700);
+    expect(statSync(join(home, '.waiver-stamp')).mode & 0o777).toBe(0o700);
   });
 
   it('returns null when nothing is saved', async () => {

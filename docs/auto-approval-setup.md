@@ -155,7 +155,7 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    >    won't forward by `secrets: inherit`.
    >    Adopting a second repository doesn't need a second App: an org-owned repo puts the
    >    secrets at org scope (later repos need only the Install click), and for a personal
-   >    account setup offers to keep the key in `~/.waiver-install/` for reuse.
+   >    account setup offers to keep the key in `~/.waiver-stamp/` for reuse.
    >    The reusable workflow mints the token, scopes it (`permission-pull-requests: write`, so
    >    zizmor's `github-app` audit stays clean), and wires it into the action's `github-token`
    >    — you don't add a `create-github-app-token` step yourself.

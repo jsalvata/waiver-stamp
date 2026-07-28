@@ -58,10 +58,12 @@ describe('resolveTarget', () => {
 describe('provisionAppFresh', () => {
   it('builds the manifest for owner/repo, runs the flow with gh.appConversion, returns creds', async () => {
     const creds = { appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' };
+    const renderDonePage = (slug: string) => `<p>${slug}</p>`;
     const runFlow = vi.fn(async (deps: ManifestFlowDeps) => {
       expect(deps.manifest.url).toBe('https://github.com/o/r');
       expect(deps.manifest.name).toBe('waiver-stamp-o');
-      expect(deps.repoFullName).toBe('o/r');
+      // The callback renderer is threaded straight through to the flow.
+      expect(deps.renderDonePage).toBe(renderDonePage);
       // convert delegates to gh.appConversion
       await deps.convert('code-xyz');
       return creds;
@@ -73,6 +75,7 @@ describe('provisionAppFresh', () => {
       repo: 'r',
       gh,
       openBrowser: vi.fn(async () => {}),
+      renderDonePage,
       runFlow,
     });
     expect(result).toEqual(creds);
@@ -94,6 +97,7 @@ describe('provisionAppFresh', () => {
       dedicated: true,
       gh: fakeGh(),
       openBrowser: vi.fn(async () => {}),
+      renderDonePage: (slug) => `<p>${slug}</p>`,
       runFlow,
     });
     expect(runFlow).toHaveBeenCalledOnce();

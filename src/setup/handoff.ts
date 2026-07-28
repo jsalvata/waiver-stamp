@@ -1,7 +1,25 @@
-const DOC = 'https://github.com/jsalvata/waiver-stamp/blob/main/docs/auto-approval-setup.md';
+import { createRequire } from 'node:module';
+
+const { version } = createRequire(import.meta.url)('../../package.json') as { version: string };
+
+// Docs are pinned to the running version's tag, so a link always points at the docs that match the
+// callers this same run just wrote — which pin the reusable ref the same way (see workflows.ts).
+const REPO = 'https://github.com/jsalvata/waiver-stamp';
+const REF = `v${version}`;
+/** A version-pinned link into the adopter guide, e.g. `setupDoc('#adopter-checklist')`. */
+export const setupDoc = (anchor = ''): string =>
+  `${REPO}/blob/${REF}/docs/auto-approval-setup.md${anchor}`;
+/** A version-pinned link into the spec, e.g. `specDoc('#61-transform-ops-...')`. */
+export const specDoc = (anchor = ''): string => `${REPO}/blob/${REF}/docs/spec.md${anchor}`;
 
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** A page-only advisory, optionally carrying a version-pinned doc pointer rendered as a link. */
+export interface Caveat {
+  text: string;
+  doc?: { href: string; label: string };
+}
 
 export interface HandoffArgs {
   owner: string;
@@ -16,8 +34,11 @@ export interface HandoffArgs {
   /** Whether the producer caller is already on the default branch. When false, the page's last step
    *  is to get the callers there and re-run — it must follow every step that edits repo content. */
   producerOnDefault: boolean;
+  /** The repo-relative files this run wrote (callers + seeded config) — named in the commit step's
+   *  copy-pasteable `git add`. Empty when nothing was written (e.g. everything already in place). */
+  writtenFiles: string[];
   /** Page-only advisories (skipped callers, commitlint, lint) — rendered as a Caveats list. */
-  caveats: string[];
+  caveats: Caveat[];
 }
 
 /**
@@ -33,16 +54,19 @@ export function handoffPage(args: HandoffArgs): string {
     configExisted,
     suggestedHonestyCheck,
     producerOnDefault,
+    writtenFiles,
     caveats,
   } = args;
   const repoFull = `${esc(owner)}/${esc(repo)}`;
   const steps: string[] = [];
 
   // Only when an App was actually provisioned: no slug ⇒ nothing to install (--no-app), and an
-  // empty-slug install link would be broken.
+  // empty-slug install link would be broken. No "if you haven't yet" hedge — this step renders
+  // only when the App still needs installing on this repo (fresh: just created; reuse/disk: the App
+  // lives elsewhere and this new repo needs it).
   if (slug)
     steps.push(
-      `<li>Install <b>${esc(slug)}</b> on <b>${repoFull}</b> if you haven't: open the <a href="https://github.com/apps/${esc(slug)}/installations/new">install page</a>, choose <b>Only select repositories</b>, pick <b>${repoFull}</b>, and click <b>Install</b>. Confirm it's listed under the App afterwards.</li>`,
+      `<li>Install <b>${esc(slug)}</b> on <b>${repoFull}</b>. Open the <a href="https://github.com/apps/${esc(slug)}/installations/new" target="_blank" rel="noopener">install page</a>, then:<ol><li>choose <b>Only select repositories</b> — not "All repositories";</li><li>pick <b>${repoFull}</b>;</li><li>click <b>Install</b>;</li><li>close that tab to come back here.</li></ol></li>`,
     );
 
   const configLede = configExisted
@@ -56,31 +80,41 @@ export function handoffPage(args: HandoffArgs): string {
   );
 
   steps.push(
-    `<li>Set <b>${repoFull}</b> to <b>merge-commit</b> or <b>rebase-merge</b> (not squash) — ` +
-      `<a href="https://github.com/${repoFull}/settings">Settings → General</a>.</li>`,
+    `<li>Set <b>${repoFull}</b> to <b>merge-commit</b> or <b>rebase-merge</b> (not squash) — <a href="https://github.com/${repoFull}/settings#merge-button-settings" target="_blank" rel="noopener">Settings → General</a>.</li>`,
   );
 
   steps.push(
     `<li>(Optional) Protect <code>.github/**</code> on <b>${esc(defaultBranch)}</b> with CODEOWNERS or a ruleset.</li>`,
   );
 
-  // Last, after every step that may edit repo content: commit those edits together with the callers,
-  // land them on the default branch, and re-run to add the required-check ruleset (§4.13).
-  if (!producerOnDefault)
+  // Last, after every step that may edit repo content: land the files this run wrote (named in a
+  // copy-pasteable `git add`) on the default branch, then re-run to add the ruleset (§4.13).
+  if (!producerOnDefault) {
+    const add =
+      writtenFiles.length > 0
+        ? ` — <code>git add ${writtenFiles.map(esc).join(' ')}</code>, commit,`
+        : ' — commit the caller workflows and any edits above,';
     steps.push(
-      `<li>Commit the two files under <code>.github/workflows/</code> (<code>waiver-stamp-ci.yml</code>, <code>waiver-stamp-review.yml</code>) together with any edits above, get them onto <b>${esc(defaultBranch)}</b> — open a PR and merge, or push — then re-run <code>waiver setup-repository</code> to add the required-check ruleset.</li>`,
+      `<li>Get the setup files onto <b>${esc(defaultBranch)}</b>${add} then open a PR and merge (or push). Re-run <code>waiver setup-repository</code> afterwards to add the required-check ruleset.</li>`,
     );
+  }
 
+  const renderCaveat = (c: Caveat): string => {
+    const link = c.doc
+      ? ` (<a href="${c.doc.href}" target="_blank" rel="noopener">${esc(c.doc.label)}</a>)`
+      : '';
+    return `<li>${esc(c.text)}${link}</li>`;
+  };
   const caveatsBlock =
     caveats.length > 0
-      ? `\n<h2>Caveats</h2>\n<ul>\n${caveats.map((c) => `<li>${esc(c)}</li>`).join('\n')}\n</ul>`
+      ? `\n<h2>Caveats</h2>\n<ul>\n${caveats.map(renderCaveat).join('\n')}\n</ul>`
       : '';
 
   return `<!doctype html><meta charset=utf-8><title>waiver-stamp — finish setup</title>
 <body>
-<h1>${producerOnDefault ? 'Setup complete' : 'Almost done'} — ${repoFull}</h1>
+<h1>${producerOnDefault ? 'Setup complete' : 'Finish setup'} — ${repoFull}</h1>
 <ol>
 ${steps.join('\n')}
 </ol>${caveatsBlock}
-<p><a href="${DOC}">docs/auto-approval-setup.md</a></p>`;
+<p><a href="${setupDoc()}" target="_blank" rel="noopener">docs/auto-approval-setup.md</a></p>`;
 }

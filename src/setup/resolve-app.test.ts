@@ -33,6 +33,7 @@ const deps = (over: Partial<ResolveAppDeps> = {}): ResolveAppDeps => ({
   repo: 'r',
   gh: fakeGh(),
   openBrowser: vi.fn(async () => {}),
+  renderDonePage: (slug) => `<p>${slug}</p>`,
   confirmSaveKey: vi.fn(async () => false),
   provisionAppFresh: vi.fn(async () => FRESH),
   readDiskApp: vi.fn(async () => null),

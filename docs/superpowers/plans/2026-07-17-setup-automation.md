@@ -1442,7 +1442,7 @@ Branch `jordi/setup-automation/setup-automation-4` off PR 3. PR body: PR 4 of th
 **Intent:** the idempotent / multi-repo layer over PR 4's fresh path — so a second repo under the same owner doesn't re-mint. Reuse an already-installed **org** App with no pem needed (org secrets already carry it, §4.3); offer **personal** pem-on-disk persistence and reuse (§4.4). Wraps `provisionAppFresh` behind a `resolveApp` that consults reuse → disk → fresh in order.
 
 **Files:**
-- Create: `src/setup/disk.ts` (+ test) — read/write `~/.waiver-install/<owner>.json` at `chmod 600`
+- Create: `src/setup/disk.ts` (+ test) — read/write `~/.waiver-stamp/<owner>.json` at `chmod 600`
 - Create: `src/setup/resolve-app.ts` (+ test) — the §4.3 resolution order
 - Modify: `src/setup/gh.ts` (+ test) — add `appExists(owner, slug)` / `orgSecretsPresent(org)` reads
 - Modify: `src/commands/setup-repository.ts` (+ test) — call `resolveApp` instead of `provisionAppFresh`; secrets only written when a pem is present

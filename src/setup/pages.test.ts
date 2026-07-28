@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildManifest } from './manifest.ts';
-import { donePage, formPage, reusePage } from './pages.ts';
+import { formPage } from './pages.ts';
 
 describe('formPage', () => {
   const manifest = buildManifest({ owner: 'o', appUrl: 'https://github.com/o/r' });
@@ -26,44 +26,17 @@ describe('formPage', () => {
   it('does not promise a permissions review — GitHub does not show them on that page', () => {
     expect(formPage(action, manifest).toLowerCase()).not.toContain('review the permissions');
   });
-});
 
-describe('donePage', () => {
-  const url = 'https://github.com/apps/waiver-stamp-o/installations/new';
-
-  it('links the install page (same tab) without auto-forwarding past the guidance', () => {
-    const html = donePage(url, 'o/r');
-    expect(html).toContain(`href="${url}"`);
-    expect(html).not.toMatch(/http-equiv="refresh"/i);
-  });
-
-  it('spells out what to select on the install page, naming the repo', () => {
-    const html = donePage(url, 'o/r');
-    expect(html).toContain('o/r');
-    expect(html.toLowerCase()).toContain('select repositories');
-    expect(html.toLowerCase()).toContain('install');
-  });
-
-  // We can't close the tab from GitHub's own install page, so the last step has to be stated
-  // here — otherwise the user is left on GitHub wondering whether setup finished.
-  it('tells the user to close the tab once the install is done', () => {
-    expect(donePage(url, 'o/r').toLowerCase()).toContain('close');
-  });
-});
-
-describe('reusePage', () => {
-  const url = 'https://github.com/apps/waiver-stamp-o/installations/new';
-
-  it('carries the same install steps as the done page', () => {
-    const html = reusePage(url, 'o/r');
-    expect(html).toContain(`href="${url}"`);
-    expect(html).toContain('o/r');
-    expect(html.toLowerCase()).toContain('select repositories');
-    expect(html.toLowerCase()).toContain('close');
-  });
-
-  // The reuse path skipped creation — the App already existed — so it must not claim otherwise.
-  it('does not claim the App was just created', () => {
-    expect(reusePage(url, 'o/r').toLowerCase()).not.toContain('created');
+  // The name-taken case can't be caught server-side (it happens on GitHub's own create form), so the
+  // page before it pre-warns. It must be reuse-first and non-destructive — a shared org App by that
+  // name must never be presented as something to delete.
+  it('warns about the "name already taken" case, reuse-first, without recommending deletion', () => {
+    const html = formPage(action, manifest);
+    expect(html.toLowerCase()).toContain('already taken');
+    expect(html).toContain('WAIVER_STAMP_APP_ID');
+    expect(html.toLowerCase()).toContain("don't delete a shared app");
+    // No link that would send an org user to the wrong (personal) App settings. (The form's own
+    // action URL legitimately starts with that path, so match the anchor form specifically.)
+    expect(html).not.toContain('href="https://github.com/settings/apps"');
   });
 });

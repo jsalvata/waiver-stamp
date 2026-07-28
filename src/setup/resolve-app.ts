@@ -22,6 +22,8 @@ export interface ResolveAppDeps {
   repo: string;
   gh: GhClient;
   openBrowser: (url: string) => Promise<void>;
+  /** Render the fresh-path callback-tab page from the new slug — the finished hand-off (§4.10). */
+  renderDonePage: (slug: string) => string;
   /** Ask whether to persist the personal key to disk (§4.4). Default is no — D10. */
   confirmSaveKey: () => Promise<boolean>;
   info: (msg: string) => void;
@@ -77,6 +79,7 @@ export async function resolveApp(deps: ResolveAppDeps): Promise<ResolvedApp> {
       dedicated,
       gh: deps.gh,
       openBrowser: deps.openBrowser,
+      renderDonePage: deps.renderDonePage,
     });
   }
 }

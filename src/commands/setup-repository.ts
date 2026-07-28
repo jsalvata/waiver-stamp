@@ -3,8 +3,7 @@ import { detectCommitlintBodyLimit } from '../setup/commitlint.ts';
 import { seedConfigIfAbsent } from '../setup/config-seed.ts';
 import { SetupError } from '../setup/errors.ts';
 import { type GhClient, makeGh } from '../setup/gh.ts';
-import { type HandoffArgs, handoffPage } from '../setup/handoff.ts';
-import { openInstallGuidance } from '../setup/install-guidance.ts';
+import { type Caveat, type HandoffArgs, handoffPage, setupDoc, specDoc } from '../setup/handoff.ts';
 import { type LintFixAdvisory, detectLintFixLinter } from '../setup/lint.ts';
 import { openBrowser } from '../setup/open-browser.ts';
 import { openLocalPage } from '../setup/open-local-page.ts';
@@ -44,8 +43,6 @@ export interface SetupDeps {
   ) => Promise<void>;
   confirmYesNo: (question: string) => Promise<boolean>;
   openBrowser: (url: string) => Promise<void>;
-  /** Show the install guidance page, then the install link, for a reuse run (no loopback ran). */
-  openInstallGuidance: (installUrl: string, repoFullName: string) => Promise<void>;
   discoverCiWorkflowNames: (dir: string) => Promise<string[]>;
   detectLockfileHonestyCheck: (dir: string) => Promise<string | null>;
   writeCallerWorkflows: (
@@ -79,7 +76,6 @@ export function makeSetupDeps(): SetupDeps {
     grantExistingOrgSecrets,
     confirmYesNo: (q) => confirmYesNo(q),
     openBrowser,
-    openInstallGuidance: (url, repo) => openInstallGuidance(url, repo, openBrowser),
     discoverCiWorkflowNames,
     detectLockfileHonestyCheck,
     writeCallerWorkflows,
@@ -98,7 +94,7 @@ export function makeSetupDeps(): SetupDeps {
 const SAVE_KEY_QUESTION = [
   'This repository needs a GitHub App, and there are two ways to go about it:',
   '',
-  '  yes — one App for your whole account. Its key is saved to ~/.waiver-install (mode 600),',
+  '  yes — one App for your whole account. Its key is saved to ~/.waiver-stamp (mode 600),',
   '        and your other repositories reuse it with no browser step.',
   '  no  — an App just for this repository. Nothing is stored on disk, and setting up another',
   '        repository will create another App.',
@@ -112,44 +108,53 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   const ctx = await deps.preflight(cwd);
   deps.info(`waiver-stamp setup: ${ctx.owner}/${ctx.repo} (default branch ${ctx.defaultBranch})`);
 
-  // Phase 1a — provision the App and its secrets. The file/config half (Phase 1b onward) is
-  // independent, so this whole block is skipped on --no-app or on a converged re-run, but the rest
-  // still runs. A hard failure here (missing scope, orphaned App) aborts before touching files.
-  const slug = await provisionApp(opts, deps, ctx);
-
-  // Phase 1b — the caller workflows and the seeded policy (§4.8, §4.11). Always: the App and the
-  // config are separate channels (§4.13).
+  // Phase 1 — the repo half (callers + seeded policy, §4.8/§4.11) and the required-check ruleset,
+  // all independent of the App (§4.13). Done *before* provisioning so the fresh-path loopback
+  // callback can render the finished hand-off in the tab GitHub redirects to, rather than a second
+  // tab. The files are non-destructive and idempotent, so writing them before a provisioning that
+  // may fail is safe — a failed run just re-runs, and they're skipped.
   const wfDir = join(cwd, '.github/workflows');
   const ciNames = await deps.discoverCiWorkflowNames(wfDir);
   const honesty = await deps.detectLockfileHonestyCheck(wfDir);
   const drop = await deps.writeCallerWorkflows(cwd, { ciWorkflowNames: ciNames });
   const seed = await deps.seedConfigIfAbsent(cwd, { lockfileHonestyCheck: honesty ?? undefined });
 
-  // Advisories ride the hand-off page (persistent), not the scrolling terminal.
-  const caveats: string[] = [];
+  // Advisories ride the hand-off page (persistent), not the scrolling terminal. Each links its own
+  // doc section (version-pinned): the callers and commitlint live in the adopter checklist; the
+  // lint-fix op only in the spec.
+  const checklist = { href: setupDoc('#adopter-checklist'), label: 'adopter checklist' };
+  const transformOps = {
+    href: specDoc('#61-transform-ops-folded-over-base-compared-to-head'),
+    label: 'spec §6.1',
+  };
+  const caveats: Caveat[] = [];
   for (const p of drop.skipped)
-    caveats.push(
-      `Existing ${p} left untouched — reconcile it by hand against the caller setup would write.`,
-    );
+    caveats.push({
+      text: `Existing ${p} left untouched — compare it against the caller the setup guide describes, and reconcile by hand.`,
+      doc: checklist,
+    });
   if ((await deps.detectCommitlintBodyLimit(cwd)).blocks)
-    caveats.push(
-      'commitlint rejects long body lines; set `body-max-line-length: [0]` so waivered commits are not blocked (spec §4.7).',
-    );
+    caveats.push({
+      text: 'commitlint rejects long body lines; set `body-max-line-length: [0]` so waivered commits are not blocked.',
+      doc: checklist,
+    });
   const lint = await deps.detectLintFixLinter(cwd);
   if (lint.status === 'none')
-    caveats.push(
-      'No supported linter (biome/eslint) declared — the lint-fix op is unavailable (spec §6.1).',
-    );
+    caveats.push({
+      text: 'No supported linter (biome/eslint) declared — the lint-fix op is unavailable.',
+      doc: transformOps,
+    });
   else if (lint.status === 'ambiguous')
-    caveats.push(
-      `Multiple linters declared (${lint.declared.join(', ')}); lint-fix fails closed until you narrow to one (spec §6.1).`,
-    );
+    caveats.push({
+      text: `Multiple linters declared (${lint.declared.join(', ')}); lint-fix fails closed until you narrow to one.`,
+      doc: transformOps,
+    });
 
-  // Phase 2 — the required-check ruleset, gated on the producer caller being on the default branch
-  // (§4.13). The `waiver-stamp` check only ever reports on PRs (the producer is `on: pull_request`),
-  // never on default-branch commits — so its presence there, i.e. the callers have been merged, is
-  // the real signal that requiring it won't block every PR on a check that never arrives. Creating
-  // it before then is the one ordering mistake that breaks the adopter's repo.
+  // The required-check ruleset, gated on the producer caller being on the default branch (§4.13).
+  // The `waiver-stamp` check only ever reports on PRs (the producer is `on: pull_request`), never on
+  // default-branch commits — so its presence there, i.e. the callers have been merged, is the real
+  // signal that requiring it won't block every PR on a check that never arrives. Creating it before
+  // then is the one ordering mistake that breaks the adopter's repo.
   const producerPath = '.github/workflows/waiver-stamp-ci.yml';
   const producerOnDefault = await deps.gh.fileExistsOnRef(
     ctx.owner,
@@ -168,37 +173,50 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
     );
   }
 
-  // Phase 3 — the hand-off page: only the steps we chose not to automate (§4.10). The install step
-  // shows when a slug was provisioned; whether it's already installed is left to the reader (no
-  // reliable user-token check exists — GET …/installation needs an App JWT).
-  await deps.openHandoff(
+  // The hand-off page: only the steps we chose not to automate (§4.10). Its install step shows when
+  // an App was provisioned (a slug); whether it's already installed is left to the reader (no
+  // reliable user-token check exists — GET …/installation needs an App JWT). The slug isn't known
+  // until provisioning, so render lazily.
+  // The files this run put in place — the callers we wrote (or that already matched) plus the config
+  // if we seeded it — named in the hand-off's copy-pasteable commit step.
+  const writtenFiles = [...drop.written, ...(seed.seeded ? ['.waiver-stamp.json'] : [])];
+  const renderHandoff = (slug: string): string =>
     deps.handoffPage({
       owner: ctx.owner,
       repo: ctx.repo,
-      slug: slug ?? '',
+      slug,
       defaultBranch: ctx.defaultBranch,
       configExisted: seed.existing,
       suggestedHonestyCheck: seed.existing ? honesty : null,
       producerOnDefault,
+      writtenFiles,
       caveats,
-    }),
-  );
+    });
+
+  // Phase 2 — provision the App + secrets. On the fresh path the manifest callback renders the
+  // hand-off in its own tab (the tab GitHub redirected to), so nothing opens here. Every other path
+  // (--no-app, converged resume, reuse, disk) has no such tab, so we open the hand-off as a file.
+  const provisioned = await provisionApp(opts, deps, ctx, renderHandoff);
+  if (!provisioned.handoffServed) await deps.openHandoff(renderHandoff(provisioned.slug ?? ''));
 }
 
 /**
- * Provision the App + secrets, returning its slug (or `undefined` when nothing was provisioned:
- * `--no-app`, or a converged re-run whose secrets already exist). Throws on a hard failure.
+ * Provision the App + secrets. Returns the App's slug (or `undefined` when nothing was provisioned:
+ * `--no-app`, or a converged re-run whose secrets already exist) and `handoffServed` — true only on
+ * the fresh path, where the loopback callback already rendered the hand-off in its tab, so the
+ * caller must not open it again. Throws on a hard failure.
  */
 async function provisionApp(
   opts: SetupOptions,
   deps: SetupDeps,
   ctx: RepoContext,
-): Promise<string | undefined> {
+  renderHandoff: (slug: string) => string,
+): Promise<{ slug: string | undefined; handoffServed: boolean }> {
   if (opts.noApp) {
     deps.info(
       '--no-app: skipping App provisioning — configure the auto-approval layer yourself, or leave it unconfigured.',
     );
-    return undefined;
+    return { slug: undefined, handoffServed: false };
   }
 
   // Converge rather than duplicate (design §1): this repo already carries both secrets, so
@@ -213,7 +231,7 @@ async function provisionApp(
         'To provision a different App instead, delete the two WAIVER_STAMP_* secrets and re-run.',
       ].join('\n'),
     );
-    return undefined;
+    return { slug: undefined, handoffServed: false };
   }
 
   const target = await deps.resolveTarget(ctx.owner, deps.gh);
@@ -234,6 +252,8 @@ async function provisionApp(
     repo: ctx.repo,
     gh: deps.gh,
     openBrowser: deps.openBrowser,
+    // Fresh only: the loopback callback serves this in its tab once the slug exists.
+    renderDonePage: renderHandoff,
     confirmSaveKey: () => deps.confirmYesNo(SAVE_KEY_QUESTION),
     info: deps.info,
   });
@@ -269,23 +289,20 @@ async function provisionApp(
     });
   }
 
+  // Fresh path: the loopback callback already rendered the hand-off in the tab GitHub redirected to,
+  // so the caller opens no second page. Reuse/disk skip the manifest flow, so there's no such tab —
+  // the caller opens the hand-off as a file; the terminal names the install link as a fallback.
   if (app.source === 'fresh') {
-    // The done page served on the loopback callback already forwards to install in that same tab.
-    deps.info(`App ${app.slug} ready; secrets written. Finish the Install step in your browser.`);
-    return app.slug;
+    deps.info(
+      `App ${app.slug} ready; secrets written. The remaining steps are on the page in your browser.`,
+    );
+    return { slug: app.slug, handoffServed: true };
   }
-  // Reuse/disk skipped the manifest flow, so no tab is open — but the App still has to be installed
-  // on this repo, and only GitHub's picker can do that.
   const installUrl = app.slug
     ? `https://github.com/apps/${app.slug}/installations/new`
     : `https://github.com/organizations/${target.kind === 'org' ? target.org : ctx.owner}/settings/installations`;
-  const repoFull = `${ctx.owner}/${ctx.repo}`;
   deps.info(
-    [
-      `Secrets ready. A browser page is opening with the last step: install the App on ${repoFull}.`,
-      `If it doesn't open, go to ${installUrl} and choose "Only select repositories", then pick ${repoFull}.`,
-    ].join('\n'),
+    `Secrets ready. Complete the remaining steps — including installing the App (${installUrl}) — on the page opening in your browser.`,
   );
-  await deps.openInstallGuidance(installUrl, repoFull);
-  return app.slug;
+  return { slug: app.slug, handoffServed: false };
 }

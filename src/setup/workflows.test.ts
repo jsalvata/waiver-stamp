@@ -118,7 +118,7 @@ describe('writeCallerWorkflows', () => {
     }
   });
 
-  it('never overwrites an existing caller — it records it as skipped instead', async () => {
+  it('never overwrites an existing caller whose content DIFFERS — records it as skipped', async () => {
     const { cwd, cleanup } = await scaffoldProject({
       '.github/workflows/waiver-stamp-ci.yml': 'name: mine\n',
       '.github/workflows/waiver-stamp-review.yml': 'name: mine\n',
@@ -134,6 +134,25 @@ describe('writeCallerWorkflows', () => {
       });
       // The pre-existing content is left byte-for-byte intact.
       expect(await readFile(wf(cwd, 'waiver-stamp-ci.yml'), 'utf8')).toBe('name: mine\n');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('is idempotent — a caller already holding our exact content is written, not skipped', async () => {
+    const { cwd, cleanup } = await scaffoldProject({});
+    try {
+      await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      // A prior partial run (the reorder writes callers before provisioning) leaves our exact
+      // files behind; a re-run must recognise them as ours, not warn about a "foreign" skip.
+      const again = await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      expect(again).toEqual({
+        written: [
+          '.github/workflows/waiver-stamp-ci.yml',
+          '.github/workflows/waiver-stamp-review.yml',
+        ],
+        skipped: [],
+      });
     } finally {
       await cleanup();
     }

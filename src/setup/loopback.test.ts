@@ -13,6 +13,8 @@ describe('runManifestFlow', () => {
       expect(code).toBe('abc123');
       return { appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' };
     });
+    // The callback tab renders whatever renderDonePage returns, keyed on the new slug.
+    const renderDonePage = vi.fn((slug: string) => `<h1>done ${slug}</h1>`);
     const openBrowser = vi.fn(async (formUrl: string) => {
       const u = new URL(formUrl);
       const page = await fetch(formUrl).then((r) => r.text());
@@ -22,17 +24,21 @@ describe('runManifestFlow', () => {
       const action = page.match(/action="([^"]+)"/)?.[1] ?? '';
       const state = new URL(action).searchParams.get('state');
       expect(state).toBeTruthy();
-      await fetch(`${u.origin}/callback?code=abc123&state=${state}`);
+      const done = await fetch(`${u.origin}/callback?code=abc123&state=${state}`).then((r) =>
+        r.text(),
+      );
+      expect(done).toContain('done waiver-stamp-o');
     });
     const creds = await runManifestFlow({
       target: { kind: 'personal' },
       manifest,
-      repoFullName: 'jsalvata/waiver-stamp',
+      renderDonePage,
       openBrowser,
       convert,
     });
     expect(creds).toEqual({ appId: 42, pem: '-----BEGIN…', slug: 'waiver-stamp-o' });
     expect(convert).toHaveBeenCalledOnce();
+    expect(renderDonePage).toHaveBeenCalledWith('waiver-stamp-o');
   });
 
   it('closes lingering browser connections on success so the process can exit', async () => {
@@ -51,6 +57,7 @@ describe('runManifestFlow', () => {
     await runManifestFlow({
       target: { kind: 'personal' },
       manifest,
+      renderDonePage: () => '<h1>done</h1>',
       openBrowser,
       convert: async () => ({ appId: 1, pem: 'p', slug: 's' }),
     });
@@ -68,6 +75,7 @@ describe('runManifestFlow', () => {
       runManifestFlow({
         target: { kind: 'personal' },
         manifest,
+        renderDonePage: () => '<h1>done</h1>',
         openBrowser,
         convert: vi.fn(),
       }),
@@ -79,6 +87,7 @@ describe('runManifestFlow', () => {
     const err = await runManifestFlow({
       target: { kind: 'personal' },
       manifest,
+      renderDonePage: () => '<h1>done</h1>',
       openBrowser: vi.fn(async () => {}), // never calls back — the user gives up instead
       convert: vi.fn(),
       onAbort: (abort) => {

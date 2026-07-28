@@ -16,38 +16,14 @@ export function formPage(action: string, manifest: AppManifest): string {
 <p>Keeping the suggested name is easiest: on an organisation it's how waiver-stamp finds this App's
 install page, and either way it's how you'll recognise it among your other Apps. Renaming won't
 stop your other repositories reusing it.</p>
+<p><b>If GitHub says the name is already taken</b>, a waiver-stamp App by this name already exists —
+a leftover from an earlier attempt, or, on an organisation, one shared across repositories. To reuse
+it (don't delete a shared App): cancel here — press Enter in the terminal — set this repo's
+<code>WAIVER_STAMP_APP_ID</code> and <code>WAIVER_STAMP_APP_PRIVATE_KEY</code> secrets from the App's
+own settings (generate a fresh private key there if you no longer have one), then re-run — setup
+skips creating one when those secrets are present. Delete the App only if nothing uses it.</p>
 <form action="${action}" method="post">
 <input type="hidden" name="manifest" value='${json}'>
 <button type="submit">Continue to GitHub →</button>
 </form>`;
-}
-
-/**
- * The install guidance both endings share (spec §3.3). GitHub's install page defaults to "All
- * repositories" and gives no hint which repo to pick, so we spell that out on the last page we
- * control. No auto-redirect: the user needs to read this before landing there.
- */
-function installPage(heading: string, installUrl: string, repoFullName: string): string {
-  return `<!doctype html><meta charset=utf-8><title>waiver-stamp — install</title>
-<body>
-<h1>${heading}</h1>
-<p>Last step: install it on <b>${repoFullName}</b>. On the page that opens:</p>
-<ol>
-<li>Choose <b>Only select repositories</b> (not "All repositories").</li>
-<li>Pick <b>${repoFullName}</b> from the list.</li>
-<li>Click <b>Install</b>.</li>
-<li>That's it — close this tab and return to your terminal.</li>
-</ol>
-<p><a href="${installUrl}">Open the install page →</a></p>`;
-}
-
-/** Shown from the loopback callback after a fresh App is created. */
-export function donePage(installUrl: string, repoFullName: string): string {
-  return installPage('App created ✓', installUrl, repoFullName);
-}
-
-/** Shown before the install page on a reuse run, where no App was created — so it can't repeat
- *  the loopback done page, and there's no server to serve it from (see {@link openInstallGuidance}). */
-export function reusePage(installUrl: string, repoFullName: string): string {
-  return installPage('Secrets ready ✓', installUrl, repoFullName);
 }

@@ -26,17 +26,22 @@ function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
     preflight: vi.fn(async () => ctx),
     gh: fakeGh(),
     resolveTarget: vi.fn(async () => ({ kind: 'personal' as const })),
-    resolveApp: vi.fn(async () => ({
-      source: 'fresh' as const,
-      appId: 42,
-      pem: '-----BEGIN…',
-      slug: 'waiver-stamp-jsalvata',
-    })),
+    // Fresh path: the real resolveApp runs the loopback flow, whose callback renders the hand-off
+    // in its tab. Emulate that here so handoffPage is exercised on the fresh path (where nothing
+    // opens a second tab), keyed on the new slug.
+    resolveApp: vi.fn(async (d) => {
+      d.renderDonePage('waiver-stamp-jsalvata');
+      return {
+        source: 'fresh' as const,
+        appId: 42,
+        pem: '-----BEGIN…',
+        slug: 'waiver-stamp-jsalvata',
+      };
+    }),
     provisionSecrets: vi.fn(async () => {}),
     grantExistingOrgSecrets: vi.fn(async () => {}),
     confirmYesNo: vi.fn(async () => false),
     openBrowser: vi.fn(async () => {}),
-    openInstallGuidance: vi.fn(async () => {}),
     discoverCiWorkflowNames: vi.fn(async () => ['CI']),
     detectLockfileHonestyCheck: vi.fn(async () => null),
     writeCallerWorkflows: vi.fn(async () => ({
@@ -72,8 +77,8 @@ describe('setupRepository', () => {
     const openBrowser = vi.fn(async () => {});
     await setupRepository({ cwd: '/repo' }, makeDeps({ provisionSecrets, openBrowser }));
     expect(provisionSecrets).toHaveBeenCalledOnce();
-    // The loopback done page owns the install tab on the fresh path — the orchestrator opens no
-    // browser itself; only the hand-off page (via openHandoff) is its own.
+    // The orchestrator opens no browser tab of its own on any path — the loopback callback serves
+    // its confirmation page, and the remaining steps ride the hand-off page (via openHandoff).
     expect(openBrowser).not.toHaveBeenCalled();
   });
 
@@ -98,8 +103,11 @@ describe('setupRepository', () => {
     });
 
     // Advisories are page-only (§6): they go into the hand-off's caveats, not the terminal.
+    type Caveat = { text: string; doc?: { href: string; label: string } };
+    const rawCaveatsOf = (handoffPage: ReturnType<typeof vi.fn>): Caveat[] =>
+      (handoffPage.mock.calls[0]?.[0] as { caveats: Caveat[] }).caveats;
     const caveatsOf = (handoffPage: ReturnType<typeof vi.fn>): string[] =>
-      (handoffPage.mock.calls[0]?.[0] as { caveats: string[] }).caveats;
+      rawCaveatsOf(handoffPage).map((c) => c.text);
 
     it('carries each untouched caller into the hand-off caveats', async () => {
       const handoffPage = vi.fn(() => '<handoff>');
@@ -135,6 +143,10 @@ describe('setupRepository', () => {
         }),
       );
       expect(caveatsOf(none)).toContainEqual(expect.stringMatching(/lint-fix/));
+      // The lint-fix caveat deep-links the spec §6.1 anchor, version-pinned (blob/vX.Y.Z).
+      expect(rawCaveatsOf(none)[0]?.doc?.href).toMatch(
+        /\/blob\/v\d+\.\d+\.\d+\/docs\/spec\.md#61-transform-ops/,
+      );
 
       const many = vi.fn(() => '<handoff>');
       await setupRepository(
@@ -194,7 +206,7 @@ describe('setupRepository', () => {
   });
 
   describe('hand-off page', () => {
-    it('opens the hand-off page with the provisioned slug and config state', async () => {
+    it('renders the hand-off with the provisioned slug and config state, served in the callback tab', async () => {
       const handoffPage = vi.fn(() => '<handoff>');
       const openHandoff = vi.fn(async () => {});
       await setupRepository({ cwd: '/repo' }, makeDeps({ handoffPage, openHandoff }));
@@ -206,7 +218,9 @@ describe('setupRepository', () => {
           configExisted: false,
         }),
       );
-      expect(openHandoff).toHaveBeenCalledWith('<handoff>');
+      // Fresh path: the loopback callback served it (via renderDonePage), so the orchestrator opens
+      // no second tab of its own.
+      expect(openHandoff).not.toHaveBeenCalled();
     });
 
     it('tells the hand-off whether the producer is already on the default branch', async () => {
@@ -244,9 +258,12 @@ describe('setupRepository', () => {
     });
     const err = await setupRepository({ cwd: '/repo' }, d).catch((e: unknown) => e);
     expect(err).toMatchObject({ name: 'SetupError', message: expect.stringMatching(/admin:org/) });
+    // The scope check still aborts before the App is created (no orphan)…
     expect(d.resolveApp).not.toHaveBeenCalled();
-    // Failing fast means the config/workflow phase never ran either.
-    expect(d.writeCallerWorkflows).not.toHaveBeenCalled();
+    // …but the repo half now runs first, so the callers are already written (non-destructive and
+    // idempotent — a re-run after `gh auth refresh` skips them). The hand-off never opens, though.
+    expect(d.writeCallerWorkflows).toHaveBeenCalledOnce();
+    expect(d.openHandoff).not.toHaveBeenCalled();
   });
 
   it('--no-app skips App provisioning but still configures the repo half', async () => {
@@ -303,21 +320,23 @@ describe('setupRepository', () => {
         ...over,
       });
 
-    it('widens the org secrets and guides install, then configures the repo half', async () => {
+    it('widens the org secrets and puts install on the hand-off page, then configures the repo half', async () => {
       const d = reuse();
       await setupRepository({ cwd: '/repo' }, d);
       expect(d.provisionSecrets).not.toHaveBeenCalled();
       expect(d.grantExistingOrgSecrets).toHaveBeenCalledOnce();
-      expect(d.openInstallGuidance).toHaveBeenCalledWith(
-        'https://github.com/apps/waiver-stamp-acme/installations/new',
-        'jsalvata/demo',
+      // Reuse opens no install tab of its own — the slug rides the hand-off page's install step.
+      expect(d.openBrowser).not.toHaveBeenCalled();
+      expect(d.handoffPage).toHaveBeenCalledWith(
+        expect.objectContaining({ slug: 'waiver-stamp-acme' }),
       );
+      expect(d.openHandoff).toHaveBeenCalledOnce();
       expect(d.writeCallerWorkflows).toHaveBeenCalledOnce();
     });
   });
 
   describe('disk', () => {
-    it('writes the repo secrets from the saved key and guides install', async () => {
+    it('writes the repo secrets from the saved key and puts install on the hand-off page', async () => {
       const d = makeDeps({
         resolveApp: vi.fn(async () => ({
           source: 'disk' as const,
@@ -328,9 +347,9 @@ describe('setupRepository', () => {
       });
       await setupRepository({ cwd: '/repo' }, d);
       expect(d.provisionSecrets).toHaveBeenCalledOnce();
-      expect(d.openInstallGuidance).toHaveBeenCalledWith(
-        'https://github.com/apps/renamed-by-hand/installations/new',
-        'jsalvata/demo',
+      expect(d.openBrowser).not.toHaveBeenCalled();
+      expect(d.handoffPage).toHaveBeenCalledWith(
+        expect.objectContaining({ slug: 'renamed-by-hand' }),
       );
     });
   });

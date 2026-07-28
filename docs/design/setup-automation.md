@@ -410,7 +410,7 @@ Only when the install target is a **personal account** (orgs use org secrets, so
 persistence is needed), one prompt — asked **before** the manifest is built, because the answer
 picks the App's name:
 
-- **Yes** → one account-wide `waiver-stamp-<owner>` App; write `~/.waiver-install/<owner>.json`
+- **Yes** → one account-wide `waiver-stamp-<owner>` App; write `~/.waiver-stamp/<owner>.json`
   (`{ "app_id": …, "pem": …, "slug": … }`), **`chmod 600`**, directory `chmod 700`. Later repos
   load it and skip the browser flow entirely.
 - **No** → a `waiver-stamp-<owner>-<repo>` App dedicated to this repository; nothing at rest.
@@ -626,7 +626,7 @@ The core threat model (`docs/automation-layer.md`, spec §3.4) is unchanged. New
   party gains standing access — the property "no third party holds your write token" is
   preserved. The one-time `code` transits only `localhost`. Standard loopback hardening:
   bind `127.0.0.1` only, verify `state`, single-shot handler, short timeout, ephemeral port.
-- **pem at rest (personal, opt-in).** `~/.waiver-install/<owner>.json` at `chmod 600` is a
+- **pem at rest (personal, opt-in).** `~/.waiver-stamp/<owner>.json` at `chmod 600` is a
   private key on disk — the same posture as any local App key or SSH key; opt-in and warned.
   Org installs never persist it.
 - **`waiver setup-repository` uses the adopter's own admin credential** (`gh`) for secrets/protection —
