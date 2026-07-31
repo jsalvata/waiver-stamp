@@ -38,6 +38,7 @@ Reasoning order: feature spike → prep → cleanup. Ship order: 0 → 1..N → 
   - **PR 5 — App reuse + pem-on-disk** (`setup-automation-5` off PR 4): the idempotent/multi-repo layer on the fresh path — reuse an existing org App with no pem (§4.3), personal pem-on-disk opt-in (§4.4). **E2E:** re-run reuses the org App / loads the disk key instead of re-minting.
   - **PR 6 — Repo config + phase boundary** (`setup-automation-6` off PR 5): dedicated `waiver-stamp` ruleset, empirical commitlint detection, non-destructive caller-workflow drop, `.waiver-stamp.json` seeding, the instructions hand-off page, and the §4.13 file-PR-then-ruleset ordering. Completes the orchestrator. **E2E:** full flow from `setup-repository` to the hand-off page against a scratch repo.
 - **PR N+1 — Cleanup refactor** (`cleanup-setup-automation` off PR 6): remove the now-dead `lockfile-honesty-checks` plumbing and any final stale narration. Pure removal, suite green before/after.
+- **PR N+2 — Reviewer: no forbidden APPROVE under the default token** (`reviewer-no-app-approve` off `main`, independent of the setup stack): surfaced reviewing PR 6's `--no-app` path. On the no-App / `github.token` path the reviewer resolves as `github-actions[bot]` and, on an APPROVE verdict, `postOutcome` (`src/action/review.ts`) warns but still calls `createReview({ event: 'APPROVE' })` — which GitHub rejects by default (422, "Actions is not permitted to approve") → the reviewer job fails red, contradicting the `docs/auto-approval-setup.md` step-8 contract ("leaves the approving click to a human"). **Fix:** downgrade APPROVE→COMMENT (or NONE) when the posting identity is `github-actions[bot]`, publishing the verdict without attempting the forbidden approve. Only reachable today with a manual `ci-checks:` override on a no-App caller (otherwise `main.ts` fails closed to a no-op first), but a real correctness bug. **Tests:** `review.test.ts` mocks `createReview` to succeed, so it never exercises the 422 — add the bot-identity APPROVE-downgrade case; rebuild the action's bundled `dist`. Not a setup-layer change; its own PR.
 
 **Docs consistency rule (applied throughout):** no PR may leave `main` referencing something it removed or describing behavior it changed. Each PR revises README / `docs/auto-approval-setup.md` / `examples/` *to the extent it changes user-facing behavior* — not a full re-narration every time. PR 1 does a targeted input-removal fix; PR 2 does the caller rewrite; PRs 3–6 add the `waiver setup-repository` story as each capability lands; the cleanup PR sweeps only genuine residue.
 
@@ -1441,7 +1442,7 @@ Branch `jordi/setup-automation/setup-automation-4` off PR 3. PR body: PR 4 of th
 **Intent:** the idempotent / multi-repo layer over PR 4's fresh path — so a second repo under the same owner doesn't re-mint. Reuse an already-installed **org** App with no pem needed (org secrets already carry it, §4.3); offer **personal** pem-on-disk persistence and reuse (§4.4). Wraps `provisionAppFresh` behind a `resolveApp` that consults reuse → disk → fresh in order.
 
 **Files:**
-- Create: `src/setup/disk.ts` (+ test) — read/write `~/.waiver-install/<owner>.json` at `chmod 600`
+- Create: `src/setup/disk.ts` (+ test) — read/write `~/.waiver-stamp/<owner>.json` at `chmod 600`
 - Create: `src/setup/resolve-app.ts` (+ test) — the §4.3 resolution order
 - Modify: `src/setup/gh.ts` (+ test) — add `appExists(owner, slug)` / `orgSecretsPresent(org)` reads
 - Modify: `src/commands/setup-repository.ts` (+ test) — call `resolveApp` instead of `provisionAppFresh`; secrets only written when a pem is present
@@ -1662,6 +1663,30 @@ With the per-PR consistency rule, most stale narration is already gone. Scan `do
 - [ ] **Step 4: Repo checks + commit + PR (skills)**
 
 Run: `pnpm test && pnpm lint`. Branch `jordi/setup-automation/cleanup-setup-automation` off PR 6. PR body: cleanup PR (N+1); pure removal of dead honesty-list plumbing and any stale doc residue.
+
+---
+
+## PR N+2 — Reviewer: no forbidden APPROVE under the default token
+
+**Intent:** the no-App reviewer must honor its documented contract — publish the verdict and leave the approving click to a human — instead of attempting an APPROVE the Actions identity can't post. Surfaced reviewing PR 6's `--no-app` path; independent of the setup layer, so it branches off `main`.
+
+**The bug:** on the `github.token` path the reviewer resolves as `github-actions[bot]`. `postOutcome` (`src/action/review.ts`) warns for that identity on an APPROVE outcome but then still calls `octokit.rest.pulls.createReview({ event: 'APPROVE' })`. GitHub rejects an Actions-identity APPROVE by default (422, "GitHub Actions is not permitted to approve pull requests") → uncaught → the reviewer job fails red. `docs/auto-approval-setup.md` step 8 promises the opposite ("leaves the approving click to a human and publishes the green `waiver-stamp` check"). Only reachable today when a `ci-checks:` override is set on a no-App caller — otherwise `main.ts` fails closed to a no-op before an APPROVE verdict is reached (`required.length === 0`) — but a genuine correctness bug and a sharp edge.
+
+**Files:**
+- Modify: `src/action/review.ts` — in `postOutcome`, when the resolved identity is `github-actions[bot]`, downgrade an `APPROVE` outcome to `COMMENT` (publish the verdict body as a non-counting review) or `NONE`, rather than attempting the approve. Keep the existing warning.
+- Modify: `src/action/review.test.ts` — the fake `createReview` returns success, so it never exercises the 422. Add: identity `github-actions[bot]` + APPROVE ⇒ `createReview` called with `event: 'COMMENT'` (or not called, if downgrading to NONE); the App-identity APPROVE path still posts a real APPROVE.
+
+- [ ] **Step 1: Failing test → downgrade impl**
+
+Add the bot-identity APPROVE-downgrade test (red), then implement the downgrade in `postOutcome`. Identity is already resolved there via `resolveReviewerLogin`, so the check belongs at post time, not in `decide.ts`.
+
+- [ ] **Step 2: Rebuild the action dist + full gate**
+
+Run: `pnpm build:action && pnpm build && pnpm typecheck && pnpm lint && pnpm test`. Stage the rebuilt `.github/actions/waiver-stamp-review/dist` — CI runs the bundle, not the TS source.
+
+- [ ] **Step 3: Commit + PR (skills)**
+
+Branch `jsalvata/reviewer-no-app-approve` off up-to-date `main`. PR body: reviewer no longer attempts a forbidden APPROVE under the default token; honors the step-8 no-App contract; its own PR, not part of the setup stack.
 
 ---
 

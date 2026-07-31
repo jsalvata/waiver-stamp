@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AppCredentials } from './loopback.ts';
 
-const DIR = '.waiver-install';
+const DIR = '.waiver-stamp';
 
 /** Where the opt-in personal credentials for `owner` live (spec §4.4). */
 export function diskAppPath(owner: string, home: string = homedir()): string {

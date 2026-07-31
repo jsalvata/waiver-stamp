@@ -21,6 +21,9 @@ const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   repoSecretNames: vi.fn(async () => []),
   grantOrgSecretRepo: vi.fn(async () => {}),
   orgAppSlugs: vi.fn(async () => []),
+  listRulesets: vi.fn(async () => []),
+  createRuleset: vi.fn(async () => {}),
+  fileExistsOnRef: vi.fn(async () => false),
   ...over,
 });
 
@@ -30,6 +33,7 @@ const deps = (over: Partial<ResolveAppDeps> = {}): ResolveAppDeps => ({
   repo: 'r',
   gh: fakeGh(),
   openBrowser: vi.fn(async () => {}),
+  renderDonePage: (slug) => `<p>${slug}</p>`,
   confirmSaveKey: vi.fn(async () => false),
   provisionAppFresh: vi.fn(async () => FRESH),
   readDiskApp: vi.fn(async () => null),

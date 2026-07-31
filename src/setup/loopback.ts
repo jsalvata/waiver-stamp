@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SetupError } from './errors.ts';
 import type { AppManifest } from './manifest.ts';
-import { donePage, formPage } from './pages.ts';
+import { formPage } from './pages.ts';
 
 export interface AppCredentials {
   appId: number;
@@ -14,8 +14,9 @@ export interface AppCredentials {
 export interface ManifestFlowDeps {
   target: { kind: 'personal' } | { kind: 'org'; org: string };
   manifest: AppManifest;
-  /** `owner/repo`, named on the done page so the user knows which repo to pick when installing. */
-  repoFullName?: string;
+  /** Render the page shown in the callback tab once the App exists — the finished hand-off, keyed
+   *  on the new App's slug. This is the tab GitHub redirected to, so it's where setup ends. */
+  renderDonePage: (slug: string) => string;
   openBrowser: (url: string) => Promise<void>;
   convert: (code: string) => Promise<AppCredentials>;
   /**
@@ -93,12 +94,7 @@ export function runManifestFlow(deps: ManifestFlowDeps): Promise<AppCredentials>
         deps.convert(code).then(
           (creds) => {
             res.writeHead(200, { 'content-type': 'text/html' });
-            res.end(
-              donePage(
-                `https://github.com/apps/${creds.slug}/installations/new`,
-                deps.repoFullName ?? 'this repository',
-              ),
-            );
+            res.end(deps.renderDonePage(creds.slug));
             succeed(creds);
           },
           (err) => {
