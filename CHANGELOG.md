@@ -1,3 +1,22 @@
+# [1.24.0](https://github.com/jsalvata/waiver-stamp/compare/v1.23.0...v1.24.0) (2026-07-31)
+
+
+### Bug Fixes
+
+* close the seed allow, widen the deny guard ([4d90fd6](https://github.com/jsalvata/waiver-stamp/commit/4d90fd61856ca1286e8a391b0da3bf51b259f5b4))
+* drop repeated steps on the complete page ([2da348c](https://github.com/jsalvata/waiver-stamp/commit/2da348c4ba35d7c8bc86783ff8fd64a2b1f47550))
+* drop the non-functional install check ([1b722cc](https://github.com/jsalvata/waiver-stamp/commit/1b722cce98a0546f4de26cc5085eeac0ce51d14b))
+* gate the ruleset on the producer being merged ([0348052](https://github.com/jsalvata/waiver-stamp/commit/0348052f70e5e9ac8fff8ab666a9b28198f5b7dc))
+* guard GEMINI.md and SKILL.md in the seeded deny ([ea8e6a0](https://github.com/jsalvata/waiver-stamp/commit/ea8e6a0dbb9557ea5370ef54077de0041429652f))
+* pin seeded schema and reword save-key ([a974edc](https://github.com/jsalvata/waiver-stamp/commit/a974edcdc76ec1547bac473dd134cf9d6e5626de))
+
+
+### Features
+
+* complete the repo-setup orchestrator ([f60f283](https://github.com/jsalvata/waiver-stamp/commit/f60f283c2c432cab0f5ed9515ee5bd837b5bd92c))
+* put all finish steps on the hand-off page ([3cf50aa](https://github.com/jsalvata/waiver-stamp/commit/3cf50aa77b784ef902e77036e474b7494f73fa8d))
+* serve the hand-off in the loopback tab ([88d16a5](https://github.com/jsalvata/waiver-stamp/commit/88d16a5e95322664cc82f08750f73285261fca58))
+
 # [1.23.0](https://github.com/jsalvata/waiver-stamp/compare/v1.22.1...v1.23.0) (2026-07-22)
 
 
