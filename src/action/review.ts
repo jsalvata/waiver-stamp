@@ -56,27 +56,33 @@ export async function postOutcome(
     }
   }
 
-  // The default GITHUB_TOKEN authenticates as github-actions[bot]; GitHub blocks that identity
-  // from approving PRs, and even a posted bot APPROVE wouldn't count toward required reviews. About
-  // to APPROVE as it ⇒ the App-token wiring (setup step 8) is missing or was dropped in a refactor.
-  // Say so — the raw API error ("GitHub Actions is not permitted to approve pull requests") is opaque.
+  // The default GITHUB_TOKEN authenticates as github-actions[bot], which GitHub blocks from
+  // approving PRs — a posted APPROVE 422s (and wouldn't count as a required review anyway). Rather
+  // than attempt a doomed APPROVE that posts nothing, downgrade it to a COMMENT carrying the same
+  // verdict plus how to make approval automatic. The App-token wiring (environment +
+  // create-github-app-token step + github-token input) is what enables a real APPROVE (§4.9 / setup
+  // step 8); reaching here means it's missing or was dropped.
+  let event = outcome.action;
+  let body = outcome.body;
   if (outcome.action === 'APPROVE' && me === 'github-actions[bot]') {
     core.warning(
-      'waiver-stamp-review: about to APPROVE as the default GitHub Actions identity ' +
-        '(github-actions[bot]). GitHub blocks that identity from approving PRs and would not count ' +
-        'the review anyway. The App-token wiring (environment + create-github-app-token step + ' +
-        'github-token input) is missing or was dropped — see docs/auto-approval-setup.md step 8.',
+      'waiver-stamp-review: cannot APPROVE as the default GitHub Actions identity ' +
+        '(github-actions[bot]) — posting a COMMENT instead. Wire the App token (environment + ' +
+        'create-github-app-token step + github-token input) to make approval automatic; see ' +
+        'docs/auto-approval-setup.md step 8.',
     );
+    event = 'COMMENT';
+    body = `${outcome.body}\n\n> ℹ️ Posted as a comment, not an approval: \`github-actions[bot]\` can't approve PRs, so a human still needs to click **Approve**. [Make this automatic.](https://github.com/jsalvata/waiver-stamp/blob/main/docs/auto-approval-setup.md#adopter-checklist)`;
   }
 
-  if (outcome.action !== 'NONE') {
+  if (event !== 'NONE') {
     await octokit.rest.pulls.createReview({
       owner,
       repo,
       pull_number,
       commit_id: headSha,
-      event: outcome.action,
-      body: outcome.body,
+      event,
+      body,
     });
   }
 }

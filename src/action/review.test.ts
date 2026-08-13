@@ -15,7 +15,9 @@ function octokitSpy(
   existingReviews: Array<{ id: number; user: { login: string }; state: string }> = [],
   identity: { user?: string; appSlug?: string } = { user: 'github-actions[bot]' },
 ) {
-  const createReview = vi.fn(async () => ({}));
+  const createReview = vi.fn(
+    async (_a: { event: string; body: string; commit_id: string }) => ({}),
+  );
   const dismissReview = vi.fn(async () => ({}));
   return {
     createReview,
@@ -50,8 +52,8 @@ function octokitSpy(
 const args = { owner: 'o', repo: 'r', prNumber: 7, headSha: 'a'.repeat(40) };
 
 describe('postOutcome', () => {
-  it('submits an APPROVE review bound to the head SHA', async () => {
-    const s = octokitSpy();
+  it('submits an APPROVE review bound to the head SHA (real identity)', async () => {
+    const s = octokitSpy([], { appSlug: 'my-reviewer' });
     await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
     expect(s.createReview).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'APPROVE', commit_id: args.headSha }),
@@ -107,20 +109,27 @@ describe('postOutcome', () => {
     s.dismissReview.mockRejectedValueOnce(new Error('transient API error'));
     await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
     expect(s.dismissReview).toHaveBeenCalledWith(expect.objectContaining({ review_id: 42 }));
+    // Still submits the new review despite the dismiss failure (event-agnostic — this identity is
+    // the default bot, so the APPROVE is downgraded; the point here is the review is not skipped).
     expect(s.createReview).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'APPROVE', commit_id: args.headSha }),
+      expect.objectContaining({ commit_id: args.headSha }),
     );
   });
 
-  it('warns when approving as the default Actions identity (App-token wiring missing)', async () => {
+  it('downgrades APPROVE to a COMMENT (and warns) as the default Actions identity', async () => {
     const s = octokitSpy([], { user: 'github-actions[bot]' });
     vi.mocked(core.warning).mockClear();
-    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
-    expect(core.warning).toHaveBeenCalledWith(
-      expect.stringContaining('default GitHub Actions identity'),
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'stamped' } });
+    // Never attempts the forbidden APPROVE (GitHub 422s it as this identity, posting nothing).
+    expect(s.createReview).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'COMMENT', commit_id: args.headSha }),
     );
-    // Additive diagnostic — the APPROVE is still attempted (fail-closed behaviour unchanged).
-    expect(s.createReview).toHaveBeenCalledWith(expect.objectContaining({ event: 'APPROVE' }));
+    // The comment keeps the verdict body and explains why it isn't an approval.
+    const body = s.createReview.mock.calls[0]?.[0]?.body ?? '';
+    expect(body).toContain('stamped');
+    expect(body.toLowerCase()).toContain('approve');
+    // Still warns the maintainer that the App-token wiring is missing.
+    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('github-actions[bot]'));
   });
 
   it('does not warn when approving as a real App identity', async () => {
