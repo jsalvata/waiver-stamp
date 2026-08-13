@@ -29,9 +29,10 @@ on:
       ci-checks:
         description: >-
           Optional newline/comma list of required check-run names that must be success on the
-          head SHA. Empty ⇒ autodiscover from the base branch's protection (needs the App's
-          administration:read token; without it, discovery fails and this override is the only
-          path — empty override ⇒ fail-closed).
+          head SHA. Empty ⇒ autodiscover from the base branch's protection — the minted App
+          token carries administration:read for that read; with no App configured (default
+          GITHUB_TOKEN) discovery fails and this override is the only path — empty override
+          ⇒ fail-closed.
         required: false
         type: string
         default: ''
@@ -81,6 +82,10 @@ jobs:
           app-id: ${{ secrets.app_id }}
           private-key: ${{ secrets.app_private_key }}
           permission-pull-requests: write
+          # A scoped mint INTERSECTS with the App's grants — a permission not requested here is
+          # stripped from the token. Without administration:read the classic branch-protection
+          # read 403s and required-check autodiscovery fails (override-less adopters never approve).
+          permission-administration: read
       - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.25.2
         with:
           ci-checks: ${{ inputs.ci-checks }}

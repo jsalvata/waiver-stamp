@@ -157,9 +157,12 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    >    Adopting a second repository doesn't need a second App: an org-owned repo puts the
    >    secrets at org scope (later repos need only the Install click), and for a personal
    >    account setup offers to keep the key in `~/.waiver-stamp/` for reuse.
-   >    The reusable workflow mints the token, scopes it (`permission-pull-requests: write`, so
-   >    zizmor's `github-app` audit stays clean), and wires it into the action's `github-token`
-   >    — you don't add a `create-github-app-token` step yourself.
+   >    The reusable workflow mints the token, scopes it to exactly what the reviewer uses
+   >    (`permission-pull-requests: write` to post the review, `permission-administration: read`
+   >    for required-check autodiscovery — an explicit scope list, so zizmor's `github-app`
+   >    audit stays clean), and wires it into the action's `github-token` — you don't add a
+   >    `create-github-app-token` step yourself. A scoped mint fails outright on a permission
+   >    the App doesn't hold, so a hand-created App must grant both (setup's manifest does).
    > 2. **Grant the App `Contents: write`, *not just* `Pull requests: write`.** GitHub counts an
    >    approving review only from an identity with **repository write access**, which for a
    >    GitHub App *is* `Contents: write`. With `pull_requests`-only the App can *submit* the
@@ -170,9 +173,10 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    >    [available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets),
    >    "approving reviews from people with write permissions".)
    >
-   > The two halves interact: scoping the mint to `permission-pull-requests: write` is correct,
-   > but it does **not** relax the requirement that the App itself hold `Contents: write` —
-   > configure both.
+   > The two halves interact: the mint's tight scope list is correct — it never needs to
+   > include `contents`, because counting is evaluated against the App's granted access, not
+   > the token's scopes — but it does **not** relax the requirement that the App itself hold
+   > `Contents: write`. Configure both.
    >
    > **The security tradeoff:** `Contents: write` is code-push. A leaked App key now carries write
    > to your code, not just the ability to approve. It's bounded — the App is not a ruleset bypass
