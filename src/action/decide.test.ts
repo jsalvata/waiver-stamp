@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideReview } from './decide.ts';
+import { REVIEW_BODY_MARKER, decideReview } from './decide.ts';
 
 const base = {
   guardsPass: true,
@@ -50,5 +50,20 @@ describe('decideReview (§5 matrix)', () => {
   });
   it('ABSTAIN → NONE', () => {
     expect(decideReview({ ...base, verdict: 'ABSTAIN' }).action).toBe('NONE');
+  });
+
+  // review.ts's self-heal dismisses stale reviews by this marker; a body that drops it
+  // would orphan its own CHANGES_REQUESTED forever.
+  it('every posted body starts with the self-heal marker', () => {
+    const posted = [
+      decideReview({ ...base, verdict: 'APPROVE' }),
+      decideReview({ ...base, verdict: 'APPROVE', guardsPass: false }),
+      decideReview({ ...base, verdict: 'COMMENT' }),
+      decideReview({ ...base, verdict: 'COMMENT', guardsPass: false }),
+    ];
+    for (const o of posted) {
+      expect(o.action).not.toBe('NONE');
+      expect(o.body.startsWith(REVIEW_BODY_MARKER)).toBe(true);
+    }
   });
 });

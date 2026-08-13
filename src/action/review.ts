@@ -1,24 +1,7 @@
 import * as core from '@actions/core';
-import type { Outcome } from './decide.ts';
+import { type Outcome, REVIEW_BODY_MARKER } from './decide.ts';
 
 type Octokit = ReturnType<typeof import('@actions/github').getOctokit>;
-
-/**
- * Login this token posts reviews as, or null if it can't be resolved.
- *
- * GET /user answers only for user-to-server tokens (PAT / OAuth). Installation tokens — the
- * default GITHUB_TOKEN and create-github-app-token outputs alike — 403 there, and no endpoint
- * reveals an installation token's own bot login (GET /app needs the JWT auth this action never
- * has). Identity only drives the stale-review self-heal below, so unresolvable → skip it,
- * never throw.
- */
-async function resolveReviewerLogin(octokit: Octokit): Promise<string | null> {
-  try {
-    return (await octokit.rest.users.getAuthenticated()).data.login;
-  } catch {
-    return null;
-  }
-}
 
 /** GitHub's 422 refusing an APPROVE from an identity it forbids (the default GITHUB_TOKEN). */
 function isForbiddenApprove(err: unknown): boolean {
@@ -32,14 +15,22 @@ export async function postOutcome(
   args: { owner: string; repo: string; prNumber: number; headSha: string; outcome: Outcome },
 ): Promise<void> {
   const { owner, repo, prNumber: pull_number, headSha, outcome } = args;
-  const me = await resolveReviewerLogin(octokit);
 
   // Self-heal: clear our own stale CHANGES_REQUESTED unless we're posting a new one.
-  // No resolvable identity ⇒ can't match our own reviews ⇒ skip healing, still post below.
-  if (me && outcome.action !== 'REQUEST_CHANGES') {
-    const reviews = (await octokit.rest.pulls.listReviews({ owner, repo, pull_number })).data;
+  // "Our own" is matched by the body marker every outcome embeds, not by login: on real
+  // Actions runs the token's identity is unresolvable (see REVIEW_BODY_MARKER), and the
+  // marker also matches reviews a previous run posted under a different token identity.
+  // Prefix-anchored so a human review quoting ours (`> waiver-stamp:…`) never matches.
+  if (outcome.action !== 'REQUEST_CHANGES') {
+    // Paginated: reviews list oldest-first, so on a PR with 30+ reviews the stale block is
+    // exactly the review a single-page fetch would miss.
+    const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
+      owner,
+      repo,
+      pull_number,
+    });
     for (const r of reviews) {
-      if (r.user?.login === me && r.state === 'CHANGES_REQUESTED') {
+      if (r.state === 'CHANGES_REQUESTED' && r.body.startsWith(REVIEW_BODY_MARKER)) {
         // Isolate dismiss failures: a transient rejection here must not skip the createReview
         // below and silently drop a legitimate APPROVE/COMMENT.
         try {
