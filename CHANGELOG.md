@@ -1,3 +1,16 @@
+# [1.25.0](https://github.com/jsalvata/waiver-stamp/compare/v1.24.2...v1.25.0) (2026-08-13)
+
+
+### Bug Fixes
+
+* harden honesty-seed and pin-match edges ([4fad422](https://github.com/jsalvata/waiver-stamp/commit/4fad422da5b7fec0eb887f916d4b3bc114385e46))
+* recognise hardened callers as ours ([2525604](https://github.com/jsalvata/waiver-stamp/commit/2525604940d51e29ccc113fea4cf9a77e77f3559))
+
+
+### Features
+
+* seed the honesty check from required checks ([28ee656](https://github.com/jsalvata/waiver-stamp/commit/28ee65673ddbb22c000ff79da5ff50882ac3e714))
+
 ## [1.24.2](https://github.com/jsalvata/waiver-stamp/compare/v1.24.1...v1.24.2) (2026-08-13)
 
 
