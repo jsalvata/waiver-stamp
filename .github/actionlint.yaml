@@ -1,0 +1,9 @@
+# actionlint (≤1.7.12, the latest release) bundles an action-schema snapshot that predates
+# create-github-app-token v3.1.0, which added `client-id` and deprecated `app-id` — so it
+# rejects the very input the runner's deprecation warning tells us to use. Ignore exactly
+# those two stale-schema errors; delete this file once an actionlint release knows `client-id`.
+paths:
+  .github/workflows/*.yml:
+    ignore:
+      - 'input "client-id" is not defined in action "actions/create-github-app-token'
+      - 'missing input "app-id" which is required by action "actions/create-github-app-token'

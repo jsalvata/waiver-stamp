@@ -69,7 +69,7 @@ describe('reviewer workflow parity — dogfood vs reusable', () => {
     // must be requested or required-check autodiscovery 403s on the classic-protection read
     // and the App path can never approve on a setup-provisioned repo (no ci-checks override).
     expect(mintStep(reusable)?.with).toEqual({
-      'app-id': '${{ secrets.app_id }}',
+      'client-id': '${{ secrets.app_id }}',
       'private-key': '${{ secrets.app_private_key }}',
       'permission-pull-requests': 'write',
       'permission-administration': 'read',

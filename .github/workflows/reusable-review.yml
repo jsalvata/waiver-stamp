@@ -79,7 +79,9 @@ jobs:
         if: env.APP_ID != ''
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.app_id }}
+          # The action deprecated `app-id` in favor of `client-id` (v3.1.0); App IDs remain
+          # valid identifier values, so the adopter-facing `app_id` secret is unchanged.
+          client-id: ${{ secrets.app_id }}
           private-key: ${{ secrets.app_private_key }}
           permission-pull-requests: write
           # A scoped mint INTERSECTS with the App's grants — a permission not requested here is
