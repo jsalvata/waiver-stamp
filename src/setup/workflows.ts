@@ -116,12 +116,32 @@ const currentContent = (abs: string): Promise<string | null> =>
     () => null,
   );
 
+/** Rewrite each 40-hex hash pin whose `# vX.Y.Z` marker names *this* version back to the tag pin
+ *  it resolves to. Pins marked with any other version are left alone — that drift is real. */
+const unpinCurrentVersion = (text: string): string =>
+  text.replace(/@[0-9a-f]{40}(\s*#\s*)v(\d+\.\d+\.\d+)\b/g, (match, gap: string, ver: string) =>
+    ver === version ? `@v${ver}${gap}v${ver}` : match,
+  );
+
+/** Whether `current` is our `intended` caller in substance: byte-equal, or equal once comments
+ *  (inert in YAML) are dropped by parsing and same-version hash pins are read as the tag pins
+ *  they mark — the two rewrites a zizmor-style hardening pass applies to an adopted caller. */
+function isOurCaller(current: string, intended: string): boolean {
+  if (current === intended) return true;
+  try {
+    return JSON.stringify(parse(unpinCurrentVersion(current))) === JSON.stringify(parse(intended));
+  } catch {
+    return false; // unparseable ⇒ not provably ours ⇒ keep the skip
+  }
+}
+
 /**
  * Write the two caller workflows (§4.8), filling the reviewer's trigger with `ciWorkflowNames`.
  * Never clobbers a *different* file: an existing path whose content differs is recorded in `skipped`
  * and left byte-for-byte intact — clobbering the adopter's hand-tuned CI is not safe (§2.2). An
- * existing path that already holds our exact caller counts as `written`: it's a no-op we own (a
- * prior partial run wrote it, or the callers are already committed), not a foreign file to warn on.
+ * existing path that already holds our caller — byte-exact, or hardened per `isOurCaller` — counts
+ * as `written`: it's a no-op we own (a prior partial run wrote it, or the callers are already
+ * committed, perhaps hash-pinned by the repo's audit), not a foreign file to warn on.
  */
 export async function writeCallerWorkflows(
   cwd: string,
@@ -137,7 +157,7 @@ export async function writeCallerWorkflows(
   for (const [rel, content] of files) {
     const abs = join(cwd, rel);
     const current = await currentContent(abs);
-    if (current !== null && current !== content) {
+    if (current !== null && !isOurCaller(current, content)) {
       skipped.push(rel);
       continue;
     }

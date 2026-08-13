@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -153,6 +153,81 @@ describe('writeCallerWorkflows', () => {
         ],
         skipped: [],
       });
+    } finally {
+      await cleanup();
+    }
+  });
+
+  // A zizmor-style audit rewrites an adopted caller: tag pin → 40-hex hash pin with a `# vX.Y.Z`
+  // marker, plus ignore/why comments (seen on lockfile-assay). Comments are inert in YAML and a
+  // hash pin marked with this same version is the same ref — still our caller, not a foreign file.
+  it('recognises a caller hardened with comments and a same-version hash pin as ours', async () => {
+    const sha = 'a1b2c3d4'.repeat(5);
+    const { cwd, cleanup } = await scaffoldProject({});
+    try {
+      await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      const harden = async (name: string, extra: (s: string) => string = (s) => s) => {
+        const hardened = extra(
+          (await readFile(wf(cwd, name), 'utf8')).replace(`@v${version}`, `@${sha} # v${version}`),
+        );
+        await writeFile(wf(cwd, name), hardened);
+        return hardened;
+      };
+      const ci = await harden('waiver-stamp-ci.yml');
+      const review = await harden('waiver-stamp-review.yml', (s) =>
+        s.replace(
+          'on:\n  workflow_run:',
+          'on:\n  # The pwn-request defense lives in the pinned reusable workflow.\n  workflow_run: # zizmor: ignore[dangerous-triggers] see note above',
+        ),
+      );
+
+      const again = await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      expect(again).toEqual({
+        written: [
+          '.github/workflows/waiver-stamp-ci.yml',
+          '.github/workflows/waiver-stamp-review.yml',
+        ],
+        skipped: [],
+      });
+      // The hardening is preserved byte-for-byte — never rewritten back to the tag pin.
+      expect(await readFile(wf(cwd, 'waiver-stamp-ci.yml'), 'utf8')).toBe(ci);
+      expect(await readFile(wf(cwd, 'waiver-stamp-review.yml'), 'utf8')).toBe(review);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('keeps the skip for a hash pin marked with a different version — that drift is real', async () => {
+    const sha = 'a1b2c3d4'.repeat(5);
+    const { cwd, cleanup } = await scaffoldProject({});
+    try {
+      await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      const raw = await readFile(wf(cwd, 'waiver-stamp-ci.yml'), 'utf8');
+      await writeFile(
+        wf(cwd, 'waiver-stamp-ci.yml'),
+        raw.replace(`@v${version}`, `@${sha} # v1.23.0`),
+      );
+      const again = await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      expect(again.skipped).toEqual(['.github/workflows/waiver-stamp-ci.yml']);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('keeps the skip when content differs beyond comments and the pin', async () => {
+    const sha = 'a1b2c3d4'.repeat(5);
+    const { cwd, cleanup } = await scaffoldProject({});
+    try {
+      await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      const raw = await readFile(wf(cwd, 'waiver-stamp-ci.yml'), 'utf8');
+      await writeFile(
+        wf(cwd, 'waiver-stamp-ci.yml'),
+        raw
+          .replace(`@v${version}`, `@${sha} # v${version}`)
+          .replace('contents: read', 'contents: write'),
+      );
+      const again = await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      expect(again.skipped).toEqual(['.github/workflows/waiver-stamp-ci.yml']);
     } finally {
       await cleanup();
     }
