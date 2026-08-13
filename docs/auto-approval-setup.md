@@ -137,9 +137,10 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    counts toward "required approving reviews" branch protection.
    > The default `${{ github.token }}` can't even *post* an APPROVE — GitHub blocks the Actions
    > identity from approving PRs — and a bot APPROVE that did post still wouldn't *count*. Both
-   > are deliberate: with the default token the layer leaves the approving click to a human and
-   > publishes the green `waiver-stamp` check as its trust signal, bounding the blast radius of
-   > any residual forgery. Opting in removes that human click. (A machine-user PAT with repo
+   > are deliberate: with the default token the layer leaves the approving click to a human,
+   > posting its verdict as a PR comment and the green `waiver-stamp` check as its trust
+   > signals, bounding the blast radius of any residual forgery. Opting in removes that human
+   > click. (A machine-user PAT with repo
    > write access also counts and sidesteps the App-permission subtlety below, at the cost of
    > running a bot account.)
    >
