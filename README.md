@@ -57,7 +57,7 @@ $ waiver verify
 stamped    514bb5d0 refactor: rename calculateTotal to computeOrderTotal
 ````
 
-On push, CI aggregates every commit in the PR into a single verdict:
+On each push, CI aggregates every commit in the PR into a single verdict:
 
 ```bash
 $ waiver stamp --base main --head my-branch
