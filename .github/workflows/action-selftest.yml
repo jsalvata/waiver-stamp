@@ -30,7 +30,7 @@ jobs:
   action-selftest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the action walks base..head; both SHAs must be in local history
           persist-credentials: false
@@ -44,7 +44,7 @@ jobs:
         uses: ./.github/actions/waiver-stamp
 
       - name: Download the report the action produced
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: waiver-stamp-report
           path: selftest-artifact
