@@ -22,7 +22,13 @@ export async function postOutcome(
   // marker also matches reviews a previous run posted under a different token identity.
   // Prefix-anchored so a human review quoting ours (`> waiver-stamp:…`) never matches.
   if (outcome.action !== 'REQUEST_CHANGES') {
-    const reviews = (await octokit.rest.pulls.listReviews({ owner, repo, pull_number })).data;
+    // Paginated: reviews list oldest-first, so on a PR with 30+ reviews the stale block is
+    // exactly the review a single-page fetch would miss.
+    const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
+      owner,
+      repo,
+      pull_number,
+    });
     for (const r of reviews) {
       if (r.state === 'CHANGES_REQUESTED' && r.body.startsWith(REVIEW_BODY_MARKER)) {
         // Isolate dismiss failures: a transient rejection here must not skip the createReview

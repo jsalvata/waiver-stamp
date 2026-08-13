@@ -46,14 +46,32 @@ function octokitSpy(
   // GITHUB_TOKEN and create-github-app-token outputs alike — 403 there and have no "who am I"
   // endpoint at all, so this models every real Actions run: an identity lookup never answers.
   const getAuthenticated = vi.fn(async () => forbidden());
+  // The real endpoint pages (30 per page, oldest first); only octokit.paginate sees past page 1.
+  const listReviews = async (p: { page?: number; per_page?: number }) => {
+    const per = p.per_page ?? 30;
+    const page = p.page ?? 1;
+    return { data: existingReviews.slice((page - 1) * per, page * per) };
+  };
+  const paginate = async (
+    fn: typeof listReviews,
+    params: Record<string, unknown>,
+  ): Promise<unknown[]> => {
+    const all: unknown[] = [];
+    for (let page = 1; ; page++) {
+      const { data } = await fn({ ...params, page });
+      all.push(...data);
+      if (data.length < 30) return all;
+    }
+  };
   return {
     createReview,
     dismissReview,
     getAuthenticated,
     octokit: {
+      paginate,
       rest: {
         pulls: {
-          listReviews: async () => ({ data: existingReviews }),
+          listReviews,
           createReview,
           dismissReview,
         },
@@ -184,6 +202,21 @@ describe('postOutcome', () => {
     expect(s.createReview).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'REQUEST_CHANGES' }),
     );
+  });
+
+  it('heals a stale review beyond the first page of 30', async () => {
+    // Reviews list oldest-first, so on a long-lived PR the stale block is precisely the
+    // review most likely to sit past page 1.
+    const priorRuns = Array.from({ length: 30 }, (_, i) => ({
+      id: i + 1,
+      user: { login: 'github-actions[bot]' },
+      state: 'COMMENTED',
+      body: 'waiver-stamp: some commits are mechanically stamped; the rest still need a human.',
+    }));
+    const s = octokitSpy([...priorRuns, { ...STALE_OWN_RC, id: 31 }]);
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
+    expect(s.dismissReview).toHaveBeenCalledTimes(1);
+    expect(s.dismissReview).toHaveBeenCalledWith(expect.objectContaining({ review_id: 31 }));
   });
 
   it('a dismiss failure is isolated: still submits the new review', async () => {
