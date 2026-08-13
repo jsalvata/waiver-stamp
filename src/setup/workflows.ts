@@ -62,6 +62,27 @@ export async function detectLockfileHonestyCheck(dir: string): Promise<string | 
   return null;
 }
 
+/**
+ * Pick the honesty-check name to record in `.waiver-stamp.json` (§4.11). The reviewer only
+ * silences the "assumes the lockfile is honest" caveat when the named check is in the base
+ * branch's *required* set — so a required context wins over what the workflow scan sees: keep
+ * `detected` when it is itself required, else prefer a required context naming lockfile-assay
+ * (the gate can report as an App check the YAML scan can't see). A detected job absent from a
+ * readable required set is still seeded — requiredness can arrive later — but `notRequired`
+ * flags it for a hand-off caveat. With `required` null (unreadable), nothing is asserted.
+ */
+export function resolveLockfileHonestyCheck(
+  detected: string | null,
+  required: string[] | null,
+): { check: string | null; notRequired: boolean } {
+  if (required === null) return { check: detected, notRequired: false };
+  if (detected !== null && required.includes(detected))
+    return { check: detected, notRequired: false };
+  const fromRequired = required.find((c) => c.includes('lockfile-assay'));
+  if (fromRequired !== undefined) return { check: fromRequired, notRequired: false };
+  return { check: detected, notRequired: detected !== null };
+}
+
 function ciCaller(): string {
   return `# waiver-stamp producer — runs waiver-stamp as unprivileged pull_request CI, publishing the
 # \`waiver-stamp\` check the reviewer consumes. The hardened shape lives in the pinned reusable

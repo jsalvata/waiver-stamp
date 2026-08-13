@@ -19,6 +19,7 @@ const fakeGh = (over: Partial<GhClient> = {}): GhClient => ({
   listRulesets: vi.fn(async () => []),
   createRuleset: vi.fn(async () => {}),
   fileExistsOnRef: vi.fn(async () => false),
+  requiredCheckContexts: vi.fn(async () => null),
   ...over,
 });
 

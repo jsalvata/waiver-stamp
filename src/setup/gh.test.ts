@@ -109,6 +109,52 @@ describe('makeGh', () => {
     expect(await makeGh(run).accountType('ghost')).toBeNull();
   });
 
+  it('requiredCheckContexts unions the rulesets and classic reads, rulesets first, deduped', async () => {
+    const run = mockRun(async (_cmd, args) =>
+      args.includes('/repos/o/r/rules/branches/main')
+        ? ok('assay\nlockfile-assay\n')
+        : ok('CI\nassay\n'),
+    );
+    const gh = makeGh(run);
+    expect(await gh.requiredCheckContexts('o', 'r', 'main')).toEqual([
+      'assay',
+      'lockfile-assay',
+      'CI',
+    ]);
+    expect(run).toHaveBeenCalledWith('gh', [
+      'api',
+      '/repos/o/r/rules/branches/main',
+      '--paginate',
+      '--jq',
+      '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context',
+    ]);
+    expect(run).toHaveBeenCalledWith('gh', [
+      'api',
+      '/repos/o/r/branches/main/protection/required_status_checks',
+      '--jq',
+      '.contexts[]',
+    ]);
+  });
+
+  it('requiredCheckContexts reads a 404 as that mechanism being unconfigured, not a failure', async () => {
+    const run = mockRun(async (_cmd, args) =>
+      args.includes('/repos/o/r/rules/branches/main')
+        ? ok('lockfile-assay\n')
+        : { stdout: '', stderr: 'gh: Not Found (HTTP 404)', code: 1 },
+    );
+    expect(await makeGh(run).requiredCheckContexts('o', 'r', 'main')).toEqual(['lockfile-assay']);
+  });
+
+  // A partial read must not pass for the required set — a 403/500 makes the whole set unknown.
+  it('requiredCheckContexts returns null when either read fails for any other reason', async () => {
+    const run = mockRun(async (_cmd, args) =>
+      args.includes('/repos/o/r/rules/branches/main')
+        ? { stdout: '', stderr: 'gh: HTTP 403 Forbidden', code: 1 }
+        : ok('CI\n'),
+    );
+    expect(await makeGh(run).requiredCheckContexts('o', 'r', 'main')).toBeNull();
+  });
+
   it('orgSecrets lists the org Actions secrets with their visibility', async () => {
     const run = mockRun(async () =>
       ok('WAIVER_STAMP_APP_ID\tselected\nWAIVER_STAMP_APP_PRIVATE_KEY\tall\n'),

@@ -22,6 +22,7 @@ import {
 import {
   detectLockfileHonestyCheck,
   discoverCiWorkflowNames,
+  resolveLockfileHonestyCheck,
   writeCallerWorkflows,
 } from '../setup/workflows.ts';
 
@@ -115,9 +116,16 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   // may fail is safe — a failed run just re-runs, and they're skipped.
   const wfDir = join(cwd, '.github/workflows');
   const ciNames = await deps.discoverCiWorkflowNames(wfDir);
-  const honesty = await deps.detectLockfileHonestyCheck(wfDir);
+  // The name to seed is resolved against the default branch's required contexts — the set the
+  // reviewer's autodiscovery will match against (spec §2.4) — not just the workflow scan.
+  const honesty = resolveLockfileHonestyCheck(
+    await deps.detectLockfileHonestyCheck(wfDir),
+    await deps.gh.requiredCheckContexts(ctx.owner, ctx.repo, ctx.defaultBranch),
+  );
   const drop = await deps.writeCallerWorkflows(cwd, { ciWorkflowNames: ciNames });
-  const seed = await deps.seedConfigIfAbsent(cwd, { lockfileHonestyCheck: honesty ?? undefined });
+  const seed = await deps.seedConfigIfAbsent(cwd, {
+    lockfileHonestyCheck: honesty.check ?? undefined,
+  });
 
   // Advisories ride the hand-off page (persistent), not the scrolling terminal. Each links its own
   // doc section (version-pinned): the callers and commitlint live in the adopter checklist; the
@@ -131,6 +139,11 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   for (const p of drop.skipped)
     caveats.push({
       text: `Existing ${p} left untouched — compare it against the caller the setup guide describes, and reconcile by hand.`,
+      doc: checklist,
+    });
+  if (honesty.check && honesty.notRequired)
+    caveats.push({
+      text: `The lockfile-honesty check "${honesty.check}" is not required on ${ctx.defaultBranch} — until it is (or lockfileHonestyCheck names one that is), APPROVEs on bump-allowing waivers keep the "assumes the lockfile is honest" caveat.`,
       doc: checklist,
     });
   if ((await deps.detectCommitlintBodyLimit(cwd)).blocks)
@@ -187,7 +200,7 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
       slug,
       defaultBranch: ctx.defaultBranch,
       configExisted: seed.existing,
-      suggestedHonestyCheck: seed.existing ? honesty : null,
+      suggestedHonestyCheck: seed.existing ? honesty.check : null,
       producerOnDefault,
       writtenFiles,
       caveats,

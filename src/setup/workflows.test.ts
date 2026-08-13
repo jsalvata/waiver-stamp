@@ -8,6 +8,7 @@ import { scaffoldProject } from '../test-helpers.ts';
 import {
   detectLockfileHonestyCheck,
   discoverCiWorkflowNames,
+  resolveLockfileHonestyCheck,
   writeCallerWorkflows,
 } from './workflows.ts';
 
@@ -81,6 +82,52 @@ describe('detectLockfileHonestyCheck', () => {
     } finally {
       await cleanup();
     }
+  });
+});
+
+describe('resolveLockfileHonestyCheck', () => {
+  it('keeps a detected job that is itself a required check', () => {
+    expect(resolveLockfileHonestyCheck('lockfile-honesty', ['CI', 'lockfile-honesty'])).toEqual({
+      check: 'lockfile-honesty',
+      notRequired: false,
+    });
+  });
+
+  // The gate can report as a check the workflow scan can't see — e.g. lockfile-assay's own App
+  // posts a `lockfile-assay` check run while the YAML job is just `assay`. The required set is
+  // what the reviewer will match against, so a required context naming the tool wins.
+  it('prefers a required context naming lockfile-assay over a detected job that is not required', () => {
+    expect(resolveLockfileHonestyCheck('assay', ['test', 'lockfile-assay'])).toEqual({
+      check: 'lockfile-assay',
+      notRequired: false,
+    });
+  });
+
+  it('finds a required lockfile-assay context even with no detectable workflow job', () => {
+    expect(resolveLockfileHonestyCheck(null, ['CI', 'lockfile-assay (pnpm 10)'])).toEqual({
+      check: 'lockfile-assay (pnpm 10)',
+      notRequired: false,
+    });
+  });
+
+  it('keeps the detected job but flags it when the readable required set lacks it', () => {
+    expect(resolveLockfileHonestyCheck('assay', ['test'])).toEqual({
+      check: 'assay',
+      notRequired: true,
+    });
+    expect(resolveLockfileHonestyCheck('assay', [])).toEqual({ check: 'assay', notRequired: true });
+  });
+
+  it('asserts nothing about requiredness when the required set is unreadable', () => {
+    expect(resolveLockfileHonestyCheck('assay', null)).toEqual({
+      check: 'assay',
+      notRequired: false,
+    });
+  });
+
+  it('resolves to nothing when neither source names a check', () => {
+    expect(resolveLockfileHonestyCheck(null, ['CI'])).toEqual({ check: null, notRequired: false });
+    expect(resolveLockfileHonestyCheck(null, null)).toEqual({ check: null, notRequired: false });
   });
 });
 

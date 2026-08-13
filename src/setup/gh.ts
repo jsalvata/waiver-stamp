@@ -72,6 +72,12 @@ export interface GhClient {
    *  the default branch (the `waiver-stamp` check only reports on PRs, never on default-branch
    *  commits, so its presence there is the real "safe to require it" signal). */
   fileExistsOnRef(owner: string, repo: string, path: string, ref: string): Promise<boolean>;
+  /** The branch's required status-check contexts, rulesets and classic protection unioned — the
+   *  same two reads the reviewer's autodiscovery makes (spec §2.4), so a name checked against this
+   *  set at setup time is one the reviewer will later recognise. A 404 is a mechanism that isn't
+   *  configured (contributes nothing); any other failure makes the whole set `null` — unknown, not
+   *  empty, so the caller asserts nothing about requiredness on a partial read. */
+  requiredCheckContexts(owner: string, repo: string, branch: string): Promise<string[] | null>;
 }
 
 const lines = (s: string): string[] =>
@@ -231,6 +237,25 @@ export function makeGh(run: Run): GhClient {
           `Add a branch ruleset on ${owner}/${repo} requiring the "waiver-stamp" check by hand, then re-run.`,
           r.stderr.trim() || r.stdout.trim() || undefined,
         );
+    },
+    async requiredCheckContexts(owner, repo, branch) {
+      const notFound = (r: RunResult) => r.code !== 0 && /HTTP 404/.test(r.stderr);
+      const rules = await run('gh', [
+        'api',
+        `/repos/${owner}/${repo}/rules/branches/${branch}`,
+        '--paginate',
+        '--jq',
+        '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context',
+      ]);
+      const classic = await run('gh', [
+        'api',
+        `/repos/${owner}/${repo}/branches/${branch}/protection/required_status_checks`,
+        '--jq',
+        '.contexts[]',
+      ]);
+      for (const r of [rules, classic]) if (r.code !== 0 && !notFound(r)) return null;
+      const contexts = [rules, classic].flatMap((r) => (r.code === 0 ? lines(r.stdout) : []));
+      return [...new Set(contexts)];
     },
     async fileExistsOnRef(owner, repo, path, ref) {
       const r = await run('gh', [

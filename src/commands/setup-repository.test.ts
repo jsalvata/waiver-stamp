@@ -19,6 +19,7 @@ const fakeGh = (): GhClient => ({
   listRulesets: vi.fn(async () => []),
   createRuleset: vi.fn(async () => {}),
   fileExistsOnRef: vi.fn(async () => false),
+  requiredCheckContexts: vi.fn(async () => null),
 });
 
 function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
@@ -102,6 +103,26 @@ describe('setupRepository', () => {
       });
     });
 
+    // §4.11: the seeded name must be one the reviewer's autodiscovery can confirm required — a
+    // required context naming lockfile-assay (e.g. an App-posted check) beats the YAML job name.
+    it('seeds a required lockfile-assay context over a detected job that is not required', async () => {
+      const seedConfigIfAbsent = vi.fn(async () => ({ seeded: true, existing: false }));
+      const gh: GhClient = {
+        ...fakeGh(),
+        requiredCheckContexts: vi.fn(async () => ['test', 'lockfile-assay']),
+      };
+      const d = makeDeps({
+        gh,
+        detectLockfileHonestyCheck: vi.fn(async () => 'assay'),
+        seedConfigIfAbsent,
+      });
+      await setupRepository({ cwd: '/repo' }, d);
+      expect(gh.requiredCheckContexts).toHaveBeenCalledWith('jsalvata', 'demo', 'main');
+      expect(seedConfigIfAbsent).toHaveBeenCalledWith('/repo', {
+        lockfileHonestyCheck: 'lockfile-assay',
+      });
+    });
+
     // Advisories are page-only (§6): they go into the hand-off's caveats, not the terminal.
     type Caveat = { text: string; doc?: { href: string; label: string } };
     const rawCaveatsOf = (handoffPage: ReturnType<typeof vi.fn>): Caveat[] =>
@@ -122,6 +143,34 @@ describe('setupRepository', () => {
         }),
       );
       expect(caveatsOf(handoffPage)).toContainEqual(expect.stringContaining('waiver-stamp-ci.yml'));
+    });
+
+    it('caveats a seeded honesty check that is not a required check', async () => {
+      const handoffPage = vi.fn(() => '<handoff>');
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({
+          handoffPage,
+          gh: { ...fakeGh(), requiredCheckContexts: vi.fn(async () => ['test']) },
+          detectLockfileHonestyCheck: vi.fn(async () => 'assay'),
+        }),
+      );
+      expect(caveatsOf(handoffPage)).toContainEqual(
+        expect.stringMatching(/"assay" is not required on main/),
+      );
+    });
+
+    it('raises no honesty caveat when the resolved check is required', async () => {
+      const handoffPage = vi.fn(() => '<handoff>');
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({
+          handoffPage,
+          gh: { ...fakeGh(), requiredCheckContexts: vi.fn(async () => ['lockfile-assay']) },
+          detectLockfileHonestyCheck: vi.fn(async () => 'assay'),
+        }),
+      );
+      expect(caveatsOf(handoffPage)).not.toContainEqual(expect.stringMatching(/honest/));
     });
 
     it('carries the commitlint caveat into the hand-off when long bodies would be rejected', async () => {
@@ -246,6 +295,22 @@ describe('setupRepository', () => {
       );
       expect(handoffPage).toHaveBeenCalledWith(
         expect.objectContaining({ configExisted: true, suggestedHonestyCheck: 'lockfile-honesty' }),
+      );
+    });
+
+    it('suggests the resolved (required) name, not the raw detection', async () => {
+      const handoffPage = vi.fn(() => '<handoff>');
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({
+          handoffPage,
+          gh: { ...fakeGh(), requiredCheckContexts: vi.fn(async () => ['lockfile-assay']) },
+          detectLockfileHonestyCheck: vi.fn(async () => 'assay'),
+          seedConfigIfAbsent: vi.fn(async () => ({ seeded: false, existing: true })),
+        }),
+      );
+      expect(handoffPage).toHaveBeenCalledWith(
+        expect.objectContaining({ suggestedHonestyCheck: 'lockfile-assay' }),
       );
     });
   });
