@@ -1,3 +1,11 @@
+## [1.25.2](https://github.com/jsalvata/waiver-stamp/compare/v1.25.1...v1.25.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* heal stale reviews under installation tokens ([cb22c07](https://github.com/jsalvata/waiver-stamp/commit/cb22c07a94ec4ae559f88b51317e6d15c8619ac4))
+* paginate the stale-review listing ([ea1f693](https://github.com/jsalvata/waiver-stamp/commit/ea1f69392267131c3a54cb5ec59c3db2419eb23f))
+
 ## [1.25.1](https://github.com/jsalvata/waiver-stamp/compare/v1.25.0...v1.25.1) (2026-08-13)
 
 
