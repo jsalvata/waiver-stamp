@@ -1639,6 +1639,8 @@ Branch `jordi/setup-automation/setup-automation-6` off PR 5. PR body: PR 6 of th
 
 ## PR N+1 — Cleanup refactor
 
+**Status: done.** The code cleanup (the `lockfileHonestyChecks` factory param + ncc-input removal, and its tests) landed early — folded into PR 1 — so `main` carries no `lockfile-honesty-checks` residue in code, the action input, `examples/`, or the adopter doc. The only residue was one stale present-tense line in the §2.5 design-doc narration (fixed); the remaining honesty/`ci-checks` references in the design and plan docs are historical spike/decision/PR-plan narration, kept as-is. The original plan (below) is left for the record.
+
 **Intent:** remove the residue the feature left behind. Pure removal — suite green before and after, no behavior change.
 
 **Files:**

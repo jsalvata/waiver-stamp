@@ -176,9 +176,9 @@ so a repo with different protection on different base branches gets the right se
 
 ### 2.5 Lockfile-honesty autodiscovery (assume `lockfile-assay`)
 
-Today `lockfile-honesty-checks` is a separate manual input that (a) joins the backstop set
-and (b) flips `lockfileHonestyConfigured`, which silences the "assumes the lockfile is
-honest" caveat on APPROVE (`src/action/decide.ts:42`, `main.ts:93`). The (a) part is
+Before autodiscovery, `lockfile-honesty-checks` was a separate manual input that (a) joined
+the backstop set and (b) flipped `lockfileHonestyConfigured`, which silences the "assumes
+the lockfile is honest" caveat on APPROVE. The (a) part is
 subsumed by §2.4 — a required lockfile-honesty check is already in the discovered set and
 already must be green; nothing extra to do. Only (b) needs a signal: *which* discovered
 check is the honesty gate.
