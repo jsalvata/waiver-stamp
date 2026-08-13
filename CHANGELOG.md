@@ -1,3 +1,10 @@
+## [1.24.2](https://github.com/jsalvata/waiver-stamp/compare/v1.24.1...v1.24.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* comment instead of a forbidden bot APPROVE ([501b893](https://github.com/jsalvata/waiver-stamp/commit/501b89312a52ecc517eedcfbeaf67817b0504064))
+
 ## [1.24.1](https://github.com/jsalvata/waiver-stamp/compare/v1.24.0...v1.24.1) (2026-08-13)
 
 
