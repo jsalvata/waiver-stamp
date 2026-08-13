@@ -1,3 +1,10 @@
+## [1.24.1](https://github.com/jsalvata/waiver-stamp/compare/v1.24.0...v1.24.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* ship yaml/fflate as runtime dependencies ([773bcd5](https://github.com/jsalvata/waiver-stamp/commit/773bcd5a70b1c61f431aae35d9644d22d5395ef7))
+
 # [1.24.0](https://github.com/jsalvata/waiver-stamp/compare/v1.23.0...v1.24.0) (2026-07-31)
 
 
