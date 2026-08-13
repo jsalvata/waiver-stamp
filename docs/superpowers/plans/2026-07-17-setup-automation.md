@@ -48,6 +48,21 @@ Candidate prep for next time: if a future op needs more repo-config reads, the `
 
 ---
 
+## Outcome — what shipped vs planned
+
+The stack shipped essentially as planned; the divergences worth recording for anyone reusing this plan:
+
+- **PRs 0–6** landed as described — the two reviewer refactors (autodiscovery seam + implementation), the reusable workflows, and the four orchestrator increments. PR 6 merged as #58 (released 1.24.0).
+- **N+1** turned out nearly empty: its code cleanup (the `lockfileHonestyChecks` removal) had already been folded into PR 1, so N+1 (#59) was a doc-only tidy. See its **Status** note.
+- **N+2** shipped as #62 (released 1.24.2), with one correction to the bug as originally written below: the forbidden bot APPROVE does **not** fail the job red — `main.ts`'s outer catch fail-closes the 422 to a `core.warning` (green). The real harm is that **no review is posted at all** (the human sees nothing though every commit was stamped) plus a misleading `errored, no review posted` warning. Fix: downgrade APPROVE→**COMMENT**. See its **Status** note.
+- **Two unplanned fixes surfaced *after* the feature merged**, both caught by the CI this plan set up rather than by the local E2E:
+  - **#60 (released 1.24.1):** `yaml` and `fflate` were imported by shipped `dist/` code but declared as `devDependencies`, so `npm install waiver-stamp` crashed on load (`ERR_MODULE_NOT_FOUND`). The source E2E (`tsx` with devDeps on disk) missed it; the **action self-test**, which installs the published tarball, caught it. Lesson for reuse: any bare import in shipped `src/` (anything under `dist/`) must be a runtime `dependency`, and standalone-install correctness is only proven by installing the tarball, not by `tsx`.
+  - **#61:** cleared the node20-deprecation and esbuild `ES2024` build warnings (bumped action pins to their node24 majors, our `waiver-stamp-review` action to `using: node24`, and `tsconfig` `target` → ES2023). Cosmetic; `ci:`-typed, so no release.
+
+The live E2E of PR 6 was run collaboratively against scratch repos (fresh personal / phase-boundary → ruleset → steady-state, `--no-app`, reuse-from-disk, and org), and drove several PR-6 hand-off refinements before merge.
+
+---
+
 ## PR 0 — Prep refactor: extract `resolveRequiredChecks`
 
 **Intent:** move the two inline computations at `main.ts:62` (`required = [...ciChecks, ...lockfileHonestyChecks]`) and `main.ts:93` (`lockfileHonestyConfigured: …length > 0`) behind one injected collaborator, so PR 1 can replace *how* the set is resolved without touching `run()`'s orchestration or the guards. **Pure refactor — no behavior change, no new test behavior.** The new collaborator's PR-0 body returns exactly what the inline code returned.
@@ -1669,6 +1684,8 @@ Run: `pnpm test && pnpm lint`. Branch `jordi/setup-automation/cleanup-setup-auto
 ---
 
 ## PR N+2 — Reviewer: no forbidden APPROVE under the default token
+
+**Status: done** (PR #62, released 1.24.2). One correction to the bug as written below: the forbidden APPROVE does **not** fail the job red — `main.ts`'s outer catch fail-closes the 422 to a `core.warning`, so the run stays green. The real harm is that **no review is posted at all** (the human sees nothing though every commit was stamped) plus a misleading `errored, no review posted` warning. The fix downgrades APPROVE→**COMMENT** (chosen over NONE) for `github-actions[bot]`: it posts the verdict body plus a note that a human still needs to click Approve and how to make approval automatic. Real App/user identities still post a genuine APPROVE. TDD'd; action bundle rebuilt. The original plan (below) is left for the record.
 
 **Intent:** the no-App reviewer must honor its documented contract — publish the verdict and leave the approving click to a human — instead of attempting an APPROVE the Actions identity can't post. Surfaced reviewing PR 6's `--no-app` path; independent of the setup layer, so it branches off `main`.
 
