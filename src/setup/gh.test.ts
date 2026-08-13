@@ -124,7 +124,6 @@ describe('makeGh', () => {
     expect(run).toHaveBeenCalledWith('gh', [
       'api',
       '/repos/o/r/rules/branches/main',
-      '--paginate',
       '--jq',
       '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context',
     ]);
@@ -134,6 +133,15 @@ describe('makeGh', () => {
       '--jq',
       '.contexts[]',
     ]);
+  });
+
+  // A `/` in the branch name must not splinter the path into a different (404ing) endpoint.
+  it('requiredCheckContexts encodes the branch path segment', async () => {
+    const run = mockRun(async () => ok(''));
+    await makeGh(run).requiredCheckContexts('o', 'r', 'release/main');
+    const paths = run.mock.calls.map(([, args]) => args[1]);
+    expect(paths).toContain('/repos/o/r/rules/branches/release%2Fmain');
+    expect(paths).toContain('/repos/o/r/branches/release%2Fmain/protection/required_status_checks');
   });
 
   it('requiredCheckContexts reads a 404 as that mechanism being unconfigured, not a failure', async () => {

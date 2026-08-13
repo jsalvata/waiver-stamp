@@ -66,21 +66,20 @@ export async function detectLockfileHonestyCheck(dir: string): Promise<string | 
  * Pick the honesty-check name to record in `.waiver-stamp.json` (§4.11). The reviewer only
  * silences the "assumes the lockfile is honest" caveat when the named check is in the base
  * branch's *required* set — so a required context wins over what the workflow scan sees: keep
- * `detected` when it is itself required, else prefer a required context naming lockfile-assay
- * (the gate can report as an App check the YAML scan can't see). A detected job absent from a
- * readable required set is still seeded — requiredness can arrive later — but `notRequired`
- * flags it for a hand-off caveat. With `required` null (unreadable), nothing is asserted.
+ * `detected` when it is itself required, else prefer a required context that IS the
+ * lockfile-assay gate (its exact name or a matrix leg — a looser match could bless a cousin
+ * check like `lockfile-assay-selftest` and wrongly silence the caveat). Falls back to
+ * `detected`; whether the returned name is actually required is the caller's to judge (it also
+ * knows an existing config's own choice, which outranks this resolution).
  */
 export function resolveLockfileHonestyCheck(
   detected: string | null,
   required: string[] | null,
-): { check: string | null; notRequired: boolean } {
-  if (required === null) return { check: detected, notRequired: false };
-  if (detected !== null && required.includes(detected))
-    return { check: detected, notRequired: false };
-  const fromRequired = required.find((c) => c.includes('lockfile-assay'));
-  if (fromRequired !== undefined) return { check: fromRequired, notRequired: false };
-  return { check: detected, notRequired: detected !== null };
+): string | null {
+  if (required === null) return detected;
+  if (detected !== null && required.includes(detected)) return detected;
+  const isGate = (c: string) => c === 'lockfile-assay' || c.startsWith('lockfile-assay ');
+  return required.find(isGate) ?? detected;
 }
 
 function ciCaller(): string {
@@ -137,16 +136,18 @@ const currentContent = (abs: string): Promise<string | null> =>
     () => null,
   );
 
-/** Rewrite each 40-hex hash pin whose `# vX.Y.Z` marker names *this* version back to the tag pin
- *  it resolves to. Pins marked with any other version are left alone — that drift is real. */
+/** Rewrite each 40-hex hash pin whose `# v<version>` marker names *this* version back to the tag
+ *  pin it resolves to. Pins marked with any other version are left alone — that drift is real. */
 const unpinCurrentVersion = (text: string): string =>
-  text.replace(/@[0-9a-f]{40}(\s*#\s*)v(\d+\.\d+\.\d+)\b/g, (match, gap: string, ver: string) =>
+  text.replace(/@[0-9a-f]{40}([ \t]*#[ \t]*)v(\S+)/g, (match, gap: string, ver: string) =>
     ver === version ? `@v${ver}${gap}v${ver}` : match,
   );
 
 /** Whether `current` is our `intended` caller in substance: byte-equal, or equal once comments
  *  (inert in YAML) are dropped by parsing and same-version hash pins are read as the tag pins
- *  they mark — the two rewrites a zizmor-style hardening pass applies to an adopted caller. */
+ *  they mark — the two rewrites a zizmor-style hardening pass applies to an adopted caller.
+ *  The marker is taken at its word (the SHA is not resolved against the tag): a lying marker
+ *  only silences a hand-off nudge about a file the adopter already owns and we never execute. */
 function isOurCaller(current: string, intended: string): boolean {
   if (current === intended) return true;
   try {

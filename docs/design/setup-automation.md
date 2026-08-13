@@ -518,7 +518,9 @@ hand-off page** (§4.10), not something setup configures or interactively offers
   reviewer's autodiscovery makes): a scanned name that is itself required is kept; else a
   required context naming lockfile-assay wins (the gate can report as an App-posted check the
   YAML scan can't see); a scanned name absent from a readable required set is still used but
-  caveated on the hand-off page. Feed the result into `.waiver-stamp.json`
+  caveated on the hand-off page, and an unreadable required set is caveated as unconfirmed.
+  An existing config's own `lockfileHonestyCheck` outranks the resolution — the caveat then
+  judges that name. Feed the result into `.waiver-stamp.json`
   `lockfileHonestyCheck` **only via the seeding rule in §4.11** (include it when seeding a new
   file; recommend it on the hand-off page when the file already exists — never silently edit an
   existing policy file). If nothing resolves, leave unset (caveat stays — fail-safe).

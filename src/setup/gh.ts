@@ -240,18 +240,25 @@ export function makeGh(run: Run): GhClient {
     },
     async requiredCheckContexts(owner, repo, branch) {
       const notFound = (r: RunResult) => r.code !== 0 && /HTTP 404/.test(r.stderr);
-      const rules = await run('gh', [
-        'api',
-        `/repos/${owner}/${repo}/rules/branches/${branch}`,
-        '--paginate',
-        '--jq',
-        '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context',
-      ]);
-      const classic = await run('gh', [
-        'api',
-        `/repos/${owner}/${repo}/branches/${branch}/protection/required_status_checks`,
-        '--jq',
-        '.contexts[]',
+      // A `/` in the branch name would splinter the path into a different endpoint (a 404 that
+      // reads as "mechanism unconfigured"), so the segment is encoded — as octokit's templating
+      // does on the reviewer side. No `--paginate` on the rules read: the reviewer's readRules
+      // makes a single unpaginated request, and parity with what it will actually see is the
+      // point of this set — beating it on a >30-rule branch would just make the two disagree.
+      const ref = encodeURIComponent(branch);
+      const [rules, classic] = await Promise.all([
+        run('gh', [
+          'api',
+          `/repos/${owner}/${repo}/rules/branches/${ref}`,
+          '--jq',
+          '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context',
+        ]),
+        run('gh', [
+          'api',
+          `/repos/${owner}/${repo}/branches/${ref}/protection/required_status_checks`,
+          '--jq',
+          '.contexts[]',
+        ]),
       ]);
       for (const r of [rules, classic]) if (r.code !== 0 && !notFound(r)) return null;
       const contexts = [rules, classic].flatMap((r) => (r.code === 0 ? lines(r.stdout) : []));

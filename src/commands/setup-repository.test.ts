@@ -53,6 +53,7 @@ function makeDeps(over: Partial<SetupDeps> = {}): SetupDeps {
       skipped: [],
     })),
     seedConfigIfAbsent: vi.fn(async () => ({ seeded: true, existing: false })),
+    readConfig: vi.fn(async () => null),
     detectCommitlintBodyLimit: vi.fn(async () => ({ blocks: false })),
     detectLintFixLinter: vi.fn(async () => ({
       status: 'resolved' as const,
@@ -157,6 +158,61 @@ describe('setupRepository', () => {
       );
       expect(caveatsOf(handoffPage)).toContainEqual(
         expect.stringMatching(/"assay" is not required on main/),
+      );
+    });
+
+    // The most common permission failure (a token that can't read branch protection) must not
+    // pass for "confirmed required" — the reviewer's own discovery will likely fail the same way.
+    it('caveats an honesty check whose requiredness could not be read', async () => {
+      const handoffPage = vi.fn(() => '<handoff>');
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({ handoffPage, detectLockfileHonestyCheck: vi.fn(async () => 'assay') }),
+      ); // requiredCheckContexts defaults to null (unreadable)
+      expect(caveatsOf(handoffPage)).toContainEqual(
+        expect.stringMatching(/"assay" being a required check is unconfirmed/),
+      );
+    });
+
+    // An existing config's own choice outranks the resolution: no suggestion to add a field that
+    // is already there, and the requiredness caveat judges the configured name, not our scan.
+    it('defers to an existing config lockfileHonestyCheck for suggestion and caveat', async () => {
+      const handoffPage = vi.fn(() => '<handoff>');
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({
+          handoffPage,
+          gh: { ...fakeGh(), requiredCheckContexts: vi.fn(async () => ['lockfile-assay']) },
+          detectLockfileHonestyCheck: vi.fn(async () => 'assay'),
+          seedConfigIfAbsent: vi.fn(async () => ({ seeded: false, existing: true })),
+          readConfig: vi.fn(async () => ({
+            changeDocs: { allow: [], deny: [] },
+            allowBumping: [],
+            lockfileHonestyCheck: 'lockfile-assay',
+          })),
+        }),
+      );
+      expect(handoffPage).toHaveBeenCalledWith(
+        expect.objectContaining({ suggestedHonestyCheck: null }),
+      );
+      expect(caveatsOf(handoffPage)).not.toContainEqual(expect.stringMatching(/honest/));
+
+      const stale = vi.fn(() => '<handoff>');
+      await setupRepository(
+        { cwd: '/repo' },
+        makeDeps({
+          handoffPage: stale,
+          gh: { ...fakeGh(), requiredCheckContexts: vi.fn(async () => ['test']) },
+          seedConfigIfAbsent: vi.fn(async () => ({ seeded: false, existing: true })),
+          readConfig: vi.fn(async () => ({
+            changeDocs: { allow: [], deny: [] },
+            allowBumping: [],
+            lockfileHonestyCheck: 'legacy',
+          })),
+        }),
+      );
+      expect(caveatsOf(stale)).toContainEqual(
+        expect.stringMatching(/"legacy" is not required on main/),
       );
     });
 

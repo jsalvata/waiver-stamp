@@ -185,7 +185,8 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    base branch's **required** status-check contexts — a required job's display name, or
    an App-posted check's name — since that's the set autodiscovery confirms it against.
    Setup seeds it with a required context when it can find one, and caveats on the
-   hand-off page when the best candidate it found is not required.
+   hand-off page when the best candidate it found is not required — or when branch
+   protection couldn't be read to confirm it.
    > The APPROVE body carries the "assumes the lockfile is honest" warning only when
    > `allowBumping` is set and no required check matches `lockfileHonestyCheck`. With
    > `allowBumping` empty, no bump can ride in, so the caveat never appears. APPROVEs

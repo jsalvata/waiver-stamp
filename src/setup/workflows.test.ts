@@ -87,47 +87,40 @@ describe('detectLockfileHonestyCheck', () => {
 
 describe('resolveLockfileHonestyCheck', () => {
   it('keeps a detected job that is itself a required check', () => {
-    expect(resolveLockfileHonestyCheck('lockfile-honesty', ['CI', 'lockfile-honesty'])).toEqual({
-      check: 'lockfile-honesty',
-      notRequired: false,
-    });
+    expect(resolveLockfileHonestyCheck('lockfile-honesty', ['CI', 'lockfile-honesty'])).toBe(
+      'lockfile-honesty',
+    );
   });
 
   // The gate can report as a check the workflow scan can't see — e.g. lockfile-assay's own App
   // posts a `lockfile-assay` check run while the YAML job is just `assay`. The required set is
   // what the reviewer will match against, so a required context naming the tool wins.
   it('prefers a required context naming lockfile-assay over a detected job that is not required', () => {
-    expect(resolveLockfileHonestyCheck('assay', ['test', 'lockfile-assay'])).toEqual({
-      check: 'lockfile-assay',
-      notRequired: false,
-    });
+    expect(resolveLockfileHonestyCheck('assay', ['test', 'lockfile-assay'])).toBe('lockfile-assay');
   });
 
-  it('finds a required lockfile-assay context even with no detectable workflow job', () => {
-    expect(resolveLockfileHonestyCheck(null, ['CI', 'lockfile-assay (pnpm 10)'])).toEqual({
-      check: 'lockfile-assay (pnpm 10)',
-      notRequired: false,
-    });
+  it('finds a required lockfile-assay context (or matrix leg) with no detectable workflow job', () => {
+    expect(resolveLockfileHonestyCheck(null, ['CI', 'lockfile-assay (pnpm 10)'])).toBe(
+      'lockfile-assay (pnpm 10)',
+    );
   });
 
-  it('keeps the detected job but flags it when the readable required set lacks it', () => {
-    expect(resolveLockfileHonestyCheck('assay', ['test'])).toEqual({
-      check: 'assay',
-      notRequired: true,
-    });
-    expect(resolveLockfileHonestyCheck('assay', [])).toEqual({ check: 'assay', notRequired: true });
+  // Only the exact tool name or a matrix leg of it: a cousin check that merely mentions the tool
+  // would silence the APPROVE caveat at review time without ever verifying the lockfile.
+  it('does not adopt a required context that merely mentions lockfile-assay', () => {
+    expect(resolveLockfileHonestyCheck(null, ['lockfile-assay-selftest'])).toBeNull();
+    expect(resolveLockfileHonestyCheck('assay', ['lockfile-assay-selftest'])).toBe('assay');
   });
 
-  it('asserts nothing about requiredness when the required set is unreadable', () => {
-    expect(resolveLockfileHonestyCheck('assay', null)).toEqual({
-      check: 'assay',
-      notRequired: false,
-    });
+  it('falls back to the detected job when the required set lacks a match', () => {
+    expect(resolveLockfileHonestyCheck('assay', ['test'])).toBe('assay');
+    expect(resolveLockfileHonestyCheck('assay', [])).toBe('assay');
   });
 
-  it('resolves to nothing when neither source names a check', () => {
-    expect(resolveLockfileHonestyCheck(null, ['CI'])).toEqual({ check: null, notRequired: false });
-    expect(resolveLockfileHonestyCheck(null, null)).toEqual({ check: null, notRequired: false });
+  it('passes the detection through when the required set is unreadable', () => {
+    expect(resolveLockfileHonestyCheck('assay', null)).toBe('assay');
+    expect(resolveLockfileHonestyCheck(null, null)).toBeNull();
+    expect(resolveLockfileHonestyCheck(null, ['CI'])).toBeNull();
   });
 });
 
@@ -215,7 +208,10 @@ describe('writeCallerWorkflows', () => {
       await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
       const harden = async (name: string, extra: (s: string) => string = (s) => s) => {
         const hardened = extra(
-          (await readFile(wf(cwd, name), 'utf8')).replace(`@v${version}`, `@${sha} # v${version}`),
+          (await readFile(wf(cwd, name), 'utf8')).replace(
+            `@v${version}`,
+            `@${sha} # v${version} pin-checked`,
+          ),
         );
         await writeFile(wf(cwd, name), hardened);
         return hardened;
