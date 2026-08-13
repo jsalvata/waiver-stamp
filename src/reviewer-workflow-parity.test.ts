@@ -29,6 +29,8 @@ const actionStep = (wf: Workflow) =>
   stepsOf(wf).find(
     (s) => s.uses?.includes('waiver-stamp-review') && !s.uses.startsWith('actions/'),
   );
+const mintStep = (wf: Workflow) =>
+  stepsOf(wf).find((s) => s.uses?.includes('create-github-app-token'));
 
 describe('reviewer workflow parity — dogfood vs reusable', () => {
   it('grants the same privileged permissions', () => {
@@ -59,6 +61,19 @@ describe('reviewer workflow parity — dogfood vs reusable', () => {
     expect(actionStep(reusable)?.uses).toMatch(
       /^jsalvata\/waiver-stamp\/\.github\/actions\/waiver-stamp-review@v\d+\.\d+\.\d+$/,
     );
+  });
+
+  it('scopes the App-token mint to exactly the permissions the reviewer needs', () => {
+    // A scoped mint is an INTERSECTION with the App's grants: any permission not requested
+    // here is stripped from the token, however the App is configured. `administration: read`
+    // must be requested or required-check autodiscovery 403s on the classic-protection read
+    // and the App path can never approve on a setup-provisioned repo (no ci-checks override).
+    expect(mintStep(reusable)?.with).toEqual({
+      'app-id': '${{ secrets.app_id }}',
+      'private-key': '${{ secrets.app_private_key }}',
+      'permission-pull-requests': 'write',
+      'permission-administration': 'read',
+    });
   });
 
   it('adds no step to either reviewer beyond the sanctioned set', () => {
