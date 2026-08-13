@@ -1,3 +1,10 @@
+## [1.25.1](https://github.com/jsalvata/waiver-stamp/compare/v1.25.0...v1.25.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* fall back to comment when approve is refused ([7200e0a](https://github.com/jsalvata/waiver-stamp/commit/7200e0a384c4161255aba120f090ea307ea77c4b))
+
 # [1.25.0](https://github.com/jsalvata/waiver-stamp/compare/v1.24.2...v1.25.0) (2026-08-13)
 
 
