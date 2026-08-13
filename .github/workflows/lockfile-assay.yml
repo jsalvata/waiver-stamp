@@ -36,15 +36,15 @@ jobs:
     runs-on: ubuntu-latest
     environment: lockfile-assay
     steps:
-      - uses: actions/checkout@v4        # base branch — never the PR head
+      - uses: actions/checkout@v7        # base branch — never the PR head
         with:
           fetch-depth: 0
       - name: fetch head as git data
         run: git fetch origin "pull/${{ github.event.pull_request.number }}/head"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.ASSAY_APP_ID }}
