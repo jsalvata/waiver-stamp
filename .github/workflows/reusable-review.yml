@@ -86,7 +86,7 @@ jobs:
           # stripped from the token. Without administration:read the classic branch-protection
           # read 403s and required-check autodiscovery fails (override-less adopters never approve).
           permission-administration: read
-      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.25.2
+      - uses: jsalvata/waiver-stamp/.github/actions/waiver-stamp-review@v1.25.3
         with:
           ci-checks: ${{ inputs.ci-checks }}
           github-token: ${{ steps.app-token.outputs.token || github.token }}

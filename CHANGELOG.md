@@ -1,3 +1,10 @@
+## [1.25.3](https://github.com/jsalvata/waiver-stamp/compare/v1.25.2...v1.25.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* mint the app token with administration:read ([707663e](https://github.com/jsalvata/waiver-stamp/commit/707663ea47a5acda12954766a71889fd0424f1c0))
+
 ## [1.25.2](https://github.com/jsalvata/waiver-stamp/compare/v1.25.1...v1.25.2) (2026-08-13)
 
 
