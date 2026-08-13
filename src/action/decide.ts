@@ -13,6 +13,14 @@ export interface Outcome {
   body: string;
 }
 
+/**
+ * Every body below starts with this. review.ts's self-heal recognizes the action's own
+ * stale reviews by it — token identity can't be used instead: installation tokens (the
+ * default GITHUB_TOKEN and create-github-app-token outputs alike) 403 on GET /user, and
+ * no endpoint reveals their own bot login.
+ */
+export const REVIEW_BODY_MARKER = 'waiver-stamp:';
+
 const LOCKFILE_WARNING =
   '\n\n> ⚠️ waiver-stamp assumes the lockfile is honest. ' +
   '[Learn how to remove this message.](https://github.com/jsalvata/waiver-stamp/blob/main/docs/auto-approval-setup.md#adopter-checklist)';
