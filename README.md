@@ -76,7 +76,12 @@ waiver's ops over the base commit and requires the result's emitted JavaScript t
 equal the PR's, file by file (modulo whitespace and comments). A smuggled logic
 change makes the emit differ → the commit is `invalid` → REQUEST_CHANGES.
 
-## Why it's worth it — measured, not asserted
+## Easier review — and no extra LLM cost to get it
+
+The advantage is the **review**: a stamp lets a reviewer trust a mechanical diff
+without reading it, because the runner re-derives it from the waiver's intent. The
+fair objection is that making the LLM *author a waiver* might cost more than just
+letting it edit the files. The benchmark below checks that objection — and it doesn't.
 
 Both ways *actually make the rename* — the same task, given to Claude Opus 4.8 with
 real tools in an isolated project. **Without a waiver**, it edits the files itself
@@ -87,21 +92,21 @@ reads) and check correctness by compiler emit against a ground-truth scoped rena
 with decoys (a `calculateTotalTax` look-alike and a same-named `calculateTotal` in an
 `invoices` module) so a scope-blind edit *fails*:
 
-| References renamed | Without a waiver | With a waiver | Savings | Correct every run? |
-|---|---|---|---|---|
-| 3  | 2611 ± 652  | 1358 ± 267 | **1.9×** | without: **no** · with: yes |
-| 12 | 3981 ± 472  | 1395 ± 322 | **2.9×** | both: yes |
-| 30 | 2954 ± 1021 | 1421 ± 403 | **2.1×** | both: yes |
+| References renamed | Without a waiver | With a waiver | Correct every run? |
+|---|---|---|---|
+| 3  | 2611 ± 652  | 1358 ± 267 | without: **no** · with: yes |
+| 12 | 3981 ± 472  | 1395 ± 322 | both: yes |
+| 30 | 2954 ± 1021 | 1421 ± 403 | both: yes |
 
-(Output tokens, mean ± sample stddev over 5 runs.) Two things stand out. The waiver is
-**flat and cheap** — ~1,400 tokens whatever the fan-out, because the deterministic
-runner does the expansion — and it was **correct in all 15 runs**. Editing by hand
-costs **~2–3× more**, varies far more run-to-run, and at 3 references was **not always
-correct** (a run corrupted a decoy or missed a reference). So the waiver wins on both
-axes that matter — fewer tokens to author *and* to review, and a result that's
-mechanically vouched rather than hopefully-right. This is a dated snapshot of
-non-deterministic model output — [`bench/results.md`](bench/results.md), reproduce with
-`pnpm bench`.
+(Output tokens, mean ± sample stddev over 5 runs.) The waiver is **flat and cheap** —
+~1,400 tokens whatever the fan-out, because the deterministic runner does the
+expansion — and it was **correct in all 15 runs**. Hand-editing costs *more, not less*,
+varies far more run-to-run, and at 3 references was **not always correct** (a run
+corrupted a decoy or missed a reference). Don't read the exact multiplier as a
+promise — this is one synthetic task, and a real codebase will differ — but the
+direction is robust: authoring a waiver **never costs more tokens than hand-editing**,
+so the easier review comes for free. Dated snapshot of non-deterministic model
+output — [`bench/results.md`](bench/results.md), reproduce with `pnpm bench`.
 
 ## Trust posture — this is not a proof
 
