@@ -11,9 +11,23 @@ function forbidden(): never {
   throw Object.assign(new Error('Resource not accessible by integration'), { status: 403 });
 }
 
+/** GitHub's 422 refusing an APPROVE from an identity it forbids (the default GITHUB_TOKEN). */
+function forbiddenApprove(): Error {
+  return Object.assign(
+    new Error(
+      'Unprocessable Entity: "GitHub Actions is not permitted to approve pull requests." - ' +
+        'https://docs.github.com/rest/pulls/reviews#create-a-review-for-a-pull-request',
+    ),
+    { status: 422 },
+  );
+}
+
 function octokitSpy(
   existingReviews: Array<{ id: number; user: { login: string }; state: string }> = [],
-  identity: { user?: string; appSlug?: string } = { user: 'github-actions[bot]' },
+  // Only user-to-server tokens (PAT/OAuth) answer GET /user. Installation tokens — the default
+  // GITHUB_TOKEN and create-github-app-token outputs alike — 403 there and have no "who am I"
+  // endpoint at all, so the default identity here is unresolvable, matching every Actions run.
+  identity: { user?: string } = {},
 ) {
   const createReview = vi.fn(
     async (_a: { event: string; body: string; commit_id: string }) => ({}),
@@ -29,20 +43,9 @@ function octokitSpy(
           createReview,
           dismissReview,
         },
-        issues: {
-          listComments: async () => ({ data: [] }),
-          createComment: vi.fn(async () => ({})),
-          updateComment: vi.fn(),
-        },
-        // A user/PAT token answers GET /user; an App installation token 403s there and
-        // answers GET /app with the app slug instead.
         users: {
           getAuthenticated: async () =>
             identity.user ? { data: { login: identity.user } } : forbidden(),
-        },
-        apps: {
-          getAuthenticated: async () =>
-            identity.appSlug ? { data: { slug: identity.appSlug } } : forbidden(),
         },
       },
     } as never,
@@ -52,97 +55,97 @@ function octokitSpy(
 const args = { owner: 'o', repo: 'r', prNumber: 7, headSha: 'a'.repeat(40) };
 
 describe('postOutcome', () => {
-  it('submits an APPROVE review bound to the head SHA (real identity)', async () => {
-    const s = octokitSpy([], { appSlug: 'my-reviewer' });
+  it('submits an APPROVE bound to the head SHA when GitHub permits it (App-token path)', async () => {
+    const s = octokitSpy();
+    vi.mocked(core.warning).mockClear();
     await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
+    expect(s.createReview).toHaveBeenCalledTimes(1);
     expect(s.createReview).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'APPROVE', commit_id: args.headSha }),
     );
+    expect(core.warning).not.toHaveBeenCalled();
   });
-  it('on a non-REQUEST_CHANGES outcome, dismisses its own prior REQUEST_CHANGES', async () => {
-    const s = octokitSpy([
-      { id: 42, user: { login: 'github-actions[bot]' }, state: 'CHANGES_REQUESTED' },
-    ]);
-    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
-    expect(s.dismissReview).toHaveBeenCalledWith(expect.objectContaining({ review_id: 42 }));
+
+  it('falls back to a COMMENT (and warns) when GitHub refuses the APPROVE', async () => {
+    const s = octokitSpy();
+    s.createReview.mockRejectedValueOnce(forbiddenApprove());
+    vi.mocked(core.warning).mockClear();
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'stamped' } });
+    expect(s.createReview).toHaveBeenCalledTimes(2);
+    expect(s.createReview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ event: 'COMMENT', commit_id: args.headSha }),
+    );
+    // The comment keeps the verdict body and explains why it isn't an approval.
+    const body = s.createReview.mock.calls[1]?.[0]?.body ?? '';
+    expect(body).toContain('stamped');
+    expect(body).toContain('Approve');
+    // Still tells the maintainer how to make approval automatic.
+    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('App token'));
   });
+
+  it('propagates non-approve-permission failures (fail-closed upstream)', async () => {
+    const s = octokitSpy();
+    s.createReview.mockRejectedValueOnce(
+      Object.assign(new Error('Unprocessable Entity: "Commit not found"'), { status: 422 }),
+    );
+    await expect(
+      postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } }),
+    ).rejects.toThrow('Commit not found');
+    expect(s.createReview).toHaveBeenCalledTimes(1);
+  });
+
   it('NONE submits no review', async () => {
     const s = octokitSpy();
     await postOutcome(s.octokit, { ...args, outcome: { action: 'NONE', body: '' } });
     expect(s.createReview).not.toHaveBeenCalled();
   });
-  it("does not dismiss a human's CHANGES_REQUESTED review", async () => {
-    const s = octokitSpy([
-      { id: 99, user: { login: 'a-human-reviewer' }, state: 'CHANGES_REQUESTED' },
-    ]);
-    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
-    expect(s.dismissReview).not.toHaveBeenCalled();
-  });
-  it('with an App installation token (/user 403s), still submits the review', async () => {
-    const s = octokitSpy([], { appSlug: 'my-reviewer' });
-    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
+
+  it('COMMENT outcomes post unchanged, without warnings', async () => {
+    const s = octokitSpy();
+    vi.mocked(core.warning).mockClear();
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'COMMENT', body: 'partial' } });
+    expect(s.createReview).toHaveBeenCalledTimes(1);
     expect(s.createReview).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'APPROVE', commit_id: args.headSha }),
+      expect.objectContaining({ event: 'COMMENT', body: 'partial' }),
     );
+    expect(core.warning).not.toHaveBeenCalled();
   });
-  it('with an App token, self-heals its own stale review posted as <slug>[bot]', async () => {
-    const s = octokitSpy(
-      [{ id: 42, user: { login: 'my-reviewer[bot]' }, state: 'CHANGES_REQUESTED' }],
-      { appSlug: 'my-reviewer' },
-    );
+
+  it('on a non-REQUEST_CHANGES outcome, dismisses its own prior REQUEST_CHANGES (PAT identity)', async () => {
+    const s = octokitSpy([{ id: 42, user: { login: 'release-bot' }, state: 'CHANGES_REQUESTED' }], {
+      user: 'release-bot',
+    });
     await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
     expect(s.dismissReview).toHaveBeenCalledWith(expect.objectContaining({ review_id: 42 }));
   });
-  it('when neither /user nor /app resolve, still submits without self-healing', async () => {
+
+  it("does not dismiss a human's CHANGES_REQUESTED review", async () => {
     const s = octokitSpy(
-      [{ id: 42, user: { login: 'my-reviewer[bot]' }, state: 'CHANGES_REQUESTED' }],
-      {},
+      [{ id: 99, user: { login: 'a-human-reviewer' }, state: 'CHANGES_REQUESTED' }],
+      { user: 'release-bot' },
     );
+    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
+    expect(s.dismissReview).not.toHaveBeenCalled();
+  });
+
+  it('an unresolvable identity (installation token) skips self-healing but still posts', async () => {
+    const s = octokitSpy([
+      { id: 42, user: { login: 'my-reviewer[bot]' }, state: 'CHANGES_REQUESTED' },
+    ]);
     await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
     expect(s.createReview).toHaveBeenCalledWith(expect.objectContaining({ event: 'APPROVE' }));
     expect(s.dismissReview).not.toHaveBeenCalled();
   });
+
   it('a dismiss failure is isolated: still submits the new review', async () => {
-    const s = octokitSpy([
-      { id: 42, user: { login: 'github-actions[bot]' }, state: 'CHANGES_REQUESTED' },
-    ]);
+    const s = octokitSpy([{ id: 42, user: { login: 'release-bot' }, state: 'CHANGES_REQUESTED' }], {
+      user: 'release-bot',
+    });
     s.dismissReview.mockRejectedValueOnce(new Error('transient API error'));
     await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
     expect(s.dismissReview).toHaveBeenCalledWith(expect.objectContaining({ review_id: 42 }));
-    // Still submits the new review despite the dismiss failure (event-agnostic — this identity is
-    // the default bot, so the APPROVE is downgraded; the point here is the review is not skipped).
     expect(s.createReview).toHaveBeenCalledWith(
       expect.objectContaining({ commit_id: args.headSha }),
     );
-  });
-
-  it('downgrades APPROVE to a COMMENT (and warns) as the default Actions identity', async () => {
-    const s = octokitSpy([], { user: 'github-actions[bot]' });
-    vi.mocked(core.warning).mockClear();
-    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'stamped' } });
-    // Never attempts the forbidden APPROVE (GitHub 422s it as this identity, posting nothing).
-    expect(s.createReview).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'COMMENT', commit_id: args.headSha }),
-    );
-    // The comment keeps the verdict body and explains why it isn't an approval.
-    const body = s.createReview.mock.calls[0]?.[0]?.body ?? '';
-    expect(body).toContain('stamped');
-    expect(body.toLowerCase()).toContain('approve');
-    // Still warns the maintainer that the App-token wiring is missing.
-    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('github-actions[bot]'));
-  });
-
-  it('does not warn when approving as a real App identity', async () => {
-    const s = octokitSpy([], { appSlug: 'my-reviewer' });
-    vi.mocked(core.warning).mockClear();
-    await postOutcome(s.octokit, { ...args, outcome: { action: 'APPROVE', body: 'ok' } });
-    expect(core.warning).not.toHaveBeenCalled();
-  });
-
-  it('does not warn when the default identity only COMMENTs (comments post fine)', async () => {
-    const s = octokitSpy([], { user: 'github-actions[bot]' });
-    vi.mocked(core.warning).mockClear();
-    await postOutcome(s.octokit, { ...args, outcome: { action: 'COMMENT', body: 'partial' } });
-    expect(core.warning).not.toHaveBeenCalled();
   });
 });

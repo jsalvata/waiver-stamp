@@ -6,21 +6,24 @@ type Octokit = ReturnType<typeof import('@actions/github').getOctokit>;
 /**
  * Login this token posts reviews as, or null if it can't be resolved.
  *
- * GET /user only works for user-to-server tokens (PAT / OAuth). An App installation token
- * 403s there — it represents no user — so fall back to GET /app: the app posts as `<slug>[bot]`.
- * Identity only drives the stale-review self-heal below, so unresolvable → skip it, never throw.
+ * GET /user answers only for user-to-server tokens (PAT / OAuth). Installation tokens — the
+ * default GITHUB_TOKEN and create-github-app-token outputs alike — 403 there, and no endpoint
+ * reveals an installation token's own bot login (GET /app needs the JWT auth this action never
+ * has). Identity only drives the stale-review self-heal below, so unresolvable → skip it,
+ * never throw.
  */
 async function resolveReviewerLogin(octokit: Octokit): Promise<string | null> {
   try {
     return (await octokit.rest.users.getAuthenticated()).data.login;
   } catch {
-    try {
-      const app = (await octokit.rest.apps.getAuthenticated()).data;
-      return app?.slug ? `${app.slug}[bot]` : null;
-    } catch {
-      return null;
-    }
+    return null;
   }
+}
+
+/** GitHub's 422 refusing an APPROVE from an identity it forbids (the default GITHUB_TOKEN). */
+function isForbiddenApprove(err: unknown): boolean {
+  const e = err as { status?: unknown; message?: unknown };
+  return e?.status === 422 && /not permitted to approve/i.test(String(e?.message ?? ''));
 }
 
 /** Submit the review (if any), bind it to headSha, self-heal our own stale REQUEST_CHANGES. */
@@ -56,33 +59,38 @@ export async function postOutcome(
     }
   }
 
-  // The default GITHUB_TOKEN authenticates as github-actions[bot], which GitHub blocks from
-  // approving PRs — a posted APPROVE 422s (and wouldn't count as a required review anyway). Rather
-  // than attempt a doomed APPROVE that posts nothing, downgrade it to a COMMENT carrying the same
-  // verdict plus how to make approval automatic. The App-token wiring (environment +
-  // create-github-app-token step + github-token input) is what enables a real APPROVE (§4.9 / setup
-  // step 8); reaching here means it's missing or was dropped.
-  let event = outcome.action;
-  let body = outcome.body;
-  if (outcome.action === 'APPROVE' && me === 'github-actions[bot]') {
-    core.warning(
-      'waiver-stamp-review: cannot APPROVE as the default GitHub Actions identity ' +
-        '(github-actions[bot]) — posting a COMMENT instead. Wire the App token (environment + ' +
-        'create-github-app-token step + github-token input) to make approval automatic; see ' +
-        'docs/auto-approval-setup.md step 8.',
-    );
-    event = 'COMMENT';
-    body = `${outcome.body}\n\n> ℹ️ Posted as a comment, not an approval: \`github-actions[bot]\` can't approve PRs, so a human still needs to click **Approve**. [Make this automatic.](https://github.com/jsalvata/waiver-stamp/blob/main/docs/auto-approval-setup.md#adopter-checklist)`;
-  }
+  if (outcome.action === 'NONE') return;
 
-  if (event !== 'NONE') {
+  // Whether this token may APPROVE is undiscoverable up front: an installation token's identity
+  // is unresolvable (above), and even github-actions[bot] can approve where the repo's "allow
+  // GitHub Actions to approve pull requests" setting is on. So attempt the APPROVE and let GitHub
+  // decide; when it refuses (422, the default-GITHUB_TOKEN path), post the same verdict as a
+  // COMMENT rather than nothing. The App-token wiring (environment + create-github-app-token
+  // step + github-token input) is what makes a real APPROVE stick (§4.9 / setup step 8).
+  try {
     await octokit.rest.pulls.createReview({
       owner,
       repo,
       pull_number,
       commit_id: headSha,
-      event,
-      body,
+      event: outcome.action,
+      body: outcome.body,
+    });
+  } catch (err) {
+    if (outcome.action !== 'APPROVE' || !isForbiddenApprove(err)) throw err;
+    core.warning(
+      'waiver-stamp-review: GitHub refused the APPROVE — this token (usually the default ' +
+        'GITHUB_TOKEN, github-actions[bot]) is not permitted to approve PRs — posting a COMMENT ' +
+        'instead. Wire the App token (environment + create-github-app-token step + github-token ' +
+        'input) to make approval automatic; see docs/auto-approval-setup.md step 8.',
+    );
+    await octokit.rest.pulls.createReview({
+      owner,
+      repo,
+      pull_number,
+      commit_id: headSha,
+      event: 'COMMENT',
+      body: `${outcome.body}\n\n> ℹ️ Posted as a comment, not an approval: this workflow's token can't approve PRs, so a human still needs to click **Approve**. [Make this automatic.](https://github.com/jsalvata/waiver-stamp/blob/main/docs/auto-approval-setup.md#adopter-checklist)`,
     });
   }
 }
