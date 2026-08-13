@@ -62,6 +62,26 @@ export async function detectLockfileHonestyCheck(dir: string): Promise<string | 
   return null;
 }
 
+/**
+ * Pick the honesty-check name to record in `.waiver-stamp.json` (§4.11). The reviewer only
+ * silences the "assumes the lockfile is honest" caveat when the named check is in the base
+ * branch's *required* set — so a required context wins over what the workflow scan sees: keep
+ * `detected` when it is itself required, else prefer a required context that IS the
+ * lockfile-assay gate (its exact name or a matrix leg — a looser match could bless a cousin
+ * check like `lockfile-assay-selftest` and wrongly silence the caveat). Falls back to
+ * `detected`; whether the returned name is actually required is the caller's to judge (it also
+ * knows an existing config's own choice, which outranks this resolution).
+ */
+export function resolveLockfileHonestyCheck(
+  detected: string | null,
+  required: string[] | null,
+): string | null {
+  if (required === null) return detected;
+  if (detected !== null && required.includes(detected)) return detected;
+  const isGate = (c: string) => c === 'lockfile-assay' || c.startsWith('lockfile-assay ');
+  return required.find(isGate) ?? detected;
+}
+
 function ciCaller(): string {
   return `# waiver-stamp producer — runs waiver-stamp as unprivileged pull_request CI, publishing the
 # \`waiver-stamp\` check the reviewer consumes. The hardened shape lives in the pinned reusable
@@ -116,12 +136,34 @@ const currentContent = (abs: string): Promise<string | null> =>
     () => null,
   );
 
+/** Rewrite each 40-hex hash pin whose `# v<version>` marker names *this* version back to the tag
+ *  pin it resolves to. Pins marked with any other version are left alone — that drift is real. */
+const unpinCurrentVersion = (text: string): string =>
+  text.replace(/@[0-9a-f]{40}([ \t]*#[ \t]*)v(\S+)/g, (match, gap: string, ver: string) =>
+    ver === version ? `@v${ver}${gap}v${ver}` : match,
+  );
+
+/** Whether `current` is our `intended` caller in substance: byte-equal, or equal once comments
+ *  (inert in YAML) are dropped by parsing and same-version hash pins are read as the tag pins
+ *  they mark — the two rewrites a zizmor-style hardening pass applies to an adopted caller.
+ *  The marker is taken at its word (the SHA is not resolved against the tag): a lying marker
+ *  only silences a hand-off nudge about a file the adopter already owns and we never execute. */
+function isOurCaller(current: string, intended: string): boolean {
+  if (current === intended) return true;
+  try {
+    return JSON.stringify(parse(unpinCurrentVersion(current))) === JSON.stringify(parse(intended));
+  } catch {
+    return false; // unparseable ⇒ not provably ours ⇒ keep the skip
+  }
+}
+
 /**
  * Write the two caller workflows (§4.8), filling the reviewer's trigger with `ciWorkflowNames`.
  * Never clobbers a *different* file: an existing path whose content differs is recorded in `skipped`
  * and left byte-for-byte intact — clobbering the adopter's hand-tuned CI is not safe (§2.2). An
- * existing path that already holds our exact caller counts as `written`: it's a no-op we own (a
- * prior partial run wrote it, or the callers are already committed), not a foreign file to warn on.
+ * existing path that already holds our caller — byte-exact, or hardened per `isOurCaller` — counts
+ * as `written`: it's a no-op we own (a prior partial run wrote it, or the callers are already
+ * committed, perhaps hash-pinned by the repo's audit), not a foreign file to warn on.
  */
 export async function writeCallerWorkflows(
   cwd: string,
@@ -137,7 +179,7 @@ export async function writeCallerWorkflows(
   for (const [rel, content] of files) {
     const abs = join(cwd, rel);
     const current = await currentContent(abs);
-    if (current !== null && current !== content) {
+    if (current !== null && !isOurCaller(current, content)) {
       skipped.push(rel);
       continue;
     }

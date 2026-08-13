@@ -505,17 +505,25 @@ hand-off page** (§4.10), not something setup configures or interactively offers
 
 - Write `.github/workflows/waiver-stamp-ci.yml` and `.github/workflows/waiver-stamp-review.yml`
   as the thin callers (§2.1). **If either path already exists, do not overwrite** — show a
-  diff against what we would write and let the user reconcile; never clobber.
+  diff against what we would write and let the user reconcile; never clobber. A caller that is
+  ours in substance — byte-equal, or differing only by comments and a hash pin whose `# vX.Y.Z`
+  marker names this version — is recognised as ours, not warned about.
 - **Discover the CI workflow name(s)** to bake into the reviewer caller's
   `workflow_run.workflows:` — from `.github/workflows/*.yml` `name:` fields and/or recent
   check-run→workflow associations on a recent PR head SHA. Present the discovered list for
   confirmation. This is the single value that must be right for the trigger model (§2.3).
 - **Detect the lockfile-honesty check name** (§2.5): scan `.github/workflows/*.yml` for a job
-  using the `lockfile-assay` action/package, extract its job/check name. Feed it into
-  `.waiver-stamp.json` `lockfileHonestyCheck` **only via the seeding rule in §4.11** (include
-  it when seeding a new file; recommend it on the hand-off page when the file already exists —
-  never silently edit an existing policy file). If none found, leave unset (caveat stays —
-  fail-safe).
+  using the `lockfile-assay` action/package, extract its job/check name, and resolve it against
+  the default branch's required status-check contexts (the same rulesets+classic reads the
+  reviewer's autodiscovery makes): a scanned name that is itself required is kept; else a
+  required context naming lockfile-assay wins (the gate can report as an App-posted check the
+  YAML scan can't see); a scanned name absent from a readable required set is still used but
+  caveated on the hand-off page, and an unreadable required set is caveated as unconfirmed.
+  An existing config's own `lockfileHonestyCheck` outranks the resolution — the caveat then
+  judges that name. Feed the result into `.waiver-stamp.json`
+  `lockfileHonestyCheck` **only via the seeding rule in §4.11** (include it when seeding a new
+  file; recommend it on the hand-off page when the file already exists — never silently edit an
+  existing policy file). If nothing resolves, leave unset (caveat stays — fail-safe).
 - We generate the producer as a **standalone file and never edit the adopter's existing CI** —
   writing a new file is safe while editing arbitrary CI YAML is fragile (§2.2).
 
@@ -546,9 +554,9 @@ interpolated, so every step is copy-paste-ready. It explains nothing — the *wh
 Policy is a security judgment (what docs/deps you'll auto-waive) — **not automated**
 (`docs/auto-approval-setup.md` §3). If the file is **absent**, offer to drop the
 closed-by-default recommended template (the exact `changeDocs.allow/deny` from the README,
-`allowBumping: []`, plus the detected `lockfileHonestyCheck` from §4.8 if any). If it
+`allowBumping: []`, plus the `lockfileHonestyCheck` resolved in §4.8 if any). If it
 **exists**, never touch it — surface it on the hand-off page for the user to review, and if a
-lockfile-honesty check was detected but the field is missing, list adding
+lockfile-honesty check resolved but the field is missing, list adding
 `lockfileHonestyCheck: "<name>"` as a suggested edit (never auto-applied). Every policy stays
 closed-by-default; setup never widens permissions.
 

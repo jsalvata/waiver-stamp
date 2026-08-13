@@ -181,11 +181,18 @@ it. The two workflow files it refers to are in [`examples/`](../examples/).
    > hash-pinning earns its keep — see [Which ref to pin](#which-ref-to-pin).
 
 9. *(If you set `allowBumping`)* **Name your lockfile-honesty check** in
-   `.waiver-stamp.json`'s `lockfileHonestyCheck` field (e.g. the lockfile-assay job/check
-   name) — autodiscovery then confirms it's a required check.
+   `.waiver-stamp.json`'s `lockfileHonestyCheck` field. The value must be one of the
+   base branch's **required** status-check contexts — a required job's display name, or
+   an App-posted check's name — since that's the set autodiscovery confirms it against.
+   Setup seeds it with a required context when it can find one, and caveats on the
+   hand-off page when the best candidate it found is not required — or when branch
+   protection couldn't be read to confirm it.
    > The APPROVE body carries the "assumes the lockfile is honest" warning only when
    > `allowBumping` is set and no required check matches `lockfileHonestyCheck`. With
-   > `allowBumping` empty, no bump can ride in, so the caveat never appears.
+   > `allowBumping` empty, no bump can ride in, so the caveat never appears. APPROVEs
+   > still warning despite a green, required honesty gate usually mean the field names
+   > the workflow's job id (e.g. `assay`) instead of the required context (e.g. an
+   > App-posted `lockfile-assay`) — point it at the required name.
 
 ## When a waivered PR falls behind `main`
 

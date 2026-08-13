@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,7 @@ import { scaffoldProject } from '../test-helpers.ts';
 import {
   detectLockfileHonestyCheck,
   discoverCiWorkflowNames,
+  resolveLockfileHonestyCheck,
   writeCallerWorkflows,
 } from './workflows.ts';
 
@@ -84,6 +85,45 @@ describe('detectLockfileHonestyCheck', () => {
   });
 });
 
+describe('resolveLockfileHonestyCheck', () => {
+  it('keeps a detected job that is itself a required check', () => {
+    expect(resolveLockfileHonestyCheck('lockfile-honesty', ['CI', 'lockfile-honesty'])).toBe(
+      'lockfile-honesty',
+    );
+  });
+
+  // The gate can report as a check the workflow scan can't see — e.g. lockfile-assay's own App
+  // posts a `lockfile-assay` check run while the YAML job is just `assay`. The required set is
+  // what the reviewer will match against, so a required context naming the tool wins.
+  it('prefers a required context naming lockfile-assay over a detected job that is not required', () => {
+    expect(resolveLockfileHonestyCheck('assay', ['test', 'lockfile-assay'])).toBe('lockfile-assay');
+  });
+
+  it('finds a required lockfile-assay context (or matrix leg) with no detectable workflow job', () => {
+    expect(resolveLockfileHonestyCheck(null, ['CI', 'lockfile-assay (pnpm 10)'])).toBe(
+      'lockfile-assay (pnpm 10)',
+    );
+  });
+
+  // Only the exact tool name or a matrix leg of it: a cousin check that merely mentions the tool
+  // would silence the APPROVE caveat at review time without ever verifying the lockfile.
+  it('does not adopt a required context that merely mentions lockfile-assay', () => {
+    expect(resolveLockfileHonestyCheck(null, ['lockfile-assay-selftest'])).toBeNull();
+    expect(resolveLockfileHonestyCheck('assay', ['lockfile-assay-selftest'])).toBe('assay');
+  });
+
+  it('falls back to the detected job when the required set lacks a match', () => {
+    expect(resolveLockfileHonestyCheck('assay', ['test'])).toBe('assay');
+    expect(resolveLockfileHonestyCheck('assay', [])).toBe('assay');
+  });
+
+  it('passes the detection through when the required set is unreadable', () => {
+    expect(resolveLockfileHonestyCheck('assay', null)).toBe('assay');
+    expect(resolveLockfileHonestyCheck(null, null)).toBeNull();
+    expect(resolveLockfileHonestyCheck(null, ['CI'])).toBeNull();
+  });
+});
+
 describe('writeCallerWorkflows', () => {
   const wf = (cwd: string, name: string) => join(cwd, '.github/workflows', name);
 
@@ -153,6 +193,84 @@ describe('writeCallerWorkflows', () => {
         ],
         skipped: [],
       });
+    } finally {
+      await cleanup();
+    }
+  });
+
+  // A zizmor-style audit rewrites an adopted caller: tag pin → 40-hex hash pin with a `# vX.Y.Z`
+  // marker, plus ignore/why comments (seen on lockfile-assay). Comments are inert in YAML and a
+  // hash pin marked with this same version is the same ref — still our caller, not a foreign file.
+  it('recognises a caller hardened with comments and a same-version hash pin as ours', async () => {
+    const sha = 'a1b2c3d4'.repeat(5);
+    const { cwd, cleanup } = await scaffoldProject({});
+    try {
+      await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      const harden = async (name: string, extra: (s: string) => string = (s) => s) => {
+        const hardened = extra(
+          (await readFile(wf(cwd, name), 'utf8')).replace(
+            `@v${version}`,
+            `@${sha} # v${version} pin-checked`,
+          ),
+        );
+        await writeFile(wf(cwd, name), hardened);
+        return hardened;
+      };
+      const ci = await harden('waiver-stamp-ci.yml');
+      const review = await harden('waiver-stamp-review.yml', (s) =>
+        s.replace(
+          'on:\n  workflow_run:',
+          'on:\n  # The pwn-request defense lives in the pinned reusable workflow.\n  workflow_run: # zizmor: ignore[dangerous-triggers] see note above',
+        ),
+      );
+
+      const again = await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      expect(again).toEqual({
+        written: [
+          '.github/workflows/waiver-stamp-ci.yml',
+          '.github/workflows/waiver-stamp-review.yml',
+        ],
+        skipped: [],
+      });
+      // The hardening is preserved byte-for-byte — never rewritten back to the tag pin.
+      expect(await readFile(wf(cwd, 'waiver-stamp-ci.yml'), 'utf8')).toBe(ci);
+      expect(await readFile(wf(cwd, 'waiver-stamp-review.yml'), 'utf8')).toBe(review);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('keeps the skip for a hash pin marked with a different version — that drift is real', async () => {
+    const sha = 'a1b2c3d4'.repeat(5);
+    const { cwd, cleanup } = await scaffoldProject({});
+    try {
+      await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      const raw = await readFile(wf(cwd, 'waiver-stamp-ci.yml'), 'utf8');
+      await writeFile(
+        wf(cwd, 'waiver-stamp-ci.yml'),
+        raw.replace(`@v${version}`, `@${sha} # v1.23.0`),
+      );
+      const again = await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      expect(again.skipped).toEqual(['.github/workflows/waiver-stamp-ci.yml']);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('keeps the skip when content differs beyond comments and the pin', async () => {
+    const sha = 'a1b2c3d4'.repeat(5);
+    const { cwd, cleanup } = await scaffoldProject({});
+    try {
+      await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      const raw = await readFile(wf(cwd, 'waiver-stamp-ci.yml'), 'utf8');
+      await writeFile(
+        wf(cwd, 'waiver-stamp-ci.yml'),
+        raw
+          .replace(`@v${version}`, `@${sha} # v${version}`)
+          .replace('contents: read', 'contents: write'),
+      );
+      const again = await writeCallerWorkflows(cwd, { ciWorkflowNames: ['CI'] });
+      expect(again.skipped).toEqual(['.github/workflows/waiver-stamp-ci.yml']);
     } finally {
       await cleanup();
     }

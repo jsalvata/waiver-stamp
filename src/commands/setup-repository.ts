@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { type WaiverConfig, loadConfig } from '../engine/config.ts';
 import { detectCommitlintBodyLimit } from '../setup/commitlint.ts';
 import { seedConfigIfAbsent } from '../setup/config-seed.ts';
 import { SetupError } from '../setup/errors.ts';
@@ -22,6 +23,7 @@ import {
 import {
   detectLockfileHonestyCheck,
   discoverCiWorkflowNames,
+  resolveLockfileHonestyCheck,
   writeCallerWorkflows,
 } from '../setup/workflows.ts';
 
@@ -53,6 +55,9 @@ export interface SetupDeps {
     cwd: string,
     a: { lockfileHonestyCheck?: string },
   ) => Promise<{ seeded: boolean; existing: boolean }>;
+  /** The repo's existing `.waiver-stamp.json`, or `null` when absent or unparseable — read only
+   *  to honour its own `lockfileHonestyCheck` over the resolved one; never written. */
+  readConfig: (cwd: string) => Promise<WaiverConfig | null>;
   detectCommitlintBodyLimit: (cwd: string) => Promise<{ blocks: boolean }>;
   detectLintFixLinter: (cwd: string) => Promise<LintFixAdvisory>;
   ensureWaiverStampRuleset: (
@@ -80,6 +85,11 @@ export function makeSetupDeps(): SetupDeps {
     detectLockfileHonestyCheck,
     writeCallerWorkflows,
     seedConfigIfAbsent,
+    readConfig: (cwd) =>
+      loadConfig(cwd).then(
+        (c) => c,
+        () => null,
+      ),
     detectCommitlintBodyLimit: (cwd) => detectCommitlintBodyLimit(cwd, runCommand),
     detectLintFixLinter,
     ensureWaiverStampRuleset,
@@ -115,9 +125,20 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   // may fail is safe — a failed run just re-runs, and they're skipped.
   const wfDir = join(cwd, '.github/workflows');
   const ciNames = await deps.discoverCiWorkflowNames(wfDir);
-  const honesty = await deps.detectLockfileHonestyCheck(wfDir);
+  // The name to seed is resolved against the default branch's required contexts — the set the
+  // reviewer's autodiscovery will match against (spec §2.4) — not just the workflow scan. The
+  // two reads are independent (local YAML scan, network protection read), hence parallel.
+  const [detected, requiredChecks] = await Promise.all([
+    deps.detectLockfileHonestyCheck(wfDir),
+    deps.gh.requiredCheckContexts(ctx.owner, ctx.repo, ctx.defaultBranch),
+  ]);
+  const honesty = resolveLockfileHonestyCheck(detected, requiredChecks);
   const drop = await deps.writeCallerWorkflows(cwd, { ciWorkflowNames: ciNames });
   const seed = await deps.seedConfigIfAbsent(cwd, { lockfileHonestyCheck: honesty ?? undefined });
+  // An existing config's own choice outranks our resolution: the suggestion and the requiredness
+  // caveat must both speak about the name the reviewer will actually read from base.
+  const configured = seed.existing ? (await deps.readConfig(cwd))?.lockfileHonestyCheck : undefined;
+  const effectiveHonesty = configured ?? honesty;
 
   // Advisories ride the hand-off page (persistent), not the scrolling terminal. Each links its own
   // doc section (version-pinned): the callers and commitlint live in the adopter checklist; the
@@ -131,6 +152,20 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
   for (const p of drop.skipped)
     caveats.push({
       text: `Existing ${p} left untouched — compare it against the caller the setup guide describes, and reconcile by hand.`,
+      doc: checklist,
+    });
+  if (effectiveHonesty != null && requiredChecks === null)
+    caveats.push({
+      text: `Could not read ${ctx.defaultBranch}'s branch protection, so "${effectiveHonesty}" being a required check is unconfirmed — if APPROVEs carry the "assumes the lockfile is honest" caveat, make it required (or point lockfileHonestyCheck at a required check).`,
+      doc: checklist,
+    });
+  else if (
+    effectiveHonesty != null &&
+    requiredChecks !== null &&
+    !requiredChecks.includes(effectiveHonesty)
+  )
+    caveats.push({
+      text: `The lockfile-honesty check "${effectiveHonesty}" is not required on ${ctx.defaultBranch} — until it is (or lockfileHonestyCheck names one that is), APPROVEs on bump-allowing waivers keep the "assumes the lockfile is honest" caveat.`,
       doc: checklist,
     });
   if ((await deps.detectCommitlintBodyLimit(cwd)).blocks)
@@ -187,7 +222,7 @@ export async function setupRepository(opts: SetupOptions, deps: SetupDeps): Prom
       slug,
       defaultBranch: ctx.defaultBranch,
       configExisted: seed.existing,
-      suggestedHonestyCheck: seed.existing ? honesty : null,
+      suggestedHonestyCheck: seed.existing && configured === undefined ? honesty : null,
       producerOnDefault,
       writtenFiles,
       caveats,
